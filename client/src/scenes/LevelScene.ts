@@ -180,6 +180,7 @@ export class LevelScene extends Phaser.Scene {
       I: this.input.keyboard!.addKey('I'),
       ESC: this.input.keyboard!.addKey('ESC'),
       SPACE: this.input.keyboard!.addKey('SPACE'),
+      SHIFT: this.input.keyboard!.addKey('SHIFT'),
     };
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -540,7 +541,10 @@ export class LevelScene extends Phaser.Scene {
     }
 
     const pointer = this.input.activePointer;
-    if (pointer.isDown && pointer.leftButtonDown()) {
+    this.player.updateWeaponPosition(pointer.worldX, pointer.worldY);
+
+    const primaryDown = pointer.isDown && (pointer.leftButtonDown() || pointer.primaryDown);
+    if (primaryDown) {
       if (time - this.lastShotAt >= state.playerFireRate) {
         this.lastShotAt = time;
         this.shootProjectile(pointer.worldX, pointer.worldY);
@@ -549,6 +553,10 @@ export class LevelScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
       this.tryDash(time);
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SHIFT)) {
+      this.tryShield();
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
@@ -595,8 +603,11 @@ export class LevelScene extends Phaser.Scene {
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
     const angles = state.isMultiShot ? [baseAngle, baseAngle - 0.2, baseAngle + 0.2] : [baseAngle];
 
+    const muzzleX = this.player.x + Math.cos(baseAngle) * 10;
+    const muzzleY = this.player.y + Math.sin(baseAngle) * 10;
+
     angles.forEach((angle) => {
-      const proj = this.physics.add.image(this.player.x, this.player.y, 'player_bullet');
+      const proj = this.physics.add.image(muzzleX, muzzleY, 'player_bullet');
       proj.setDepth(10);
       proj.setData('damage', damage);
       proj.setVelocity(Math.cos(angle) * PROJECTILE_SPEED, Math.sin(angle) * PROJECTILE_SPEED);
@@ -604,9 +615,12 @@ export class LevelScene extends Phaser.Scene {
       this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => proj.destroy());
     });
 
-    this.spawnMuzzleFlash(this.player.x, this.player.y);
-    this.player.x += Math.cos(baseAngle + Math.PI) * 1;
-    this.player.y += Math.sin(baseAngle + Math.PI) * 1;
+    this.spawnMuzzleFlash(muzzleX, muzzleY);
+    const snap = (Math.PI * 2) / 8;
+    const snapped = Math.round(baseAngle / snap) * snap;
+    this.player.weaponSprite.setRotation(snapped + Math.PI / 2);
+    this.player.weaponSprite.setTint(0xffffff);
+    this.time.delayedCall(50, () => this.player.weaponSprite.clearTint());
     this.shakeCamera(28, 0.002);
     AudioManager.get().shoot();
   }

@@ -14,10 +14,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   shieldCooldownUntil = 0;
   shieldActiveUntil = 0;
   lastDir = new Phaser.Math.Vector2(1, 0);
+  aimAngle = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, spriteKey: string, weaponConfig: ItemConfig) {
     super(scene, x, y, spriteKey);
     this.weaponSprite = scene.add.image(x + 8, y + 4, weaponConfig.sprite);
+    this.weaponSprite.setOrigin(0.5, 0.85);
     this.weaponSprite.setDepth(11);
     this.setDepth(10);
     this.setOrigin(0.5, 0.6);
@@ -33,6 +35,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   setWeapon(config: ItemConfig): void {
     this.weaponSprite.setTexture(config.sprite);
+    if (config.sprite.startsWith('bomb')) {
+      this.weaponSprite.setOrigin(0.5, 0.5);
+    } else {
+      this.weaponSprite.setOrigin(0.5, 0.85);
+    }
   }
 
   setInvincible(durationMs: number, now: number): void {
@@ -66,9 +73,24 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
-  updateWeaponPosition(): void {
-    const offsetX = this.flipX ? -8 : 8;
-    this.weaponSprite.setPosition(this.x + offsetX, this.y + 4);
-    this.weaponSprite.setFlipX(this.flipX);
+  updateWeaponPosition(targetX?: number, targetY?: number): void {
+    if (typeof targetX === 'number' && typeof targetY === 'number') {
+      this.aimAngle = Phaser.Math.Angle.Between(this.x, this.y, targetX, targetY);
+    }
+
+    const step = (Math.PI * 2) / 8;
+    const snapped = Math.round(this.aimAngle / step) * step;
+
+    const holdRadius = 10;
+    const offsetX = Math.cos(snapped) * holdRadius;
+    const offsetY = Math.sin(snapped) * holdRadius;
+
+    this.weaponSprite.setPosition(this.x + offsetX, this.y + offsetY);
+
+    // Most 0x72 weapon sprites are oriented "up" by default, so rotate from up -> angle.
+    this.weaponSprite.setRotation(snapped + Math.PI / 2);
+
+    // Put weapon behind player when aiming upwards, in front otherwise.
+    this.weaponSprite.setDepth(Math.sin(snapped) < -0.2 ? 9 : 11);
   }
 }
