@@ -309,6 +309,9 @@ export class LevelScene extends Phaser.Scene {
     this.player = new Player(this, spawnX, spawnY, `${this.playerSpriteKey}_idle_anim_f0`, weaponConfig);
     this.add.existing(this.player);
     this.physics.add.existing(this.player);
+    if (!this.player.body) {
+      this.physics.world.enable(this.player);
+    }
     this.player.initPhysics();
     if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
       this.player.play(`${this.playerSpriteKey}_idle`);
@@ -509,6 +512,11 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleInput(time: number): void {
+    if (!this.player.body) {
+      this.physics.world.enable(this.player);
+      this.player.initPhysics();
+    }
+
     const move = new Phaser.Math.Vector2(0, 0);
     if (this.cursors.left?.isDown || this.keys.A.isDown) move.x -= 1;
     if (this.cursors.right?.isDown || this.keys.D.isDown) move.x += 1;
