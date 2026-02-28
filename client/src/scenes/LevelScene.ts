@@ -153,7 +153,9 @@ export class LevelScene extends Phaser.Scene {
     this.lastFootstepAt = 0;
     this.lastTelemetryUpdate = 0;
 
-    audio.playMusic('ambient');
+    // Start dungeon ambient music
+    this.sound.stopAll();
+    this.sound.play('dungeon_ambient', { loop: true, volume: 0.4 });
 
     this.cameras.main.setBackgroundColor(this.levelData.bgColor);
 
@@ -249,12 +251,12 @@ export class LevelScene extends Phaser.Scene {
     if (time - this.lastTelemetryUpdate > 10_000) {
       this.lastTelemetryUpdate = time;
       AudioManager.get().updateTelemetry({
-        playerHP: GameState.get().getData().playerHP,
-        playerMaxHP: GameState.get().getData().playerMaxHP,
+        hp: GameState.get().getData().playerHP,
+        maxHp: GameState.get().getData().playerMaxHP,
         enemyCount: this.enemies.countActive(),
-        bossActive: !!this.boss,
-        level: this.levelData.level,
-        recentDamage: this.damageLog.filter((d) => d.time > time - 10_000).reduce((s, d) => s + d.amount, 0),
+        bossHp: this.boss ? this.boss.hp : 0,
+        bossMaxHp: this.boss ? this.boss.maxHP : 0,
+        recentDamageTaken: this.damageLog.filter((d) => d.time > time - 10_000).reduce((s, d) => s + d.amount, 0),
       });
     }
 
@@ -294,7 +296,6 @@ export class LevelScene extends Phaser.Scene {
         shootProjectile: (x, y, vx, vy, dmg, color) => this.spawnEnemyProjectile(x, y, vx, vy, dmg, color),
         spawnEnemy: (type, x, y) => this.spawnSummonedEnemy(type, x, y),
         shake: (d, i) => this.shakeCamera(d, i),
-        playSound: (sx, sy, name) => AudioManager.get().playSFXAt(name, sx, sy, this.player.x, this.player.y),
       });
       this.updateBossBar();
     }
@@ -851,7 +852,7 @@ export class LevelScene extends Phaser.Scene {
       }
       if (time - this.lastFootstepAt > 200) {
         this.lastFootstepAt = time;
-        AudioManager.get().playPhaserSFXPitched('footstep', 0.45, 0.1);
+        this.sound.play('footstep', { volume: 0.4, detune: Phaser.Math.Between(-100, 100) });
       }
     } else {
       this.player.setVelocity(0, 0);
@@ -1049,7 +1050,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.weaponSprite.setTint(0xffffff);
     this.time.delayedCall(50, () => this.player.weaponSprite.clearTint());
     this.shakeCamera(28, 0.002);
-    AudioManager.get().playPhaserSFX('sword_attack', 0.7, 100);
+    this.sound.play('sword_attack', { volume: 0.7 });
   }
 
   private spawnEnemyProjectile(x: number, y: number, vx: number, vy: number, damage: number, color: number): void {
@@ -1092,7 +1093,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.dashCooldownUntil = time + DASH_COOLDOWN_MS;
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
     this.shakeCamera(28, 0.0025);
-    AudioManager.get().playPhaserSFX('dash_sfx', 0.8, 100);
+    this.sound.play('dash', { volume: 0.8 });
   }
 
   private spawnDashTrail(x1: number, y1: number, x2: number, y2: number): void {
@@ -1115,7 +1116,7 @@ export class LevelScene extends Phaser.Scene {
     if (time < this.player.shieldCooldownUntil) return;
     this.player.setShieldActive(SHIELD_DURATION_MS, time);
     this.player.shieldCooldownUntil = time + SHIELD_COOLDOWN_MS;
-    AudioManager.get().playPhaserSFX('shield_activate', 0.8, 300);
+    this.sound.play('shield_activate', { volume: 0.8 });
   }
 
   private swapWeapon(): void {
@@ -1154,7 +1155,7 @@ export class LevelScene extends Phaser.Scene {
           state.applyShield(duration);
         }
         state.removeItem(slot.config, 1);
-        AudioManager.get().playPhaserSFX('potion_drink', 0.85, 300);
+        this.sound.play('potion_drink', { volume: 0.85 });
         this.spawnHealEffect();
         break;
       }
@@ -1237,7 +1238,7 @@ export class LevelScene extends Phaser.Scene {
   private openChest(item: Item): void {
     if (item.opened) return;
     item.openChest();
-    AudioManager.get().playPhaserSFX('chest_open', 0.9, 400);
+    this.sound.play('chest_open', { volume: 0.9 });
     const isGolden = item.config.type === ItemType.GoldenChest;
     GameState.get().addCoins(item.config.value);
     const drops = LootSystem.rollChestLoot(isGolden);
@@ -1360,7 +1361,8 @@ export class LevelScene extends Phaser.Scene {
     AudioManager.get().bossDeath();
     AudioManager.get().stopHeartbeat();
     this.activeAudioLayer = 'ambient';
-    AudioManager.get().playMusic('ambient');
+    this.sound.stopByKey('boss_music');
+    this.sound.play('dungeon_ambient', { loop: true, volume: 0.4 });
     this.spawnCoinExplosion(boss.x, boss.y);
     if (this.stairsSprite) {
       this.stairsSprite.setVisible(true);
@@ -1448,9 +1450,13 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(3000, () => this.bossNameText?.destroy());
     this.shakeCamera(300, 0.01);
     this.showBossBar();
-    AudioManager.get().playPhaserSFX('boss_roar', 1.0, 15000);
     this.activeAudioLayer = 'boss';
-    AudioManager.get().playMusic('boss');
+    this.sound.stopByKey('dungeon_ambient');
+    this.sound.stopByKey('combat_music');
+    if (!this.sound.get('boss_music')?.isPlaying) {
+      this.sound.play('boss_music', { loop: true, volume: 0.8 });
+    }
+    this.sound.play('boss_roar', { volume: 1.0 });
     AudioManager.get().startHeartbeat();
   }
 
@@ -1581,7 +1587,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private spawnPlayerHitEffects(): void {
-    AudioManager.get().playPhaserSFX('enemy_hit', 0.9, 150);
+    this.sound.play('enemy_hit', { volume: 0.9 });
     this.shakeCamera(200, 0.01);
     this.cameras.main.flash(80, 255, 0, 0);
     for (let i = 0; i < 8; i += 1) {
@@ -1622,7 +1628,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateCombatMusic(time: number): void {
-    if (this.activeAudioLayer === 'boss') return; // boss music takes priority
+    if (this.activeAudioLayer === 'boss') return;
 
     const enemyCount = this.enemies.countActive();
     if (enemyCount > 0) {
@@ -1630,7 +1636,10 @@ export class LevelScene extends Phaser.Scene {
       if (!this.combatMusicActive) {
         this.combatMusicActive = true;
         this.activeAudioLayer = 'combat';
-        AudioManager.get().playMusic('combat');
+        this.sound.stopByKey('dungeon_ambient');
+        if (!this.sound.get('combat_music')?.isPlaying) {
+          this.sound.play('combat_music', { loop: true, volume: 0.6 });
+        }
       }
     } else if (this.combatMusicActive) {
       if (this.enemyQuietStart === 0) {
@@ -1639,8 +1648,10 @@ export class LevelScene extends Phaser.Scene {
         this.combatMusicActive = false;
         this.enemyQuietStart = 0;
         this.activeAudioLayer = 'ambient';
-        AudioManager.get().playMusic('ambient');
-        // Stop heartbeat once safe and HP is back above threshold.
+        this.sound.stopByKey('combat_music');
+        if (!this.sound.get('dungeon_ambient')?.isPlaying) {
+          this.sound.play('dungeon_ambient', { loop: true, volume: 0.4 });
+        }
         if (GameState.get().getData().playerHP / GameState.get().getData().playerMaxHP > 0.3) {
           AudioManager.get().stopHeartbeat();
         }

@@ -25,15 +25,14 @@ export class MenuScene extends Phaser.Scene {
     this.createMenu();
     this.createControlsHint();
 
-    const audio = AudioManager.get();
-    audio.init(this);
+    AudioManager.get().init(this);
 
-    const unlockAndPlay = () => {
-      audio.unlockAudio();
-      audio.crossFade('menu_theme');
-    };
-    this.input.once('pointerdown', unlockAndPlay);
-    this.input.keyboard?.once('keydown', unlockAndPlay);
+    this.input.once('pointerdown', () => {
+      this.sound.unlock();
+      if (!this.sound.get('menu_theme')?.isPlaying) {
+        this.sound.play('menu_theme', { loop: true, volume: 0.5 });
+      }
+    });
 
     this.input.keyboard?.on('keydown-UP', () => this.moveSelection(-1));
     this.input.keyboard?.on('keydown-DOWN', () => this.moveSelection(1));
@@ -257,7 +256,7 @@ export class MenuScene extends Phaser.Scene {
     } while (!this.items[idx].enabled);
     this.selectedIndex = idx;
     this.refreshMenu();
-    AudioManager.get().playPhaserSFX('menu_hover', 0.6, 120);
+    this.sound.play('menu_hover', { volume: 0.5 });
   }
 
   private refreshMenu(): void {
@@ -276,7 +275,7 @@ export class MenuScene extends Phaser.Scene {
   private activateSelection(): void {
     const item = this.items[this.selectedIndex];
     if (item.enabled) {
-      AudioManager.get().playPhaserSFX('menu_click', 0.8, 150);
+      this.sound.play('menu_click', { volume: 0.7 });
       item.action();
     }
   }

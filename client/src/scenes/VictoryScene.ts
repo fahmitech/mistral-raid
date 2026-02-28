@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { GameState } from '../core/GameState';
-import { AudioManager } from '../systems/AudioManager';
 
 export class VictoryScene extends Phaser.Scene {
   private confetti: { sprite: Phaser.GameObjects.Rectangle; speed: number; drift: number }[] = [];
@@ -12,10 +11,8 @@ export class VictoryScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
-    const audio = AudioManager.get();
-    audio.init(this);
-    audio.stopMusic();
-    audio.crossFade('victory_music');
+    this.sound.stopAll();
+    this.sound.play('victory_music', { loop: true, volume: 0.7 });
 
     const gfx = this.add.graphics();
     gfx.fillStyle(0x060b16, 1);
@@ -123,7 +120,7 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   private playAgain(): void {
-    AudioManager.get().crossFade('menu_theme');
+    this.sound.stopAll();
     GameState.get().reset();
     this.scene.start('MenuScene');
   }

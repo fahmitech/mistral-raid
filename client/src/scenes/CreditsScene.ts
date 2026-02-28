@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { AudioManager } from '../systems/AudioManager';
 
 export class CreditsScene extends Phaser.Scene {
   private container!: Phaser.GameObjects.Container;
@@ -11,9 +10,8 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   create(): void {
-    const audio = AudioManager.get();
-    audio.init(this);
-    audio.crossFade('credits_theme');
+    this.sound.stopAll();
+    this.sound.play('credits_theme', { loop: true, volume: 0.5 });
 
     this.createBackground();
     this.createScroll();
@@ -112,7 +110,7 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   private exit(): void {
-    AudioManager.get().crossFade('menu_theme');
+    this.sound.stopAll();
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'));
   }
