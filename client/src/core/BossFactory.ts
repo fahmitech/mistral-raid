@@ -14,9 +14,8 @@ export class BossFactory {
     const config = BOSS_CONFIGS[type];
     const boss = new BossEntity(scene, x, y, config);
     scene.add.existing(boss);
-    scene.physics.add.existing(boss);
-    boss.setCollideWorldBounds(true);
     group.add(boss);
+    boss.setCollideWorldBounds(true);
     return boss;
   }
 }

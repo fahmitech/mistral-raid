@@ -55,6 +55,7 @@ export class BossEntity extends Phaser.Physics.Arcade.Sprite {
   }
 
   updateAI(player: Player, time: number, actions: BossActions): void {
+    if (!this.body) return;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     if (dist > BOSS_AGGRO_RANGE) {
       this.setVelocity(0, 0);

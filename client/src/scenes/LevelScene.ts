@@ -26,7 +26,7 @@ import {
   RoomType,
   TileType,
 } from '../config/types';
-import { GameState, getWeaponDamageMultiplier } from '../core/GameState';
+import { GameState, getWeaponDamageMultiplier, getWeaponProjectileColor } from '../core/GameState';
 import { MazeData, MazeGenerator } from '../core/MazeGenerator';
 import { getLevelData } from '../core/LevelConfig';
 import { EnemyFactory } from '../core/EnemyFactory';
@@ -86,6 +86,7 @@ export class LevelScene extends Phaser.Scene {
 
   private options = SaveSystem.loadOptions();
   private currentWeaponType: ItemType = ItemType.WeaponSword;
+  private lastUpdateTime = 0;
 
   constructor() {
     super('LevelScene');
@@ -111,6 +112,10 @@ export class LevelScene extends Phaser.Scene {
     this.events.on('resume', () => {
       this.options = SaveSystem.loadOptions();
       AudioManager.get().setOptions(this.options);
+      if (this.player) {
+        this.player.setAlpha(1);
+        this.player.invincibleUntil = 0;
+      }
     });
 
     this.createBulletTextures();
@@ -191,6 +196,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    this.lastUpdateTime = time;
     this.handleInput(time);
 
     this.player.updateBlink(time);
@@ -227,7 +233,7 @@ export class LevelScene extends Phaser.Scene {
   private createBulletTextures(): void {
     if (!this.textures.exists('player_bullet')) {
       const gfx = this.add.graphics();
-      gfx.fillStyle(0xffcc00, 1);
+      gfx.fillStyle(0xffffff, 1);
       gfx.fillCircle(PROJECTILE_SIZE / 2, PROJECTILE_SIZE / 2, PROJECTILE_SIZE / 2);
       gfx.generateTexture('player_bullet', PROJECTILE_SIZE, PROJECTILE_SIZE);
       gfx.destroy();
@@ -365,20 +371,20 @@ export class LevelScene extends Phaser.Scene {
     this.physics.add.overlap(this.enemyProjectiles, this.player, (proj) => {
       const dmg = (proj as Phaser.Physics.Arcade.Image).getData('damage') as number;
       proj.destroy();
-      this.damagePlayer(dmg || 1);
+      this.damagePlayer(dmg || 1, this.lastUpdateTime);
     });
 
     this.physics.add.overlap(this.player, this.enemies, (_playerObj, enemyObj) => {
       const enemy = enemyObj as Enemy | undefined;
       const damage = enemy?.config?.damage;
       if (typeof damage !== 'number') return;
-      this.damagePlayer(damage);
+      this.damagePlayer(damage, this.lastUpdateTime);
     });
 
     this.physics.add.overlap(this.player, this.bossGroup, (_p, bossObj) => {
       const boss = bossObj as BossEntity;
       if (!boss.active) return;
-      this.damagePlayer(2 + boss.phase);
+      this.damagePlayer(2 + boss.phase, this.lastUpdateTime);
     });
 
   }
@@ -622,6 +628,7 @@ export class LevelScene extends Phaser.Scene {
       proj.setDepth(10);
       proj.setData('damage', damage);
       this.playerProjectiles.add(proj);
+      proj.setTint(getWeaponProjectileColor(state.equippedWeapon));
       proj.setVelocity(Math.cos(angle) * PROJECTILE_SPEED, Math.sin(angle) * PROJECTILE_SPEED);
       this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => proj.destroy());
     });
@@ -675,8 +682,6 @@ export class LevelScene extends Phaser.Scene {
     this.player.setPosition(newX, newY);
     this.player.dashCooldownUntil = time + DASH_COOLDOWN_MS;
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
-    this.player.setAlpha(0.5);
-    this.time.delayedCall(DASH_INVINCIBLE_MS, () => this.player.setAlpha(1));
     this.shakeCamera(28, 0.0025);
     AudioManager.get().dash();
   }
@@ -697,7 +702,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private tryShield(): void {
-    const time = this.time.now;
+    const time = this.lastUpdateTime;
     if (time < this.player.shieldCooldownUntil) return;
     this.player.setShieldActive(SHIELD_DURATION_MS, time);
     this.player.shieldCooldownUntil = time + SHIELD_COOLDOWN_MS;
@@ -902,7 +907,7 @@ export class LevelScene extends Phaser.Scene {
   private triggerExploder(enemy: Enemy): void {
     const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
     if (dist <= ENEMY_EXPLODE_RANGE) {
-      this.damagePlayer(enemy.config.damage * 3);
+      this.damagePlayer(enemy.config.damage * 3, this.lastUpdateTime);
       this.shakeCamera(80, 0.008);
     }
   }
@@ -1119,8 +1124,7 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private damagePlayer(amount: number): void {
-    const time = this.time.now;
+  private damagePlayer(amount: number, time: number): void {
     if (this.player.isShieldActive(time)) {
       this.player.shieldActiveUntil = 0;
       this.player.shieldCooldownUntil = time + SHIELD_COOLDOWN_MS;

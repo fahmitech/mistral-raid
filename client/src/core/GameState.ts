@@ -206,3 +206,20 @@ export const getWeaponDamageMultiplier = (weapon: ItemType): number => {
   const config = ITEM_CONFIGS[weapon];
   return config?.effect === ItemEffect.BoostDamage ? config.value : 1;
 };
+
+export const getWeaponProjectileColor = (weapon: ItemType): number => {
+  switch (weapon) {
+    case ItemType.WeaponSword:
+      return 0x00ccff;
+    case ItemType.WeaponDagger:
+      return 0xdddddd;
+    case ItemType.WeaponKatana:
+      return 0xff4444;
+    case ItemType.WeaponHammer:
+      return 0xff8800;
+    case ItemType.WeaponBomb:
+      return 0x44ff88;
+    default:
+      return 0xffffff;
+  }
+};
