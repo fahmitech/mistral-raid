@@ -14,6 +14,8 @@ export interface EnemyActions {
   shootProjectile: (x: number, y: number, vx: number, vy: number, damage: number, color: number) => void;
   spawnEnemy: (type: EnemyType, x: number, y: number) => void;
   shake: (duration: number, intensity: number) => void;
+  /** Spatialized SFX callback — implemented by LevelScene via AudioManager.playSFXAt. */
+  playSound?: (x: number, y: number, sfxName: string) => void;
 }
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
@@ -60,6 +62,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.lastShotAt = time;
           const dir = new Phaser.Math.Vector2(player.x - this.x, player.y - this.y).normalize();
           actions.shootProjectile(this.x, this.y, dir.x, dir.y, this.config.damage, this.config.projectileColor);
+          if (this.config.attackSfx) {
+            actions.playSound?.(this.x, this.y, this.config.attackSfx);
+          }
         }
       } else if (dist <= ENEMY_AGGRO_RANGE * 1.5) {
         this.scene.physics.moveToObject(this, player, this.config.speed);

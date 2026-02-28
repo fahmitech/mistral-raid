@@ -49,6 +49,8 @@ export interface EnemyConfig {
   scale: number;
   hasRunAnim: boolean;
   projectileColor: number;
+  /** SFX category name played when this enemy attacks. */
+  attackSfx?: string;
 }
 
 export enum BossType {

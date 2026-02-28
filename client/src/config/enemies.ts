@@ -12,6 +12,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'goblin_attack',
   },
   [EnemyType.Imp]: {
     type: EnemyType.Imp,
@@ -24,6 +25,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'elemental_magic',
   },
   [EnemyType.Chort]: {
     type: EnemyType.Chort,
@@ -36,6 +38,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'goblin_attack',
   },
   [EnemyType.BigZombie]: {
     type: EnemyType.BigZombie,
@@ -48,6 +51,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'zombie_growl',
   },
   [EnemyType.IceZombie]: {
     type: EnemyType.IceZombie,
@@ -60,6 +64,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: false,
     projectileColor: 0xffcc00,
+    attackSfx: 'zombie_growl',
   },
   [EnemyType.MaskedOrc]: {
     type: EnemyType.MaskedOrc,
@@ -72,6 +77,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'orc_roar',
   },
   [EnemyType.BigDemon]: {
     type: EnemyType.BigDemon,
@@ -84,6 +90,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.2,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'orc_roar',
   },
   [EnemyType.Skelet]: {
     type: EnemyType.Skelet,
@@ -96,6 +103,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'skeleton_rattle',
   },
   [EnemyType.Necromancer]: {
     type: EnemyType.Necromancer,
@@ -108,6 +116,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.0,
     hasRunAnim: true,
     projectileColor: 0xffcc00,
+    attackSfx: 'elemental_magic',
   },
   [EnemyType.OrcArmored]: {
     type: EnemyType.OrcArmored,
@@ -120,6 +129,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     scale: 1.1,
     hasRunAnim: false,
     projectileColor: 0xffcc00,
+    attackSfx: 'orc_roar',
   },
 };
 
