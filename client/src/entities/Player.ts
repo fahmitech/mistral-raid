@@ -15,6 +15,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   shieldActiveUntil = 0;
   lastDir = new Phaser.Math.Vector2(1, 0);
   aimAngle = 0;
+  private blinkOn = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, spriteKey: string, weaponConfig: ItemConfig) {
     super(scene, x, y, spriteKey);
@@ -69,18 +70,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (!Number.isFinite(now)) {
       this.setVisible(true);
       this.setAlpha(1);
+      this.blinkOn = false;
+      this.clearTint();
       return;
     }
 
     if (this.isInvincible(now)) {
-      const t = (now % 200) / 200;
-      // Keep the player clearly visible even under the fog-of-war multiply overlay.
-      const nextAlpha = 0.7 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2));
+      // Keep the body fully visible; use tint-based blinking instead of alpha (alpha can
+      // make the sprite appear to vanish depending on lighting/overlay).
+      const on = Math.floor(now / 100) % 2 === 0;
+      if (on !== this.blinkOn) {
+        this.blinkOn = on;
+        if (on) this.setTintFill(0xffffff);
+        else this.clearTint();
+      }
       this.setVisible(true);
-      this.setAlpha(Number.isFinite(nextAlpha) ? nextAlpha : 1);
+      this.setAlpha(1);
     } else {
       this.setVisible(true);
       this.setAlpha(1);
+      if (this.blinkOn) {
+        this.blinkOn = false;
+        this.clearTint();
+      }
     }
   }
 
