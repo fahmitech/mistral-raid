@@ -359,9 +359,11 @@ export class LevelScene extends Phaser.Scene {
       this.damagePlayer(dmg || 1);
     });
 
-    this.physics.add.overlap(this.enemies, this.player, (enemy) => {
-      const e = enemy as Enemy;
-      this.damagePlayer(e.config.damage);
+    this.physics.add.overlap(this.player, this.enemies, (_playerObj, enemyObj) => {
+      const enemy = enemyObj as Enemy | undefined;
+      const damage = enemy?.config?.damage;
+      if (typeof damage !== 'number') return;
+      this.damagePlayer(damage);
     });
 
   }
