@@ -97,6 +97,7 @@ export class LevelScene extends Phaser.Scene {
   private debugText?: Phaser.GameObjects.Text;
   private debugMarker?: Phaser.GameObjects.Graphics;
   private debugToggleKey?: Phaser.Input.Keyboard.Key;
+  private playerRenderGlitchFrames = 0;
 
   constructor() {
     super('LevelScene');
@@ -219,6 +220,7 @@ export class LevelScene extends Phaser.Scene {
       this.player.setVisible(true);
     }
     this.player.updateWeaponPosition();
+    this.ensurePlayerRenderable();
     this.updateShieldRing(time);
     this.checkAutoCollect();
     this.applyFogVisibility();
@@ -248,6 +250,43 @@ export class LevelScene extends Phaser.Scene {
     this.updateHUD(time);
     this.lighting.update(this.player.x, this.player.y);
     this.updateDebug(time);
+  }
+
+  private ensurePlayerRenderable(): void {
+    // Defensive watchdog: in long sessions / multiple restarts, we've seen intermittent cases where the
+    // player is logically visible but stops rendering. Keep the fix surgical by only intervening when
+    // the sprite *should* be visible yet renderFlags indicate otherwise.
+    if (!this.player) return;
+
+    // Ensure the player and weapon aren't excluded by camera ignore filters.
+    // (cameraFilter is used by Camera.ignore; 0 means render for all cameras).
+    (this.player as unknown as { cameraFilter?: number }).cameraFilter = 0;
+    (this.player.weaponSprite as unknown as { cameraFilter?: number }).cameraFilter = 0;
+
+    // Ensure they're still on the display list (should be, but guards long-session edge cases).
+    if (!this.children.exists(this.player)) {
+      this.add.existing(this.player);
+    }
+    if (!this.children.exists(this.player.weaponSprite)) {
+      this.add.existing(this.player.weaponSprite);
+    }
+
+    const rf = (this.player as unknown as { renderFlags?: number }).renderFlags;
+    const shouldRender = this.player.visible && this.player.alpha > 0.2;
+    if (shouldRender && rf === 0) {
+      this.playerRenderGlitchFrames += 1;
+      // After a few consecutive frames, force a minimal refresh of render-related flags.
+      if (this.playerRenderGlitchFrames >= 6) {
+        this.player.setVisible(true);
+        this.player.setAlpha(1);
+        this.player.setActive(true);
+        this.player.weaponSprite.setVisible(true);
+        this.player.weaponSprite.setActive(true);
+        this.playerRenderGlitchFrames = 0;
+      }
+    } else {
+      this.playerRenderGlitchFrames = 0;
+    }
   }
 
   private handleResume(): void {
