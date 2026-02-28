@@ -5,10 +5,10 @@ import {
   PLAYER_BODY_OFFSET_Y,
   PLAYER_BODY_WIDTH,
 } from '../config/constants';
-import { ItemConfig } from '../config/types';
+import { ItemConfig, ItemType, WeaponConfig } from '../config/types';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  weaponSprite: Phaser.GameObjects.Image;
+  weaponSprite: Phaser.GameObjects.Sprite;
   invincibleUntil = 0;
   dashCooldownUntil = 0;
   shieldCooldownUntil = 0;
@@ -17,15 +17,27 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   aimAngle = 0;
   private invincibleTintOn = false;
   private weaponHoldOffset = new Phaser.Math.Vector2(0, 3);
+  private weaponRotationOffset = Math.PI / 2;
+  private weaponScale = 1;
+  private currentWeaponType: ItemType = ItemType.WeaponSword;
+  private sceneRef: Phaser.Scene;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, spriteKey: string, weaponConfig: ItemConfig) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    spriteKey: string,
+    weaponItem: ItemConfig,
+    weaponConfig: WeaponConfig
+  ) {
     super(scene, x, y, spriteKey);
-    this.weaponSprite = scene.add.image(x + 8, y + 4, weaponConfig.sprite);
-    this.weaponSprite.setOrigin(0.5, 0.92);
+    this.sceneRef = scene;
+    this.weaponSprite = scene.add.sprite(x + 8, y + 4, weaponItem.sprite);
     this.weaponSprite.setDepth(18);
     this.setDepth(17);
     this.setOrigin(0.5, 0.6);
     this.setScale(1);
+    this.setWeapon(weaponItem, weaponConfig, weaponItem.type);
   }
 
   initPhysics(): void {
@@ -35,12 +47,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.body?.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT).setOffset(PLAYER_BODY_OFFSET_X, PLAYER_BODY_OFFSET_Y);
   }
 
-  setWeapon(config: ItemConfig): void {
-    this.weaponSprite.setTexture(config.sprite);
-    if (config.sprite.startsWith('bomb')) {
-      this.weaponSprite.setOrigin(0.5, 0.5);
-    } else {
-      this.weaponSprite.setOrigin(0.5, 0.92);
+  setWeapon(itemConfig: ItemConfig, weaponConfig: WeaponConfig, type: ItemType): void {
+    this.currentWeaponType = type;
+    this.weaponSprite.setTexture(itemConfig.sprite);
+    this.weaponScale = weaponConfig.weaponScale ?? 1;
+    this.weaponSprite.setScale(this.weaponScale);
+    this.weaponHoldOffset.set(weaponConfig.holdOffset.x, weaponConfig.holdOffset.y);
+    this.weaponRotationOffset = weaponConfig.rotationOffset;
+    const originY = itemConfig.sprite.startsWith('bomb') ? 0.5 : 0.92;
+    this.weaponSprite.setOrigin(0.5, originY);
+    this.weaponSprite.anims?.stop();
+    if (weaponConfig.holdAnimationKey && this.scene.anims.exists(weaponConfig.holdAnimationKey)) {
+      this.weaponSprite.play(weaponConfig.holdAnimationKey);
     }
   }
 
@@ -112,11 +130,41 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.weaponSprite.setPosition(baseX + offsetX, baseY + offsetY);
 
     // Most 0x72 weapon sprites are oriented "up" by default, so rotate from up -> angle.
-    this.weaponSprite.setRotation(angle + Math.PI / 2);
+    this.weaponSprite.setRotation(angle + this.weaponRotationOffset);
 
     // Put weapon behind player when aiming upwards, in front otherwise.
     const playerDepth = this.depth ?? 0;
     this.weaponSprite.setDepth(Math.sin(angle) < -0.2 ? playerDepth - 1 : playerDepth + 1);
+  }
+
+  playWeaponAttack(_config: WeaponConfig, weapon: ItemType): void {
+    const swing = weapon === ItemType.WeaponHammer ? Phaser.Math.DegToRad(35) : Phaser.Math.DegToRad(12);
+    const duration = weapon === ItemType.WeaponHammer ? 160 : weapon === ItemType.WeaponKatana ? 140 : 90;
+    const scaleBump = weapon === ItemType.WeaponHammer ? 0.12 : weapon === ItemType.WeaponKatana ? 0.08 : 0.05;
+    this.sceneRef.tweens.killTweensOf(this.weaponSprite);
+    this.sceneRef.tweens.add({
+      targets: this.weaponSprite,
+      rotation: this.weaponSprite.rotation + swing,
+      duration,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    });
+    this.sceneRef.tweens.add({
+      targets: this.weaponSprite,
+      scaleX: this.weaponScale + scaleBump,
+      scaleY: this.weaponScale + scaleBump,
+      duration: duration * 0.5,
+      yoyo: true,
+      ease: 'Sine.easeOut',
+    });
+    if (weapon === ItemType.WeaponDagger) {
+      this.sceneRef.tweens.add({
+        targets: this.weaponSprite,
+        alpha: { from: 1, to: 0.4 },
+        duration: 60,
+        yoyo: true,
+      });
+    }
   }
 
   setAimAngle(angle: number): void {

@@ -1,4 +1,4 @@
-import { OptionsData } from '../config/types';
+import { ItemType, OptionsData } from '../config/types';
 
 export class AudioManager {
   private static instance = new AudioManager();
@@ -61,6 +61,32 @@ export class AudioManager {
 
   shoot(): void {
     this.playTone(620, 40, 'square', 0.06);
+  }
+
+  weaponShoot(type: ItemType): void {
+    switch (type) {
+      case ItemType.WeaponDagger:
+        this.playTone(760, 55, 'triangle', 0.05);
+        break;
+      case ItemType.WeaponKatana:
+        this.playTone(480, 80, 'sawtooth', 0.07);
+        break;
+      case ItemType.WeaponHammer:
+        this.playTone(320, 110, 'square', 0.09);
+        break;
+      case ItemType.WeaponBomb:
+        this.playTone(220, 90, 'triangle', 0.08);
+        break;
+      case ItemType.WeaponSword:
+      default:
+        this.playTone(600, 60, 'square', 0.06);
+        break;
+    }
+  }
+
+  weaponExplode(): void {
+    this.playTone(160, 200, 'sawtooth', 0.12);
+    this.playTone(60, 260, 'triangle', 0.08);
   }
 
   dash(): void {

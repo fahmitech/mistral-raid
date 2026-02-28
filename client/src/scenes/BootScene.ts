@@ -44,6 +44,7 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     this.aliasMissingFrames();
     this.createAnimations();
+    this.createWeaponAssets();
     this.scene.start('MenuScene');
   }
 
@@ -192,6 +193,69 @@ export class BootScene extends Phaser.Scene {
         this.textures.addImage(frameKey, image);
       }
     }
+  }
+
+  private createWeaponAssets(): void {
+    const requiredKeys = [
+      'weapon_regular_sword',
+      'weapon_katana',
+      'weapon_big_hammer',
+      'bomb_f0',
+      'bomb_f1',
+      'bomb_f2',
+      'weapon_shuriken',
+    ];
+    const status: Record<string, boolean> = {};
+    requiredKeys.forEach((key) => {
+      status[key] = this.textures.exists(key);
+    });
+
+    if (!status['weapon_shuriken']) {
+      const fallback = this.findShurikenFallback();
+      if (fallback) {
+        this.aliasTexture(fallback, 'weapon_shuriken');
+        status['weapon_shuriken'] = this.textures.exists('weapon_shuriken');
+      }
+    }
+
+    this.ensureBombFuseAnimation();
+    this.ensureSwordSlashTexture();
+    console.info('[BootScene] Weapon textures:', status);
+  }
+
+  private findShurikenFallback(): string | null {
+    const candidates = ['weapon_throwing_axe', 'weapon_dagger_silver', 'floor_spikes_anim_f0'];
+    return candidates.find((key) => this.textures.exists(key)) ?? null;
+  }
+
+  private aliasTexture(source: string, target: string): void {
+    if (this.textures.exists(target) || !this.textures.exists(source)) return;
+    const sourceTex = this.textures.get(source);
+    const image = sourceTex.getSourceImage() as HTMLImageElement;
+    this.textures.addImage(target, image);
+  }
+
+  private ensureBombFuseAnimation(): void {
+    if (this.anims.exists('bomb_fuse')) return;
+    const frames = ['bomb_f0', 'bomb_f1', 'bomb_f2'].filter((k) => this.textures.exists(k));
+    if (!frames.length) return;
+    this.anims.create({
+      key: 'bomb_fuse',
+      frames: frames.map((k) => ({ key: k })),
+      frameRate: 10,
+      repeat: -1,
+    });
+  }
+
+  private ensureSwordSlashTexture(): void {
+    if (this.textures.exists('weapon_sword_slash')) return;
+    const gfx = this.make.graphics({ x: 0, y: 0, add: false });
+    gfx.fillStyle(0x66ccff, 1);
+    gfx.fillRoundedRect(0, 0, 18, 4, 2);
+    gfx.fillStyle(0xffffff, 0.4);
+    gfx.fillRoundedRect(2, 1, 14, 2, 1);
+    gfx.generateTexture('weapon_sword_slash', 18, 4);
+    gfx.destroy();
   }
 
   private aliasRunToIdle(key: string): void {
