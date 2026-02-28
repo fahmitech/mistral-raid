@@ -29,18 +29,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   initPhysics(): void {
     // Arcade body is created only after `scene.physics.add.existing(this)`.
     if (!this.body) return;
-    this.ensureAnims();
     this.setCollideWorldBounds(true);
     this.body?.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT).setOffset(PLAYER_BODY_OFFSET_X, PLAYER_BODY_OFFSET_Y);
-  }
-
-  ensureAnims(): void {
-    const self = this as unknown as { anims?: unknown; scene?: Phaser.Scene };
-    if (self.anims) return;
-    const AnimationState = (Phaser.Animations as unknown as { AnimationState?: new (parent: unknown) => unknown })
-      .AnimationState;
-    if (!AnimationState) return;
-    self.anims = new AnimationState(this);
   }
 
   setWeapon(config: ItemConfig): void {
