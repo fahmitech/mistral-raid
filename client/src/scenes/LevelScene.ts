@@ -531,12 +531,14 @@ export class LevelScene extends Phaser.Scene {
       this.player.updateFacing(move);
       if (move.x !== 0) this.player.setFlipX(move.x < 0);
       if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
-        this.player.play(`${this.playerSpriteKey}_run`, true);
+        this.player.ensureAnims();
+        this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
       }
     } else {
       this.player.setVelocity(0, 0);
       if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
-        this.player.play(`${this.playerSpriteKey}_idle`, true);
+        this.player.ensureAnims();
+        this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
       }
     }
 
