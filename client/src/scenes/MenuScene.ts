@@ -146,11 +146,14 @@ export class MenuScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        title.y = Math.round(title.y);
+      },
     });
 
     this.tweens.add({
       targets: title,
-      scale: 1.04,
+      alpha: 0.92,
       duration: 1100,
       yoyo: true,
       repeat: -1,
@@ -164,6 +167,9 @@ export class MenuScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        subtitle.y = Math.round(subtitle.y);
+      },
     });
   }
 

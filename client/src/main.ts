@@ -17,8 +17,9 @@ const config: Phaser.Types.Core.GameConfig = {
   height: INTERNAL_HEIGHT,
   parent: 'app',
   pixelArt: true,
+  antialias: false,
   roundPixels: true,
-  zoom: ZOOM,
+  zoom: 1,
   physics: {
     default: 'arcade',
     arcade: {
@@ -27,8 +28,9 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.NONE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoRound: true,
   },
   scene: [
     BootScene,
@@ -46,6 +48,18 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+
+// Keep the canvas scaling to an integer multiple of the internal resolution.
+// This prevents browser sub-pixel scaling that makes UI text look blurry.
+const updateIntegerZoom = () => {
+  const maxZoom = game.scale.getMaxZoom();
+  const nextZoom = Math.max(1, Math.min(ZOOM, maxZoom));
+  if (game.scale.zoom !== nextZoom) {
+    game.scale.setZoom(nextZoom);
+  }
+};
+window.addEventListener('resize', updateIntegerZoom);
+updateIntegerZoom();
 
 const preventContextMenu = (event: Event) => event.preventDefault();
 window.addEventListener('contextmenu', preventContextMenu);

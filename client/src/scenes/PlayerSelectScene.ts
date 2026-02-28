@@ -81,8 +81,12 @@ export class PlayerSelectScene extends Phaser.Scene {
       const bg = this.add.graphics();
       bg.fillStyle(0x0a0f1e, 0.9);
       bg.fillRoundedRect(x - 22, y - 22, 44, 44, 6);
-      const sprite = this.add.sprite(x, y, `${cfg.spriteKey}_idle`);
-      sprite.play(`${cfg.spriteKey}_idle`);
+      const portraitKey = this.resolvePortraitKey(cfg.spriteKey);
+      const sprite = this.add.sprite(x, y, portraitKey);
+      const animKey = `${cfg.spriteKey}_idle`;
+      if (this.anims.exists(animKey)) {
+        sprite.play(animKey);
+      }
       sprite.setScale(2.0);
       const label = this.add
         .text(x, y + 28, cfg.label.toUpperCase(), {
@@ -118,6 +122,16 @@ export class PlayerSelectScene extends Phaser.Scene {
         .setOrigin(0, 0.5);
       this.statLabels.push(text);
     });
+  }
+
+  private resolvePortraitKey(spriteKey: string): string {
+    const idleKey = `${spriteKey}_idle_anim_f0`;
+    if (this.textures.exists(idleKey)) return idleKey;
+    const animKey = `${spriteKey}_anim_f0`;
+    if (this.textures.exists(animKey)) return animKey;
+    const runKey = `${spriteKey}_run_anim_f0`;
+    if (this.textures.exists(runKey)) return runKey;
+    return '__MISSING';
   }
 
   private createButtons(): void {

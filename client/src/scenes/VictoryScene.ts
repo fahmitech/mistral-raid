@@ -24,8 +24,8 @@ export class VictoryScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: title,
-      scale: 1.05,
-      duration: 1100,
+      alpha: 0.9,
+      duration: 900,
       yoyo: true,
       repeat: -1,
     });
