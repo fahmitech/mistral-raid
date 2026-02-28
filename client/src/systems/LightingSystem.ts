@@ -25,11 +25,9 @@ export class LightingSystem {
       gfx.destroy();
     }
 
-    this.lightSprite = scene.add
-      .image(0, 0, this.lightTextureKey)
-      .setVisible(false)
-      .setOrigin(0.5)
-      .setScrollFactor(0);
+    // Used only as a brush for RenderTexture.erase; keep it off the display list,
+    // but still renderable (visible) so erase actually draws something.
+    this.lightSprite = scene.make.image({ x: 0, y: 0, key: this.lightTextureKey, add: false }).setOrigin(0.5);
   }
 
   setTorches(positions: { x: number; y: number }[]): void {
