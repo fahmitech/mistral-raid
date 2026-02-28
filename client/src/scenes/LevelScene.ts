@@ -51,6 +51,7 @@ export class LevelScene extends Phaser.Scene {
   private player!: Player;
   private playerSpriteKey = 'knight_m';
 
+  private wallShadows?: Phaser.GameObjects.Graphics;
   private enemies!: Phaser.Physics.Arcade.Group;
   private bossGroup!: Phaser.Physics.Arcade.Group;
   private items!: Phaser.Physics.Arcade.Group;
@@ -259,6 +260,8 @@ export class LevelScene extends Phaser.Scene {
   private createFloor(): void {
     const floor = this.add.renderTexture(0, 0, this.maze.width * TILE_SIZE, this.maze.height * TILE_SIZE);
     floor.setOrigin(0, 0).setDepth(0);
+    // Slightly brighten the floor layer to improve floor-vs-wall readability without changing assets.
+    floor.setTint(0xdddddd);
     for (let y = 0; y < this.maze.height; y += 1) {
       for (let x = 0; x < this.maze.width; x += 1) {
         const tile = this.maze.tiles[y][x];
@@ -272,6 +275,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createWalls(): void {
+    this.wallShadows?.destroy();
+    this.wallShadows = this.add.graphics().setDepth(0.9);
+    this.wallShadows.fillStyle(0x000000, 0.22);
+
     this.walls = this.physics.add.staticGroup();
     for (let y = 0; y < this.maze.height; y += 1) {
       for (let x = 0; x < this.maze.width; x += 1) {
@@ -280,8 +287,14 @@ export class LevelScene extends Phaser.Scene {
           const key = aboveWall ? 'wall_mid' : 'wall_top_mid';
           const wall = this.add.image(x * TILE_SIZE + 8, y * TILE_SIZE + 8, key).setDepth(1);
           // Slight tint separation improves wall/floor readability without changing assets.
-          wall.setTint(aboveWall ? 0x8f8f8f : 0xffffff);
+          wall.setTint(aboveWall ? 0x777777 : 0xffffff);
           this.walls.add(wall);
+
+          // Add a subtle shadow on the floor just below wall tiles to make boundaries more readable.
+          const belowIsWall = y + 1 < this.maze.height && this.maze.tiles[y + 1][x] === TileType.Wall;
+          if (!belowIsWall) {
+            this.wallShadows.fillRect(x * TILE_SIZE, y * TILE_SIZE + TILE_SIZE - 3, TILE_SIZE, 3);
+          }
         }
       }
     }
