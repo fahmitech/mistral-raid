@@ -9,6 +9,7 @@ dist/
 !.env.example
 
 # Beads (local DB, not needed in repo)
+.beads/
 .beads/*.db
 .beads/*.db-wal
 .beads/*.db-shm
