@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { ItemType, OptionsData } from '../config/types';
 import {
   AudioVolumes,
@@ -89,6 +90,30 @@ const FALLBACK_TONES: Readonly<Record<string, [number, number, OscillatorType, n
   stairs_descend:    [220, 400, 'sine',     0.06],
   heartbeat_low_hp:  [80,   80, 'sine',     0.08],
   suspense_build:    [60,  800, 'sine',     0.06],
+};
+
+// ─── Static Phaser audio volumes ──────────────────────────────────────────────
+const STATIC_MUSIC_VOLUMES: Record<string, number> = {
+  menu_theme:      0.5,
+  dungeon_ambient: 0.4,
+  combat_music:    0.6,
+  boss_music:      0.8,
+  game_over_music: 0.7,
+  victory_music:   0.7,
+  credits_theme:   0.5,
+};
+const STATIC_SFX_VOLUMES: Record<string, number> = {
+  sword_attack: 0.7,
+  enemy_hit:    0.9,
+  enemy_die:    0.75,
+  dash:         0.8,
+  shield:       0.8,
+  footstep:     0.4,
+  ui_click:     0.7,
+  menu_hover:   0.5,
+  chest_open:   0.9,
+  potion_drink: 0.85,
+  boss_roar:    0.9,
 };
 
 // ─── Music track mapping ───────────────────────────────────────────────────────
@@ -772,5 +797,52 @@ export class AudioManager {
       musicVolume:  this.volumes.music,
       sfxVolume:    this.volumes.sfx,
     };
+  }
+
+  // ─── Static Phaser-native audio API (plan-based simple singleton) ─────────────
+
+  private static currentMusicKey: string | null = null;
+
+  static playMusic(scene: Phaser.Scene, key: string): void {
+    if (AudioManager.currentMusicKey === key && !!scene.sound.get(key)?.isPlaying) return;
+    scene.sound.stopAll();
+    AudioManager.currentMusicKey = key;
+    if (!scene.cache.audio.exists(key)) {
+      console.warn('[AudioManager] Missing audio key:', key);
+      return;
+    }
+    try {
+      scene.sound.play(key, { loop: true, volume: STATIC_MUSIC_VOLUMES[key] ?? 0.5 });
+    } catch (err) {
+      console.error('[AudioManager] playMusic error:', err);
+    }
+  }
+
+  static playSFX(scene: Phaser.Scene, key: string): void {
+    if (!scene.cache.audio.exists(key)) {
+      console.warn('[AudioManager] Missing SFX key:', key);
+      return;
+    }
+    try {
+      scene.sound.play(key, { volume: STATIC_SFX_VOLUMES[key] ?? 0.7 });
+    } catch (err) {
+      console.error('[AudioManager] playSFX error:', err);
+    }
+  }
+
+  static stopAll(scene: Phaser.Scene): void {
+    scene.sound.stopAll();
+    AudioManager.currentMusicKey = null;
+  }
+
+  static stopMusic(scene: Phaser.Scene): void {
+    if (AudioManager.currentMusicKey) {
+      scene.sound.stopByKey(AudioManager.currentMusicKey);
+      AudioManager.currentMusicKey = null;
+    }
+  }
+
+  static isMusicPlaying(scene: Phaser.Scene, key: string): boolean {
+    return !!scene.sound.get(key)?.isPlaying;
   }
 }

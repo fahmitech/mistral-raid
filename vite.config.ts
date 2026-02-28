@@ -1,16 +1,9 @@
-import { defineConfig } from 'vite';
-import path from 'node:path';
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  root: '.',
-  publicDir: false,
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'client/src'),
-    },
-  },
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-  },
-});
+  root: 'client',
+  publicDir: 'public',
+  server: {
+    port: 5173
+  }
+})

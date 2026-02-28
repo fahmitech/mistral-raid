@@ -1,190 +1,183 @@
-# TASK: Full Dynamic Audio System Integration (ElevenLabs Generated Assets)
+# 🎯 GLOBAL AUDIO INTEGRATION — MISTRAL RAID (STABLE VERSION)
 
-## Context
+Now that Vite is correctly configured:
 
-Project: Mistral Raid  
-Engine: Phaser 3  
-Audio Assets: Generated via ElevenLabs Text-to-Sound API  
-Files located in: client/public/audio/
+- root = client
+- publicDir = public
+- Audio URL works at: /audio/...
 
-The following audio files already exist:
+We will integrate a full, stable Phaser audio system.
 
-- dungeon_ambient.mp3
-- combat_music.mp3
-- boss_music.mp3
-- sword_attack.mp3
-- player_hit.mp3
-- boss_roar.mp3
-- game_over.mp3
-- victory_music.mp3
-- footstep.mp3
-- dash.mp3
-- shield_activate.mp3
-- menu_theme.mp3
-- credits_theme.mp3
+------------------------------------------------------------
+OBJECTIVES
+------------------------------------------------------------
 
-Goal:
-Implement a professional-grade global audio system across the entire game.
+• Load all audio from /public/audio
+• Prevent decoding errors
+• Prevent duplicate music
+• Unlock audio on first click
+• Handle scene transitions
+• Stable for hackathon demo
+• No runtime crash
+• No unhandled promise errors
 
----
+------------------------------------------------------------
+STEP 1 — CREATE GLOBAL AUDIO MANAGER
+------------------------------------------------------------
 
-# PART 1 — AudioManager Architecture
-
-Create:
+Create file:
 
 client/src/systems/AudioManager.ts
 
-Requirements:
+Implement:
 
 - Singleton pattern
-- Centralized audio control
-- Separate channels:
-  - music
-  - sfx
-  - ambient
-- Volume controls
-- Crossfade system (500ms fade)
-- Prevent overlapping SFX spam
+- Current music reference
+- playMusic(key)
+- playSFX(key)
+- stopMusic()
+- stopAll()
 
-Public API:
+Behavior:
 
-init(scene)
-unlockAudio()
-playMusic(key)
-stopMusic()
-crossFade(newTrack)
-playSFX(key)
-setMasterVolume(value)
-setMusicVolume(value)
-setSFXVolume(value)
+• Only one music track at a time
+• SFX can overlap
+• Safe play with try/catch
+• Check cache before play
 
----
+------------------------------------------------------------
+STEP 2 — LOAD ALL AUDIO IN BOOTSCENE
+------------------------------------------------------------
 
-# PART 2 — Auto Unlock Audio
+In BootScene preload():
 
-Because browsers block autoplay:
+Load ALL files with absolute path:
 
-On first user click OR key press:
-- Call audioManager.unlockAudio()
-- Start menu_theme
+this.load.audio('menu_theme', '/audio/music/menu_theme2.mp3');
+this.load.audio('dungeon_ambient', '/audio/ambient/dungeon_ambient.mp3');
+this.load.audio('combat_music', '/audio/combat/combat_music.mp3');
+this.load.audio('boss_music', '/audio/boss/boss_music.mp3');
+this.load.audio('victory_music', '/audio/music/victory_music.mp3');
+this.load.audio('game_over_music', '/audio/music/game_over.mp3');
 
-Display overlay:
-"Click to Enter the Dungeon"
+this.load.audio('sword_attack', '/audio/combat/sword_attack.mp3');
+this.load.audio('enemy_hit', '/audio/enemies/enemy_hit.mp3');
+this.load.audio('enemy_die', '/audio/enemies/enemy_die.mp3');
+this.load.audio('dash', '/audio/movement/dash.mp3');
+this.load.audio('shield', '/audio/movement/shield_activate.mp3');
+this.load.audio('footstep', '/audio/movement/footstep.mp3');
+this.load.audio('ui_click', '/audio/ui/menu_click.mp3');
 
-Remove overlay after unlock.
+Add load error listener:
 
----
+this.load.on('loaderror', (file) => {
+    console.error('Audio load error:', file);
+});
 
-# PART 3 — Music States
+------------------------------------------------------------
+STEP 3 — UNLOCK AUDIO ON FIRST USER INPUT
+------------------------------------------------------------
 
-Implement global music states:
+In MenuScene create():
 
-1. MENU → menu_theme
-2. DUNGEON_IDLE → dungeon_ambient (loop)
-3. COMBAT → combat_music (crossfade)
-4. BOSS → boss_music (crossfade + boss_roar once)
-5. GAME_OVER → game_over
-6. VICTORY → victory_music
-7. CREDITS → credits_theme
+this.input.once('pointerdown', () => {
+    if (this.sound.locked) {
+        this.sound.unlock();
+    }
+    AudioManager.playMusic(this, 'menu_theme');
+});
 
-Rules:
+------------------------------------------------------------
+STEP 4 — SCENE MUSIC LOGIC
+------------------------------------------------------------
 
-- If enemies present → COMBAT
-- If boss active → BOSS
-- If no enemies for 5 seconds → DUNGEON_IDLE
-- If player HP < 30% → slightly increase music volume + low filter effect
+MenuScene:
+Play menu_theme
 
----
+LevelScene start:
+AudioManager.playMusic(this, 'dungeon_ambient');
 
-# PART 4 — Movement-Based Sound
+When combat begins:
+AudioManager.playMusic(this, 'combat_music');
 
-In Player update loop:
+When boss appears:
+AudioManager.playMusic(this, 'boss_music');
 
-If velocity > 0:
-- Every 200ms play footstep
-- Randomize pitch slightly (0.95–1.05)
+VictoryScene:
+AudioManager.playMusic(this, 'victory_music');
 
-On Dash:
-- play dash.mp3
+GameOverScene:
+AudioManager.playMusic(this, 'game_over_music');
 
-On Shield:
-- play shield_activate.mp3
+------------------------------------------------------------
+STEP 5 — SFX INTEGRATION
+------------------------------------------------------------
 
-On Sword Attack:
-- play sword_attack.mp3
+On player attack:
+AudioManager.playSFX(this, 'sword_attack');
 
-On Player Hit:
-- play player_hit.mp3
+On enemy hit:
+AudioManager.playSFX(this, 'enemy_hit');
 
-On Enemy Death:
-- play short hit confirmation sound
+On enemy death:
+AudioManager.playSFX(this, 'enemy_die');
 
----
+On dash:
+AudioManager.playSFX(this, 'dash');
 
-# PART 5 — Credits Scene
+On shield:
+AudioManager.playSFX(this, 'shield');
 
-When entering CreditsScene:
-- Stop current music
-- Crossfade to credits_theme
-- Lower master volume slightly
-- Add subtle ambient reverb
+On UI button:
+AudioManager.playSFX(this, 'ui_click');
 
----
+------------------------------------------------------------
+STEP 6 — FOOTSTEP LOOP CONTROL
+------------------------------------------------------------
 
-# PART 6 — Preload Strategy
+Implement throttled step sound:
 
-In BootScene preload:
+If player velocity > 0
+Play footstep every 250ms
 
-this.load.audio('dungeon_ambient', 'audio/dungeon_ambient.mp3')
-this.load.audio('combat_music', 'audio/combat_music.mp3')
-this.load.audio('boss_music', 'audio/boss_music.mp3')
-this.load.audio('menu_theme', 'audio/menu_theme.mp3')
-this.load.audio('credits_theme', 'audio/credits_theme.mp3')
-this.load.audio('game_over', 'audio/game_over.mp3')
-this.load.audio('victory_music', 'audio/victory_music.mp3')
-this.load.audio('footstep', 'audio/footstep.mp3')
-this.load.audio('dash', 'audio/dash.mp3')
-this.load.audio('shield_activate', 'audio/shield_activate.mp3')
-this.load.audio('sword_attack', 'audio/sword_attack.mp3')
-this.load.audio('player_hit', 'audio/player_hit.mp3')
-this.load.audio('boss_roar', 'audio/boss_roar.mp3')
+Stop when velocity == 0
 
----
+------------------------------------------------------------
+STEP 7 — SAFE PLAY IMPLEMENTATION
+------------------------------------------------------------
 
-# PART 7 — Performance Rules
+Inside AudioManager:
 
-- All music looped
-- Only one music track active at a time
-- SFX pooled
-- Do NOT generate audio during gameplay
-- No API calls during game runtime
+Before playing:
+- Check this.cache.audio.exists(key)
+- Wrap play() in try/catch
+- Log errors but do not crash
 
----
+------------------------------------------------------------
+STEP 8 — CLEAN START
+------------------------------------------------------------
 
-# PART 8 — Hackathon WOW Feature
+In main.ts ensure:
 
-Add debug overlay (F4):
+audio: {
+   disableWebAudio: false
+}
 
-Show:
+Use default Phaser WebAudio now that files are valid.
 
-- Current music state
-- Active track
-- SFX triggered per second
-- Master volume level
+------------------------------------------------------------
+EXPECTED RESULT
+------------------------------------------------------------
 
----
+• Game launches clean
+• Audio loads without decoding error
+• Music plays after first click
+• Only one music at a time
+• SFX works during gameplay
+• No console red errors
+• Stable hackathon demo ready
 
-# Expected Result
-
-- Music plays on menu after click
-- Music transitions smoothly
-- Combat feels reactive
-- Boss fight feels cinematic
-- Credits has its own theme
-- No crashes
-- Clean architecture
-- Production ready
-
-Deliver modular clean TypeScript implementation.
-No placeholder logic.
-Fully integrated with LevelScene and MenuScene.
+Do not refactor gameplay logic.
+Only implement audio architecture cleanly.
+Ensure TypeScript compiles.
+Ensure no runtime crashes.

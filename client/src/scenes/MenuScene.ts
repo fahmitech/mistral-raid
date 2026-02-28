@@ -25,19 +25,18 @@ export class MenuScene extends Phaser.Scene {
     this.createMenu();
     this.createControlsHint();
 
-    AudioManager.get().init(this);
-
-    const playMenuTheme = () => {
-      if (!this.sound.get('menu_theme')?.isPlaying) {
-        this.sound.play('menu_theme', { loop: true, volume: 0.5 });
-      }
-    };
-    // Phaser fires 'unlocked' automatically on first user interaction
-    // If already unlocked (returning from another scene), play immediately
-    if (this.sound.locked) {
-      this.sound.once('unlocked', playMenuTheme);
+    // Play immediately if audio already unlocked (returning from gameplay)
+    if (!this.sound.locked) {
+      AudioManager.playMusic(this, 'menu_theme');
     } else {
-      playMenuTheme();
+      // First visit: wait for any user interaction to unlock
+      const startMusic = () => {
+        this.sound.unlock();
+        AudioManager.playMusic(this, 'menu_theme');
+      };
+      this.input.once('pointerdown', startMusic);
+      this.input.keyboard?.once('keydown', startMusic);
+      this.sound.once('unlocked', () => AudioManager.playMusic(this, 'menu_theme'));
     }
 
     this.input.keyboard?.on('keydown-UP', () => this.moveSelection(-1));
@@ -262,7 +261,7 @@ export class MenuScene extends Phaser.Scene {
     } while (!this.items[idx].enabled);
     this.selectedIndex = idx;
     this.refreshMenu();
-    this.sound.play('menu_hover', { volume: 0.5 });
+    AudioManager.playSFX(this, 'menu_hover');
   }
 
   private refreshMenu(): void {
@@ -281,7 +280,7 @@ export class MenuScene extends Phaser.Scene {
   private activateSelection(): void {
     const item = this.items[this.selectedIndex];
     if (item.enabled) {
-      this.sound.play('menu_click', { volume: 0.7 });
+      AudioManager.playSFX(this, 'ui_click');
       item.action();
     }
   }

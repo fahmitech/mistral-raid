@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
+import { AudioManager } from '../systems/AudioManager';
 
 const TAUNTS = [
   'The dungeon remembers your name. It always does.',
@@ -27,8 +28,7 @@ export class GameOverScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(300, 0, 0, 0);
 
-    this.sound.stopAll();
-    this.sound.play('game_over', { volume: 0.7 });
+    AudioManager.playMusic(this, 'game_over_music');
 
     this.drawBackground();
     this.spawnEmbers();
@@ -431,14 +431,14 @@ export class GameOverScene extends Phaser.Scene {
 
   private retry(): void {
     if (!this.inputEnabled) return;
-    this.sound.stopAll();
+    AudioManager.stopAll(this);
     GameState.get().reset();
     this.scene.start('LevelScene', { level: 1 });
   }
 
   private backToMenu(): void {
     if (!this.inputEnabled) return;
-    this.sound.stopAll();
+    AudioManager.stopAll(this);
     GameState.get().reset();
     this.scene.start('MenuScene');
   }
