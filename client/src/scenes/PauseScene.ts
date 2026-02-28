@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { AudioManager } from '../systems/AudioManager';
 
 interface PauseItem {
   label: string;
@@ -16,6 +17,7 @@ export class PauseScene extends Phaser.Scene {
 
   create(): void {
     this.scene.pause('LevelScene');
+    AudioManager.get().playSFX('pause_whoosh', 0.7);
 
     this.add.rectangle(160, 90, 320, 180, 0x000000, 0.55).setScrollFactor(0);
     const panel = this.add.graphics();
@@ -50,6 +52,8 @@ export class PauseScene extends Phaser.Scene {
       {
         label: 'Main Menu',
         action: () => {
+          AudioManager.get().stopMusic();
+          AudioManager.get().crossFade('menu_theme');
           this.scene.stop('LevelScene');
           this.scene.stop();
           this.scene.start('MenuScene');

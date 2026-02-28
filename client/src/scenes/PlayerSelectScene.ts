@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
+import { AudioManager } from '../systems/AudioManager';
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -32,6 +33,7 @@ export class PlayerSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    AudioManager.get().init(this);
     this.createBackground();
 
     this.add

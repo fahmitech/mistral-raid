@@ -101,6 +101,16 @@ const MUSIC_TRACK: Partial<Record<MusicLayer, string>> = {
   credits:     'credits_music',
 };
 
+// Static Phaser audio keys (preloaded in BootScene from client/public/audio/)
+const PHASER_MUSIC_KEYS: Partial<Record<MusicLayer, string>> = {
+  menu:        'menu_theme',
+  hero_select: 'menu_theme',
+  ambient:     'dungeon_ambient',
+  combat:      'combat_music',
+  boss:        'boss_music',
+  credits:     'credits_theme',
+};
+
 interface MusicNode {
   source: AudioBufferSourceNode;
   gain: GainNode;
@@ -172,6 +182,14 @@ export class AudioManager {
 
   // Debug
   private recentSFX: string[] = [];
+  private sfxTriggerTimes: number[] = []; // for SFX/sec stat
+
+  // Phaser scene reference for static music (set via init())
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private phaserScene: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private activePhaserTrack: any = null;
+  private activePhaserKey = '';
 
   static get(): AudioManager { return AudioManager.instance; }
 
@@ -207,6 +225,10 @@ export class AudioManager {
     if (this.masterGain) this.masterGain.gain.value = this.soundOn ? this.volumes.master : 0;
     if (this.musicGain)  this.musicGain.gain.value  = this.musicOn  ? this.volumes.music  : 0;
     if (this.sfxGain)    this.sfxGain.gain.value    = this.soundOn  ? this.volumes.sfx    : 1;
+    // Also update Phaser track volume
+    if (this.activePhaserTrack) {
+      this.activePhaserTrack.volume = this.musicOn ? this.volumes.music * this.volumes.master : 0;
+    }
   }
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -328,6 +350,7 @@ export class AudioManager {
     this.lastPlayed.set(name, now);
 
     this.recentSFX = [name, ...this.recentSFX].slice(0, 8);
+    this.sfxTriggerTimes.push(now);
 
     const buffer = this.buffers.get(name);
     if (buffer) {
@@ -428,15 +451,25 @@ export class AudioManager {
   // ─── Music Layer Management ────────────────────────────────────────────────────
 
   playMusic(layer: MusicLayer): void {
-    if (layer === this.currentLayer || layer === 'none') return;
+    if (layer === 'none') { this.stopMusic(); return; }
+    if (layer === this.currentLayer) return;
+    this.currentLayer = layer;
+
+    // ── Try Phaser static file first (preloaded in BootScene) ──────────────────
+    const phaserKey = PHASER_MUSIC_KEYS[layer];
+    if (phaserKey && this.phaserScene) {
+      const isCached: boolean = this.phaserScene.sound?.game?.cache?.audio?.has?.(phaserKey) ?? false;
+      if (isCached) {
+        this.crossFade(phaserKey);
+        return;
+      }
+    }
+
+    // ── Fallback: Web Audio API via ElevenLabs server ──────────────────────────
     const trackName = MUSIC_TRACK[layer];
     if (!trackName) return;
 
-    const prevLayer = this.currentLayer;
-    this.currentLayer = layer;
     this.fadeOutAllMusic(0.5);
-
-    void prevLayer;
 
     const buf = this.buffers.get(trackName);
     if (buf) {
@@ -492,6 +525,17 @@ export class AudioManager {
   stopMusic(): void {
     this.fadeOutAllMusic(0.4);
     this.currentLayer = 'none';
+    // Also stop Phaser static track
+    if (this.activePhaserTrack) {
+      const old = this.activePhaserTrack;
+      if (this.phaserScene?.tweens) {
+        this.phaserScene.tweens.add({ targets: old, volume: 0, duration: 400, onComplete: () => { try { old.stop(); old.destroy(); } catch { /* ignore */ } } });
+      } else {
+        try { old.stop(); old.destroy(); } catch { /* ignore */ }
+      }
+      this.activePhaserTrack = null;
+      this.activePhaserKey = '';
+    }
   }
 
   /** Duck music volume briefly — e.g. during a boss voice line. */
@@ -586,6 +630,64 @@ export class AudioManager {
     this.playSFX(sfxMap[weapon] ?? 'sword_slash', 0.75);
   }
 
+  // ─── Phaser Integration ───────────────────────────────────────────────────────
+
+  /**
+   * Register the active Phaser scene. Enables Phaser-native music playback
+   * using pre-generated static MP3s from client/public/audio/.
+   * Call this in every scene's create() before playMusic().
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  init(scene: any): void {
+    this.phaserScene = scene;
+  }
+
+  /** Alias for unlock() — matches the plan's public API. */
+  unlockAudio(): void { this.unlock(); }
+
+  /** Alias for setSfxVolume() — matches the plan's public API. */
+  setSFXVolume(v: number): void { this.setSfxVolume(v); }
+
+  /**
+   * Crossfade to a Phaser static music key (e.g. 'menu_theme', 'combat_music').
+   * 500ms fade out of current, 500ms fade in of new track.
+   * Falls back to playMusic() via MusicLayer mapping if key not found.
+   */
+  crossFade(key: string): void {
+    if (!this.phaserScene || !this.musicOn) return;
+    const soundMgr = this.phaserScene.sound;
+    const tweens = this.phaserScene.tweens;
+    if (!soundMgr) return;
+
+    const targetVol: number = this.volumes.music * this.volumes.master;
+
+    // Fade out current Phaser track
+    if (this.activePhaserTrack && this.activePhaserKey !== key) {
+      const old = this.activePhaserTrack;
+      tweens.add({ targets: old, volume: 0, duration: 500, onComplete: () => { try { old.stop(); old.destroy(); } catch { /* ignore */ } } });
+      this.activePhaserTrack = null;
+      this.activePhaserKey = '';
+    }
+
+    // Check if audio is cached by Phaser (preloaded in BootScene)
+    const isCached: boolean = soundMgr.game?.cache?.audio?.has?.(key) ?? false;
+    if (!isCached) {
+      // Fallback: find MusicLayer from key and use Web Audio
+      const layer = (Object.entries(PHASER_MUSIC_KEYS).find(([, v]) => v === key)?.[0]) as MusicLayer | undefined;
+      if (layer) this.playMusic(layer);
+      return;
+    }
+
+    // Fade in new Phaser track
+    if (this.activePhaserKey === key && this.activePhaserTrack?.isPlaying) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const track: any = soundMgr.add(key, { loop: true, volume: 0 });
+    track.play();
+    this.activePhaserTrack = track;
+    this.activePhaserKey = key;
+    tweens.add({ targets: track, volume: targetVol, duration: 500 });
+  }
+
   // ─── Backward-Compatible Wrappers ─────────────────────────────────────────────
 
   shoot(): void     { this.playSFX('sword_slash', 0.7); }
@@ -596,6 +698,16 @@ export class AudioManager {
 
   // ─── Debug ────────────────────────────────────────────────────────────────────
 
+  /** SFX triggers in the last 1 second. */
+  getSFXPerSecond(): number {
+    const now = performance.now();
+    this.sfxTriggerTimes = this.sfxTriggerTimes.filter((t) => now - t < 1000);
+    return this.sfxTriggerTimes.length;
+  }
+
+  /** Current active Phaser static music key (or empty string). */
+  getActivePhaserKey(): string { return this.activePhaserKey; }
+
   getDebugInfo(): AudioDebugInfo {
     return {
       layer:        this.currentLayer,
@@ -603,7 +715,9 @@ export class AudioManager {
       loading:      this.loading.size,
       heartbeat:    this.heartbeatTimer !== null,
       presence:     this.presenceStarted,
-      musicTracks:  [...this.musicNodes.keys()],
+      musicTracks:  this.activePhaserKey
+        ? [...this.musicNodes.keys(), `[phaser:${this.activePhaserKey}]`]
+        : [...this.musicNodes.keys()],
       recent:       [...this.recentSFX],
       hp:           this.lastTelemetry.hp,
       maxHp:        this.lastTelemetry.maxHp,

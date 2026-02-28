@@ -100,6 +100,9 @@ export class LevelScene extends Phaser.Scene {
   private debugToggleKey?: Phaser.Input.Keyboard.Key;
   private playerRenderGlitchFrames = 0;
 
+  // ─── Audio debug (F4 overlay) ─────────────────────────────────────────────────
+  private audioDebugText?: Phaser.GameObjects.Text;
+
   // ─── Audio state ─────────────────────────────────────────────────────────────
   private activeAudioLayer: MusicLayer = 'ambient';
   private combatMusicActive = false;
@@ -129,6 +132,7 @@ export class LevelScene extends Phaser.Scene {
   create(): void {
     const audio = AudioManager.get();
     audio.setOptions(this.options);
+    audio.init(this);
 
     // Pre-warm audio buffers for this level's sounds.
     audio.preload([
@@ -230,6 +234,7 @@ export class LevelScene extends Phaser.Scene {
       SHIFT: this.input.keyboard!.addKey('SHIFT'),
       F2: this.input.keyboard!.addKey('F2'),
       F3: this.input.keyboard!.addKey('F3'),
+      F4: this.input.keyboard!.addKey('F4'),
     };
     this.debugToggleKey = this.keys.F2;
 
@@ -396,6 +401,8 @@ export class LevelScene extends Phaser.Scene {
     this.debugText = undefined;
     this.debugMarker?.destroy();
     this.debugMarker = undefined;
+    this.audioDebugText?.destroy();
+    this.audioDebugText = undefined;
 
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
@@ -919,6 +926,34 @@ export class LevelScene extends Phaser.Scene {
         this.scene.launch('AudioDebugOverlay');
         this.audioOverlayOpen = true;
       }
+    }
+
+    if (this.keys.F4 && Phaser.Input.Keyboard.JustDown(this.keys.F4)) {
+      if (this.audioDebugText) {
+        this.audioDebugText.destroy();
+        this.audioDebugText = undefined;
+      } else {
+        this.audioDebugText = this.add
+          .text(160, 4, '', {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontSize: '9px',
+            color: '#00ffcc',
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            padding: { x: 5, y: 3 },
+          })
+          .setOrigin(0.5, 0)
+          .setScrollFactor(0)
+          .setDepth(9999);
+      }
+    }
+
+    if (this.audioDebugText) {
+      const dbg = AudioManager.get().getDebugInfo();
+      const pKey = AudioManager.get().getActivePhaserKey();
+      const sfxPs = AudioManager.get().getSFXPerSecond();
+      this.audioDebugText.setText(
+        `[F4 AUDIO] layer:${dbg.layer} | track:${pKey || dbg.musicTracks[0] || 'none'} | sfx/s:${sfxPs} | vol:${(dbg.masterVolume * 100).toFixed(0)}%`
+      );
     }
 
     this.updatePickupHint();

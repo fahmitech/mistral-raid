@@ -39,6 +39,21 @@ export class BootScene extends Phaser.Scene {
     for (const entry of FRAME_LIST) {
       this.load.image(entry.key, entry.url);
     }
+
+    // ── Preload all static audio assets ────────────────────────────────────────
+    this.load.audio('menu_theme',      'audio/menu_theme.mp3');
+    this.load.audio('dungeon_ambient', 'audio/dungeon_ambient.mp3');
+    this.load.audio('combat_music',    'audio/combat_music.mp3');
+    this.load.audio('boss_music',      'audio/boss_music.mp3');
+    this.load.audio('game_over',       'audio/game_over.mp3');
+    this.load.audio('victory_music',   'audio/victory_music.mp3');
+    this.load.audio('credits_theme',   'audio/credits_theme.mp3');
+    this.load.audio('footstep',        'audio/footstep.mp3');
+    this.load.audio('dash_sfx',        'audio/dash.mp3');
+    this.load.audio('shield_activate', 'audio/shield_activate.mp3');
+    this.load.audio('sword_attack',    'audio/sword_attack.mp3');
+    this.load.audio('player_hit_sfx',  'audio/player_hit.mp3');
+    this.load.audio('boss_roar',       'audio/boss_roar.mp3');
   }
 
   create(): void {

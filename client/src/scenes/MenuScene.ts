@@ -25,8 +25,15 @@ export class MenuScene extends Phaser.Scene {
     this.createMenu();
     this.createControlsHint();
 
-    this.input.once('pointerdown', () => AudioManager.get().unlock());
-    this.input.keyboard?.once('keydown', () => AudioManager.get().unlock());
+    const audio = AudioManager.get();
+    audio.init(this);
+
+    const unlockAndPlay = () => {
+      audio.unlockAudio();
+      audio.crossFade('menu_theme');
+    };
+    this.input.once('pointerdown', unlockAndPlay);
+    this.input.keyboard?.once('keydown', unlockAndPlay);
 
     this.input.keyboard?.on('keydown-UP', () => this.moveSelection(-1));
     this.input.keyboard?.on('keydown-DOWN', () => this.moveSelection(1));
@@ -250,6 +257,7 @@ export class MenuScene extends Phaser.Scene {
     } while (!this.items[idx].enabled);
     this.selectedIndex = idx;
     this.refreshMenu();
+    AudioManager.get().playSFX('menu_hover', 0.6);
   }
 
   private refreshMenu(): void {
@@ -268,6 +276,7 @@ export class MenuScene extends Phaser.Scene {
   private activateSelection(): void {
     const item = this.items[this.selectedIndex];
     if (item.enabled) {
+      AudioManager.get().playSFX('menu_select', 0.8);
       item.action();
     }
   }
