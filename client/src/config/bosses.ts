@@ -10,6 +10,10 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     phase2Tint: 0xff4400,
     scale: 2.0,
     hasRunAnim: true,
+    speed: 45,
+    damage: 2,
+    projectileColor: 0xff4400,
+    attackCooldownMs: 1800,
   },
   [BossType.DarkKnight]: {
     type: BossType.DarkKnight,
@@ -20,6 +24,10 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     phase2Tint: 0x0055ff,
     scale: 2.2,
     hasRunAnim: false,
+    speed: 38,
+    damage: 3,
+    projectileColor: 0x4466ff,
+    attackCooldownMs: 1500,
   },
   [BossType.Necromancer]: {
     type: BossType.Necromancer,
@@ -30,6 +38,10 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     phase2Tint: 0x8800ff,
     scale: 1.8,
     hasRunAnim: true,
+    speed: 35,
+    damage: 3,
+    projectileColor: 0x8800ff,
+    attackCooldownMs: 2000,
   },
   [BossType.ElementalFusion]: {
     type: BossType.ElementalFusion,
@@ -40,6 +52,10 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     phase2Tint: 0x00ffaa,
     scale: 2.5,
     hasRunAnim: false,
+    speed: 42,
+    damage: 4,
+    projectileColor: 0x00ffaa,
+    attackCooldownMs: 1200,
   },
   [BossType.TheWatcher]: {
     type: BossType.TheWatcher,
@@ -50,5 +66,9 @@ export const BOSS_CONFIGS: Record<BossType, BossConfig> = {
     phase2Tint: 0xcc33ff,
     scale: 2.2,
     hasRunAnim: false,
+    speed: 48,
+    damage: 5,
+    projectileColor: 0xcc33ff,
+    attackCooldownMs: 1000,
   },
 };

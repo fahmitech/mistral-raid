@@ -211,6 +211,11 @@ export class LevelScene extends Phaser.Scene {
     });
 
     if (this.boss) {
+      this.boss.updateAI(this.player, time, {
+        shootProjectile: (x, y, vx, vy, dmg, color) => this.spawnEnemyProjectile(x, y, vx, vy, dmg, color),
+        spawnEnemy: (type, x, y) => this.spawnSummonedEnemy(type, x, y),
+        shake: (d, i) => this.shakeCamera(d, i),
+      });
       this.updateBossBar();
     }
 
@@ -368,6 +373,12 @@ export class LevelScene extends Phaser.Scene {
       const damage = enemy?.config?.damage;
       if (typeof damage !== 'number') return;
       this.damagePlayer(damage);
+    });
+
+    this.physics.add.overlap(this.player, this.bossGroup, (_p, bossObj) => {
+      const boss = bossObj as BossEntity;
+      if (!boss.active) return;
+      this.damagePlayer(2 + boss.phase);
     });
 
   }
@@ -610,8 +621,8 @@ export class LevelScene extends Phaser.Scene {
       const proj = this.physics.add.image(muzzleX, muzzleY, 'player_bullet');
       proj.setDepth(10);
       proj.setData('damage', damage);
-      proj.setVelocity(Math.cos(angle) * PROJECTILE_SPEED, Math.sin(angle) * PROJECTILE_SPEED);
       this.playerProjectiles.add(proj);
+      proj.setVelocity(Math.cos(angle) * PROJECTILE_SPEED, Math.sin(angle) * PROJECTILE_SPEED);
       this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => proj.destroy());
     });
 
@@ -629,8 +640,8 @@ export class LevelScene extends Phaser.Scene {
     const proj = this.physics.add.image(x, y, 'enemy_bullet');
     proj.setTint(color);
     proj.setData('damage', damage);
-    proj.setVelocity(vx * ENEMY_PROJECTILE_SPEED, vy * ENEMY_PROJECTILE_SPEED);
     this.enemyProjectiles.add(proj);
+    proj.setVelocity(vx * ENEMY_PROJECTILE_SPEED, vy * ENEMY_PROJECTILE_SPEED);
     this.time.delayedCall(ENEMY_PROJECTILE_LIFETIME_MS, () => proj.destroy());
   }
 

@@ -68,6 +68,10 @@ export interface BossConfig {
   phase2Tint: number;
   scale: number;
   hasRunAnim: boolean;
+  speed: number;
+  damage: number;
+  projectileColor: number;
+  attackCooldownMs: number;
 }
 
 export enum ItemType {

@@ -116,7 +116,7 @@ of the unused ArenaScene stack; see `docs/reference/game-behavior.md`.
 ## 11. Enemy Combat Feedback
 
 - Enemies flash on hit
-- Kill: coins and XP awarded; double score for enemy death
+- Kill: coins and XP awarded; score increments once per kill
 - Shielded enemies block frontal damage until shield broken
 
 ---

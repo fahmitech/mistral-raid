@@ -9,7 +9,6 @@ import {
 } from '../config/constants';
 import { EnemyBehavior, EnemyConfig, EnemyType } from '../config/types';
 import { Player } from './Player';
-import { GameState } from '../core/GameState';
 
 export interface EnemyActions {
   shootProjectile: (x: number, y: number, vx: number, vy: number, damage: number, color: number) => void;
@@ -104,6 +103,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   die(): void {
-    GameState.addScore(this.xp * 10);
+    // Score is awarded by LevelScene.handleEnemyHit().
   }
 }

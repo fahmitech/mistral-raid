@@ -50,3 +50,10 @@ export const TORCH_RADIUS = 42;
 export const PLAYER_LIGHT_RADIUS = 55;
 
 export const STAIRS_OFFSET_X = 2;
+
+export const BOSS_AGGRO_RANGE = 160;
+export const BOSS_MELEE_RANGE = 30;
+export const BOSS_CHARGE_SPEED_MULT = 2.5;
+export const BOSS_CHARGE_DURATION_MS = 600;
+export const BOSS_SUMMON_COOLDOWN_MS = 6000;
+export const BOSS_BURST_COUNT = 5;
