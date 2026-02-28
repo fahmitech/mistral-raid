@@ -16,11 +16,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   lastDir = new Phaser.Math.Vector2(1, 0);
   aimAngle = 0;
   private invincibleTintOn = false;
+  private weaponHoldOffset = new Phaser.Math.Vector2(0, 3);
 
   constructor(scene: Phaser.Scene, x: number, y: number, spriteKey: string, weaponConfig: ItemConfig) {
     super(scene, x, y, spriteKey);
     this.weaponSprite = scene.add.image(x + 8, y + 4, weaponConfig.sprite);
-    this.weaponSprite.setOrigin(0.5, 0.85);
+    this.weaponSprite.setOrigin(0.5, 0.92);
     this.weaponSprite.setDepth(18);
     this.setDepth(17);
     this.setOrigin(0.5, 0.6);
@@ -39,7 +40,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (config.sprite.startsWith('bomb')) {
       this.weaponSprite.setOrigin(0.5, 0.5);
     } else {
-      this.weaponSprite.setOrigin(0.5, 0.85);
+      this.weaponSprite.setOrigin(0.5, 0.92);
     }
   }
 
@@ -103,16 +104,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const step = (Math.PI * 2) / 8;
     const snapped = Math.round(this.aimAngle / step) * step;
 
-    const holdRadius = 10;
+    const holdRadius = 9;
     const offsetX = Math.cos(snapped) * holdRadius;
     const offsetY = Math.sin(snapped) * holdRadius;
 
-    this.weaponSprite.setPosition(this.x + offsetX, this.y + offsetY);
+    const baseX = this.x + this.weaponHoldOffset.x;
+    const baseY = this.y + this.weaponHoldOffset.y;
+    this.weaponSprite.setPosition(baseX + offsetX, baseY + offsetY);
 
     // Most 0x72 weapon sprites are oriented "up" by default, so rotate from up -> angle.
     this.weaponSprite.setRotation(snapped + Math.PI / 2);
 
     // Put weapon behind player when aiming upwards, in front otherwise.
-    this.weaponSprite.setDepth(Math.sin(snapped) < -0.2 ? 9 : 11);
+    const playerDepth = this.depth ?? 0;
+    this.weaponSprite.setDepth(Math.sin(snapped) < -0.2 ? playerDepth - 1 : playerDepth + 1);
   }
 }

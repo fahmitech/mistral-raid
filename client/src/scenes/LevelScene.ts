@@ -7,6 +7,8 @@ import {
   ENEMY_PROJECTILE_LIFETIME_MS,
   ENEMY_PROJECTILE_SPEED,
   INVINCIBLE_MS,
+  INTERNAL_HEIGHT,
+  INTERNAL_WIDTH,
   PROJECTILE_LIFETIME_MS,
   PROJECTILE_SPEED,
   PROJECTILE_SIZE,
@@ -68,6 +70,8 @@ export class LevelScene extends Phaser.Scene {
   private levelText?: Phaser.GameObjects.Text;
   private coinText?: Phaser.GameObjects.Text;
   private scoreText?: Phaser.GameObjects.Text;
+  private scoreBg?: Phaser.GameObjects.Rectangle;
+  private weaponBg?: Phaser.GameObjects.Rectangle;
   private dashBar?: Phaser.GameObjects.Graphics;
   private dashLabel?: Phaser.GameObjects.Text;
   private shieldIndicator?: Phaser.GameObjects.Graphics;
@@ -207,6 +211,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.updateWeaponPosition();
     this.updateShieldRing(time);
     this.checkAutoCollect();
+    this.applyFogVisibility();
 
     this.enemies.children.iterate((child) => {
       const enemy = child as Enemy;
@@ -258,7 +263,8 @@ export class LevelScene extends Phaser.Scene {
       for (let x = 0; x < this.maze.width; x += 1) {
         const tile = this.maze.tiles[y][x];
         if (tile !== TileType.Wall) {
-          const variant = (x + y) % 4;
+          // Break up obvious grid repetition while staying deterministic per tile.
+          const variant = ((x * 73856093) ^ (y * 19349663)) & 3;
           floor.draw(`floor_${variant + 1}`, x * TILE_SIZE, y * TILE_SIZE);
         }
       }
@@ -273,6 +279,8 @@ export class LevelScene extends Phaser.Scene {
           const aboveWall = y > 0 && this.maze.tiles[y - 1][x] === TileType.Wall;
           const key = aboveWall ? 'wall_mid' : 'wall_top_mid';
           const wall = this.add.image(x * TILE_SIZE + 8, y * TILE_SIZE + 8, key).setDepth(1);
+          // Slight tint separation improves wall/floor readability without changing assets.
+          wall.setTint(aboveWall ? 0x8f8f8f : 0xffffff);
           this.walls.add(wall);
         }
       }
@@ -399,6 +407,8 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createHUD(): void {
+    const margin = 6;
+    const rightX = INTERNAL_WIDTH - margin;
     this.levelText = this.add
       .text(6, 6, `LEVEL ${this.levelData.level}`, {
         fontFamily: '"Press Start 2P"',
@@ -417,21 +427,35 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
+    this.scoreBg = this.add
+      .rectangle(rightX, 5, 96, 11, 0x000000, 0.35)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(19);
     this.scoreText = this.add
-      .text(314, 6, 'SCORE: 0', {
+      .text(rightX, 6, 'SCORE: 0', {
         fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#eecc55',
+        stroke: '#000000',
+        strokeThickness: 2,
       })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(20);
 
+    this.weaponBg = this.add
+      .rectangle(rightX, INTERNAL_HEIGHT - 19, 70, 11, 0x000000, 0.35)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(19);
     this.weaponText = this.add
-      .text(314, 162, 'SWORD', {
+      .text(rightX, INTERNAL_HEIGHT - 18, 'SWORD', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
+        fontSize: '5px',
         color: '#ffcc44',
+        stroke: '#000000',
+        strokeThickness: 2,
       })
       .setOrigin(1, 0)
       .setScrollFactor(0)
@@ -488,6 +512,16 @@ export class LevelScene extends Phaser.Scene {
       this.weaponText.setText(WEAPON_LABELS[state.equippedWeapon] ?? 'SWORD');
     }
 
+    // Keep the HUD backplates snug to their labels (helps avoid clipping on integer-zoom + shake).
+    if (this.scoreBg && this.scoreText) {
+      const w = Math.min(140, Math.max(68, Math.ceil(this.scoreText.width) + 10));
+      this.scoreBg.width = w;
+    }
+    if (this.weaponBg && this.weaponText) {
+      const w = Math.min(120, Math.max(54, Math.ceil(this.weaponText.width) + 10));
+      this.weaponBg.width = w;
+    }
+
     if (state.playerHP !== this.lastHP) {
       this.lastHP = state.playerHP;
       this.updateHearts();
@@ -519,6 +553,62 @@ export class LevelScene extends Phaser.Scene {
           this.shieldIndicator.fillRect(80, 170, 30 * pct, 3);
         }
       }
+    }
+  }
+
+  private applyFogVisibility(): void {
+    if (!this.lighting || !this.player) return;
+    const px = this.player.x;
+    const py = this.player.y;
+
+    // Enemies / items should be fully obscured if outside any light source.
+    this.enemies?.children?.iterate((child) => {
+      const enemy = child as Enemy;
+      if (!enemy?.active) return true;
+      const f = this.lighting.getLightFactor(enemy.x, enemy.y, px, py);
+      enemy.setAlpha(f);
+      enemy.setVisible(f > 0.02);
+      return true;
+    });
+
+    this.items?.children?.iterate((child) => {
+      const item = child as Item;
+      if (!item?.active) return true;
+      const f = this.lighting.getLightFactor(item.x, item.y, px, py);
+      item.setAlpha(f);
+      item.setVisible(f > 0.02);
+      return true;
+    });
+
+    this.enemyProjectiles?.children?.iterate((child) => {
+      const proj = child as Phaser.Physics.Arcade.Image;
+      if (!proj?.active) return true;
+      const f = this.lighting.getLightFactor(proj.x, proj.y, px, py);
+      proj.setAlpha(f);
+      proj.setVisible(f > 0.02);
+      return true;
+    });
+
+    this.playerProjectiles?.children?.iterate((child) => {
+      const proj = child as Phaser.Physics.Arcade.Image;
+      if (!proj?.active) return true;
+      const f = this.lighting.getLightFactor(proj.x, proj.y, px, py);
+      proj.setAlpha(f);
+      proj.setVisible(f > 0.02);
+      return true;
+    });
+
+    if (this.boss?.active) {
+      const f = this.lighting.getLightFactor(this.boss.x, this.boss.y, px, py);
+      this.boss.setAlpha(f);
+      this.boss.setVisible(f > 0.02);
+    }
+
+    if (this.stairsSprite) {
+      const f = this.lighting.getLightFactor(this.stairsSprite.x, this.stairsSprite.y, px, py);
+      this.stairsSprite.setAlpha(f);
+      // Only show the stairs once activated, but still allow fog-of-war to hide it when unlit.
+      this.stairsSprite.setVisible(this.stairsActive && f > 0.02);
     }
   }
 
