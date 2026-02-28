@@ -257,7 +257,7 @@ export class MenuScene extends Phaser.Scene {
     } while (!this.items[idx].enabled);
     this.selectedIndex = idx;
     this.refreshMenu();
-    AudioManager.get().playSFX('menu_hover', 0.6);
+    AudioManager.get().playPhaserSFX('menu_hover', 0.6, 120);
   }
 
   private refreshMenu(): void {
@@ -276,7 +276,7 @@ export class MenuScene extends Phaser.Scene {
   private activateSelection(): void {
     const item = this.items[this.selectedIndex];
     if (item.enabled) {
-      AudioManager.get().playSFX('menu_select', 0.8);
+      AudioManager.get().playPhaserSFX('menu_click', 0.8, 150);
       item.action();
     }
   }

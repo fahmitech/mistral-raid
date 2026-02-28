@@ -642,6 +642,49 @@ export class AudioManager {
     this.phaserScene = scene;
   }
 
+  /**
+   * Play a Phaser-preloaded static SFX (from client/public/audio/).
+   * Volume is scaled by master * sfx volumes. Cooldown via lastPlayed map.
+   */
+  playPhaserSFX(key: string, volume = 1.0, cooldownMs = 100): void {
+    if (!this.soundOn || !this.phaserScene) return;
+    const now = performance.now();
+    const cd = SOUND_COOLDOWNS[key] ?? cooldownMs;
+    if ((this.lastPlayed.get(key) ?? 0) + cd > now) return;
+    this.lastPlayed.set(key, now);
+    this.recentSFX = [key, ...this.recentSFX].slice(0, 8);
+    this.sfxTriggerTimes.push(now);
+
+    const targetVol = volume * this.volumes.sfx * this.volumes.master;
+    const isCached: boolean = this.phaserScene.sound?.game?.cache?.audio?.has?.(key) ?? false;
+    if (!isCached) return; // not preloaded — silent fallback
+    try {
+      this.phaserScene.sound.play(key, { volume: targetVol });
+    } catch { /* ignore */ }
+  }
+
+  /**
+   * Play a Phaser SFX with random pitch variation via detune (cents).
+   * ±pitchVariance is a fraction (0.1 = ±10%), converted to ±1200 cents.
+   */
+  playPhaserSFXPitched(key: string, volume = 1.0, pitchVariance = 0.1): void {
+    if (!this.soundOn || !this.phaserScene) return;
+    const now = performance.now();
+    const cd = SOUND_COOLDOWNS[key] ?? 100;
+    if ((this.lastPlayed.get(key) ?? 0) + cd > now) return;
+    this.lastPlayed.set(key, now);
+    this.recentSFX = [key, ...this.recentSFX].slice(0, 8);
+    this.sfxTriggerTimes.push(now);
+
+    const targetVol = volume * this.volumes.sfx * this.volumes.master;
+    const isCached: boolean = this.phaserScene.sound?.game?.cache?.audio?.has?.(key) ?? false;
+    if (!isCached) return;
+    const detune = (Math.random() * 2 - 1) * pitchVariance * 1200;
+    try {
+      this.phaserScene.sound.play(key, { volume: targetVol, detune });
+    } catch { /* ignore */ }
+  }
+
   /** Alias for unlock() — matches the plan's public API. */
   unlockAudio(): void { this.unlock(); }
 

@@ -851,7 +851,7 @@ export class LevelScene extends Phaser.Scene {
       }
       if (time - this.lastFootstepAt > 200) {
         this.lastFootstepAt = time;
-        AudioManager.get().playSFXPitched('footstep_stone', 0.4, 0.12);
+        AudioManager.get().playPhaserSFXPitched('footstep', 0.45, 0.1);
       }
     } else {
       this.player.setVelocity(0, 0);
@@ -1049,7 +1049,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.weaponSprite.setTint(0xffffff);
     this.time.delayedCall(50, () => this.player.weaponSprite.clearTint());
     this.shakeCamera(28, 0.002);
-    AudioManager.get().shoot();
+    AudioManager.get().playPhaserSFX('sword_attack', 0.7, 100);
   }
 
   private spawnEnemyProjectile(x: number, y: number, vx: number, vy: number, damage: number, color: number): void {
@@ -1092,7 +1092,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.dashCooldownUntil = time + DASH_COOLDOWN_MS;
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
     this.shakeCamera(28, 0.0025);
-    AudioManager.get().dash();
+    AudioManager.get().playPhaserSFX('dash_sfx', 0.8, 100);
   }
 
   private spawnDashTrail(x1: number, y1: number, x2: number, y2: number): void {
@@ -1115,7 +1115,7 @@ export class LevelScene extends Phaser.Scene {
     if (time < this.player.shieldCooldownUntil) return;
     this.player.setShieldActive(SHIELD_DURATION_MS, time);
     this.player.shieldCooldownUntil = time + SHIELD_COOLDOWN_MS;
-    AudioManager.get().playSFX('shield_activate', 0.8);
+    AudioManager.get().playPhaserSFX('shield_activate', 0.8, 300);
   }
 
   private swapWeapon(): void {
@@ -1154,7 +1154,7 @@ export class LevelScene extends Phaser.Scene {
           state.applyShield(duration);
         }
         state.removeItem(slot.config, 1);
-        AudioManager.get().playSFX('potion_drink', 0.8);
+        AudioManager.get().playPhaserSFX('potion_drink', 0.85, 300);
         this.spawnHealEffect();
         break;
       }
@@ -1237,7 +1237,7 @@ export class LevelScene extends Phaser.Scene {
   private openChest(item: Item): void {
     if (item.opened) return;
     item.openChest();
-    AudioManager.get().playSFX('chest_open', 0.9);
+    AudioManager.get().playPhaserSFX('chest_open', 0.9, 400);
     const isGolden = item.config.type === ItemType.GoldenChest;
     GameState.get().addCoins(item.config.value);
     const drops = LootSystem.rollChestLoot(isGolden);
@@ -1286,8 +1286,7 @@ export class LevelScene extends Phaser.Scene {
 
     if (enemy.hp <= 0) {
       enemy.die();
-      AudioManager.get().playSFX('enemy_kill', 0.7);
-      AudioManager.get().playSFX('xp_tone', 0.5);
+      AudioManager.get().playPhaserSFX('enemy_die', 0.75, 80);
       ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
       GameState.get().addScore(enemy.xp);
       if (enemy.config.behavior === EnemyBehavior.Exploder) {
@@ -1449,7 +1448,7 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(3000, () => this.bossNameText?.destroy());
     this.shakeCamera(300, 0.01);
     this.showBossBar();
-    AudioManager.get().playSFX('boss_intro', 1.0);
+    AudioManager.get().playPhaserSFX('boss_roar', 1.0, 15000);
     this.activeAudioLayer = 'boss';
     AudioManager.get().playMusic('boss');
     AudioManager.get().startHeartbeat();
@@ -1582,7 +1581,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private spawnPlayerHitEffects(): void {
-    AudioManager.get().hit();
+    AudioManager.get().playPhaserSFX('enemy_hit', 0.9, 150);
     this.shakeCamera(200, 0.01);
     this.cameras.main.flash(80, 255, 0, 0);
     for (let i = 0; i < 8; i += 1) {
