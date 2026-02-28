@@ -271,6 +271,14 @@ export class LevelScene extends Phaser.Scene {
     this.events.off('resume', this.handleResume, this);
     this.input?.off('pointerdown', this.handlePointerDown, this);
 
+    const safeClearGroup = (group?: { scene?: unknown; children?: { size?: number }; clear?: (remove?: boolean, destroy?: boolean) => void }) => {
+      // During Scene shutdown, plugins (like Arcade Physics) may have already destroyed groups,
+      // leaving `children` undefined. Guard to avoid runtime errors.
+      if (!group?.scene) return;
+      if (!group.children || typeof group.children.size !== 'number') return;
+      group.clear?.(true, true);
+    };
+
     // Timers / delayed calls.
     this.stairsCheck?.remove(false);
     this.stairsCheck = undefined;
@@ -315,12 +323,12 @@ export class LevelScene extends Phaser.Scene {
     this.player?.weaponSprite?.destroy();
     this.player?.destroy();
 
-    this.enemies?.clear(true, true);
-    this.items?.clear(true, true);
-    this.playerProjectiles?.clear(true, true);
-    this.enemyProjectiles?.clear(true, true);
-    this.bossGroup?.clear(true, true);
-    this.walls?.clear(true, true);
+    safeClearGroup(this.enemies);
+    safeClearGroup(this.items);
+    safeClearGroup(this.playerProjectiles);
+    safeClearGroup(this.enemyProjectiles);
+    safeClearGroup(this.bossGroup);
+    safeClearGroup(this.walls);
   }
 
   private createBulletTextures(): void {
