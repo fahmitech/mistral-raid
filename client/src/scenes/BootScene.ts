@@ -1,0 +1,208 @@
+import Phaser from 'phaser';
+import { FRAME_LIST } from '../utils/assetManifest';
+import { CHARACTER_CONFIGS } from '../config/characters';
+import { ENEMY_CONFIGS } from '../config/enemies';
+import { BOSS_CONFIGS } from '../config/bosses';
+
+export class BootScene extends Phaser.Scene {
+  constructor() {
+    super('BootScene');
+  }
+
+  preload(): void {
+    const { width, height } = this.scale;
+    const barWidth = 200;
+    const barHeight = 8;
+    const barX = width / 2 - barWidth / 2;
+    const barY = height / 2 - barHeight / 2;
+
+    const bar = this.add.graphics();
+    const loadingText = this.add
+      .text(width / 2, barY - 16, 'LOADING...', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '7px',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5, 0.5);
+
+    this.load.on('progress', (value: number) => {
+      bar.clear();
+      bar.fillStyle(0xcc33ff, 1);
+      bar.fillRect(barX, barY, barWidth * value, barHeight);
+    });
+
+    this.load.on('complete', () => {
+      bar.destroy();
+      loadingText.destroy();
+    });
+
+    for (const entry of FRAME_LIST) {
+      this.load.image(entry.key, entry.url);
+    }
+  }
+
+  create(): void {
+    this.aliasMissingFrames();
+    this.createAnimations();
+    this.scene.start('MenuScene');
+  }
+
+  private createAnimations(): void {
+    const createAnim = (key: string, action: 'idle' | 'run', frameRate = 8): void => {
+      const frames = this.resolveFrames(key, action);
+      if (frames.length === 0) return;
+      this.anims.create({
+        key: `${key}_${action}`,
+        frames: frames.map((frame) => ({ key: frame })),
+        frameRate,
+        repeat: -1,
+      });
+    };
+
+    Object.values(CHARACTER_CONFIGS).forEach((cfg) => {
+      createAnim(cfg.spriteKey, 'idle', 8);
+      createAnim(cfg.spriteKey, 'run', 8);
+    });
+
+    Object.values(ENEMY_CONFIGS).forEach((cfg) => {
+      createAnim(cfg.spriteKey, 'idle', 8);
+      createAnim(cfg.spriteKey, 'run', 8);
+    });
+
+    Object.values(BOSS_CONFIGS).forEach((cfg) => {
+      createAnim(cfg.spriteKey, 'idle', 8);
+      createAnim(cfg.spriteKey, 'run', 8);
+    });
+
+    const coinFrames = ['coin_anim_f0', 'coin_anim_f1', 'coin_anim_f2', 'coin_anim_f3'].filter((k) =>
+      this.textures.exists(k)
+    );
+    if (coinFrames.length) {
+      this.anims.create({
+        key: 'coin_spin',
+        frames: coinFrames.map((k) => ({ key: k })),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+
+    const torchFrames = ['wall_fountain_mid_blue_anim_f0', 'wall_fountain_mid_blue_anim_f1', 'wall_fountain_mid_blue_anim_f2'].filter(
+      (k) => this.textures.exists(k)
+    );
+    if (torchFrames.length) {
+      this.anims.create({
+        key: 'torch',
+        frames: torchFrames.map((k) => ({ key: k })),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+  }
+
+  private resolveFrames(key: string, action: 'idle' | 'run'): string[] {
+    const frames: string[] = [];
+    const idleBase = `${key}_idle_anim_f0`;
+    const runBase = `${key}_run_anim_f0`;
+    const genericBase = `${key}_anim_f0`;
+
+    if (this.textures.exists(idleBase)) {
+      for (let i = 0; i < 4; i += 1) {
+        const frameKey = `${key}_${action}_anim_f${i}`;
+        frames.push(this.textures.exists(frameKey) ? frameKey : `${key}_idle_anim_f0`);
+      }
+      return frames;
+    }
+
+    if (this.textures.exists(genericBase)) {
+      for (let i = 0; i < 4; i += 1) {
+        const frameKey = `${key}_anim_f${i}`;
+        frames.push(this.textures.exists(frameKey) ? frameKey : `${key}_anim_f0`);
+      }
+      return frames;
+    }
+
+    if (this.textures.exists(runBase)) {
+      for (let i = 0; i < 4; i += 1) {
+        const frameKey = `${key}_${action}_anim_f${i}`;
+        frames.push(this.textures.exists(frameKey) ? frameKey : `${key}_run_anim_f0`);
+      }
+    }
+
+    return frames;
+  }
+
+  private aliasMissingFrames(): void {
+    const aliasMap: Record<string, string> = {
+      skelet: 'chort',
+      necromancer: 'doc',
+      orc_armored: 'masked_orc',
+    };
+
+    Object.entries(aliasMap).forEach(([missing, fallback]) => {
+      this.aliasAnimSet(missing, fallback);
+    });
+
+    this.aliasRunToIdle('ice_zombie');
+
+    Object.values(CHARACTER_CONFIGS).forEach((cfg) => {
+      this.ensureAnimFrames(cfg.spriteKey, 'idle');
+      this.ensureAnimFrames(cfg.spriteKey, 'run');
+    });
+    Object.values(ENEMY_CONFIGS).forEach((cfg) => {
+      this.ensureAnimFrames(cfg.spriteKey, 'idle');
+      this.ensureAnimFrames(cfg.spriteKey, 'run');
+      this.ensureAnimFrames(cfg.spriteKey, 'anim');
+    });
+    Object.values(BOSS_CONFIGS).forEach((cfg) => {
+      this.ensureAnimFrames(cfg.spriteKey, 'idle');
+      this.ensureAnimFrames(cfg.spriteKey, 'run');
+      this.ensureAnimFrames(cfg.spriteKey, 'anim');
+    });
+  }
+
+  private aliasAnimSet(target: string, source: string): void {
+    const patterns: Array<{ base: string; fallback: string }> = [
+      { base: `${target}_idle_anim_f`, fallback: `${source}_idle_anim_f` },
+      { base: `${target}_run_anim_f`, fallback: `${source}_run_anim_f` },
+      { base: `${target}_anim_f`, fallback: `${source}_anim_f` },
+    ];
+
+    patterns.forEach((pattern) => {
+      for (let i = 0; i < 4; i += 1) {
+        const targetKey = `${pattern.base}${i}`;
+        const sourceKey = `${pattern.fallback}${i}`;
+        if (!this.textures.exists(targetKey) && this.textures.exists(sourceKey)) {
+          const sourceTex = this.textures.get(sourceKey);
+          const image = sourceTex.getSourceImage() as HTMLImageElement;
+          this.textures.addImage(targetKey, image);
+        }
+      }
+    });
+  }
+
+  private ensureAnimFrames(key: string, kind: 'idle' | 'run' | 'anim'): void {
+    const baseKey = kind === 'anim' ? `${key}_anim_f` : `${key}_${kind}_anim_f`;
+    const frame0 = `${baseKey}0`;
+    if (!this.textures.exists(frame0)) return;
+    for (let i = 1; i < 4; i += 1) {
+      const frameKey = `${baseKey}${i}`;
+      if (!this.textures.exists(frameKey)) {
+        const sourceTex = this.textures.get(frame0);
+        const image = sourceTex.getSourceImage() as HTMLImageElement;
+        this.textures.addImage(frameKey, image);
+      }
+    }
+  }
+
+  private aliasRunToIdle(key: string): void {
+    for (let i = 0; i < 4; i += 1) {
+      const runKey = `${key}_run_anim_f${i}`;
+      const idleKey = `${key}_idle_anim_f${i}`;
+      if (!this.textures.exists(runKey) && this.textures.exists(idleKey)) {
+        const sourceTex = this.textures.get(idleKey);
+        const image = sourceTex.getSourceImage() as HTMLImageElement;
+        this.textures.addImage(runKey, image);
+      }
+    }
+  }
+}

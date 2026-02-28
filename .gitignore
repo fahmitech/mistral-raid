@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+dist/
+.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Beads (local DB, not needed in repo)
+.beads/*.db
+.beads/*.db-wal
+.beads/*.db-shm
+
+docs/specs.md
+
+# OS
+.DS_Store
