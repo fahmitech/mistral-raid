@@ -27,12 +27,18 @@ export class MenuScene extends Phaser.Scene {
 
     AudioManager.get().init(this);
 
-    this.input.once('pointerdown', () => {
-      this.sound.unlock();
+    const playMenuTheme = () => {
       if (!this.sound.get('menu_theme')?.isPlaying) {
         this.sound.play('menu_theme', { loop: true, volume: 0.5 });
       }
-    });
+    };
+    // Phaser fires 'unlocked' automatically on first user interaction
+    // If already unlocked (returning from another scene), play immediately
+    if (this.sound.locked) {
+      this.sound.once('unlocked', playMenuTheme);
+    } else {
+      playMenuTheme();
+    }
 
     this.input.keyboard?.on('keydown-UP', () => this.moveSelection(-1));
     this.input.keyboard?.on('keydown-DOWN', () => this.moveSelection(1));

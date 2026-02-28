@@ -47,6 +47,10 @@ const config: Phaser.Types.Core.GameConfig = {
     AudioDebugOverlay,
   ],
   backgroundColor: '#0a0a1a',
+  audio: {
+    noAudio: false,
+    disableWebAudio: false,
+  },
 };
 
 const game = new Phaser.Game(config);

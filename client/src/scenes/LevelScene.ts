@@ -134,15 +134,6 @@ export class LevelScene extends Phaser.Scene {
     audio.setOptions(this.options);
     audio.init(this);
 
-    // Pre-warm audio buffers for this level's sounds.
-    audio.preload([
-      'footstep_stone', 'sword_slash', 'dagger_slash', 'katana_slice', 'hammer_impact',
-      'bomb_explosion', 'player_hit', 'player_death', 'dash', 'shield_activate',
-      'item_pickup', 'coin_pickup', 'chest_open', 'potion_drink', 'weapon_swap',
-      'enemy_kill', 'xp_tone', 'goblin_attack', 'orc_roar', 'skeleton_rattle',
-      'zombie_growl', 'elemental_magic', 'suspense_build', 'low_rumble',
-      'boss_intro', 'boss_death', 'stairs_descend',
-    ]);
 
     // Reset combat music state.
     this.activeAudioLayer = 'ambient';
@@ -248,17 +239,6 @@ export class LevelScene extends Phaser.Scene {
     this.lastUpdateTime = time;
     this.handleInput(time);
     this.updateCombatMusic(time);
-    if (time - this.lastTelemetryUpdate > 10_000) {
-      this.lastTelemetryUpdate = time;
-      AudioManager.get().updateTelemetry({
-        hp: GameState.get().getData().playerHP,
-        maxHp: GameState.get().getData().playerMaxHP,
-        enemyCount: this.enemies.countActive(),
-        bossHp: this.boss ? this.boss.hp : 0,
-        bossMaxHp: this.boss ? this.boss.maxHP : 0,
-        recentDamageTaken: this.damageLog.filter((d) => d.time > time - 10_000).reduce((s, d) => s + d.amount, 0),
-      });
-    }
 
     this.player.updateBlink(time);
     // Defensive: keep the player above the fog overlay even if something resets depths.
@@ -346,7 +326,17 @@ export class LevelScene extends Phaser.Scene {
   private handleResume(): void {
     this.options = SaveSystem.loadOptions();
     AudioManager.get().setOptions(this.options);
-    AudioManager.get().playMusic(this.activeAudioLayer);
+    // Resume the correct music layer (Phaser native, no double-track)
+    const isPlaying = (key: string) => !!this.sound.get(key)?.isPlaying;
+    if (!isPlaying('dungeon_ambient') && !isPlaying('combat_music') && !isPlaying('boss_music')) {
+      if (this.activeAudioLayer === 'boss') {
+        this.sound.play('boss_music', { loop: true, volume: 0.8 });
+      } else if (this.combatMusicActive) {
+        this.sound.play('combat_music', { loop: true, volume: 0.6 });
+      } else {
+        this.sound.play('dungeon_ambient', { loop: true, volume: 0.4 });
+      }
+    }
     if (this.player) {
       this.player.setAlpha(1);
       this.player.setVisible(true);
@@ -1287,7 +1277,7 @@ export class LevelScene extends Phaser.Scene {
 
     if (enemy.hp <= 0) {
       enemy.die();
-      AudioManager.get().playPhaserSFX('enemy_die', 0.75, 80);
+      this.sound.play('enemy_die', { volume: 0.75 });
       ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
       GameState.get().addScore(enemy.xp);
       if (enemy.config.behavior === EnemyBehavior.Exploder) {
@@ -1456,7 +1446,6 @@ export class LevelScene extends Phaser.Scene {
     if (!this.sound.get('boss_music')?.isPlaying) {
       this.sound.play('boss_music', { loop: true, volume: 0.8 });
     }
-    this.sound.play('boss_roar', { volume: 1.0 });
     AudioManager.get().startHeartbeat();
   }
 
