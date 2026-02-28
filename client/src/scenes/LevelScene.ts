@@ -155,7 +155,7 @@ export class LevelScene extends Phaser.Scene {
       },
     });
 
-    this.shieldRing = this.add.graphics().setDepth(11);
+    this.shieldRing = this.add.graphics().setDepth(18);
 
     this.cameras.main.fadeIn(500, 0, 0, 0);
     this.showLevelIntro();

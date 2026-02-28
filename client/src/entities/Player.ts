@@ -21,8 +21,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     super(scene, x, y, spriteKey);
     this.weaponSprite = scene.add.image(x + 8, y + 4, weaponConfig.sprite);
     this.weaponSprite.setOrigin(0.5, 0.85);
-    this.weaponSprite.setDepth(11);
-    this.setDepth(10);
+    this.weaponSprite.setDepth(18);
+    this.setDepth(17);
     this.setOrigin(0.5, 0.6);
     this.setScale(1);
   }

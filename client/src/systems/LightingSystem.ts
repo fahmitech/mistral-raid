@@ -14,7 +14,7 @@ export class LightingSystem {
     this.fogAlpha = fogAlpha;
     this.overlay = scene.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setOrigin(0, 0);
     this.overlay.setScrollFactor(0);
-    this.overlay.setDepth(19);
+    this.overlay.setDepth(16);
     this.overlay.setBlendMode(Phaser.BlendModes.MULTIPLY);
 
     if (!scene.textures.exists(this.lightTextureKey)) {
