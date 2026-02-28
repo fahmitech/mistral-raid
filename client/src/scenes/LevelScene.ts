@@ -93,6 +93,11 @@ export class LevelScene extends Phaser.Scene {
   private currentWeaponType: ItemType = ItemType.WeaponSword;
   private lastUpdateTime = 0;
 
+  private debugEnabled = false;
+  private debugText?: Phaser.GameObjects.Text;
+  private debugMarker?: Phaser.GameObjects.Graphics;
+  private debugToggleKey?: Phaser.Input.Keyboard.Key;
+
   constructor() {
     super('LevelScene');
   }
@@ -191,7 +196,9 @@ export class LevelScene extends Phaser.Scene {
       ESC: this.input.keyboard!.addKey('ESC'),
       SPACE: this.input.keyboard!.addKey('SPACE'),
       SHIFT: this.input.keyboard!.addKey('SHIFT'),
+      F2: this.input.keyboard!.addKey('F2'),
     };
+    this.debugToggleKey = this.keys.F2;
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) {
@@ -205,6 +212,13 @@ export class LevelScene extends Phaser.Scene {
     this.handleInput(time);
 
     this.player.updateBlink(time);
+    // Defensive: keep the player above the fog overlay even if something resets depths.
+    if (this.lighting) {
+      const overlayDepth = this.lighting.getOverlayDepth();
+      if ((this.player.depth ?? 0) <= overlayDepth) {
+        this.player.setDepth(overlayDepth + 1);
+      }
+    }
     if (!Number.isFinite(this.player.alpha) || this.player.alpha <= 0) {
       this.player.setAlpha(1);
       this.player.setVisible(true);
@@ -238,6 +252,7 @@ export class LevelScene extends Phaser.Scene {
     this.checkBossTrigger();
     this.updateHUD(time);
     this.lighting.update(this.player.x, this.player.y);
+    this.updateDebug(time);
   }
 
   private createBulletTextures(): void {
@@ -712,7 +727,72 @@ export class LevelScene extends Phaser.Scene {
       }
     }
 
+    if (this.debugToggleKey && Phaser.Input.Keyboard.JustDown(this.debugToggleKey)) {
+      this.debugEnabled = !this.debugEnabled;
+      if (!this.debugEnabled) {
+        this.debugText?.destroy();
+        this.debugText = undefined;
+        this.debugMarker?.destroy();
+        this.debugMarker = undefined;
+      }
+    }
+
     this.updatePickupHint();
+  }
+
+  private updateDebug(time: number): void {
+    if (!this.debugEnabled) return;
+    if (!this.debugText) {
+      this.debugText = this.add
+        .text(6, 24, '', {
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+          fontSize: '10px',
+          color: '#ffffff',
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          padding: { x: 6, y: 4 },
+        })
+        .setScrollFactor(0)
+        .setDepth(9999);
+    }
+    if (!this.debugMarker) {
+      this.debugMarker = this.add.graphics().setDepth(9998);
+    }
+
+    const cam = this.cameras.main;
+    const p = this.player;
+    const w = this.player.weaponSprite;
+    const overlayDepth = this.lighting?.getOverlayDepth?.() ?? -1;
+    const pInView = cam.worldView.contains(p.x, p.y);
+    const pRenderFlags = (p as unknown as { renderFlags?: number }).renderFlags ?? -1;
+    const wRenderFlags = (w as unknown as { renderFlags?: number }).renderFlags ?? -1;
+
+    const warnings: string[] = [];
+    if (overlayDepth >= 0 && (p.depth ?? 0) <= overlayDepth) warnings.push('PLAYER_BELOW_FOG');
+    if (!pInView) warnings.push('PLAYER_OFF_CAMERA');
+    if (!p.visible) warnings.push('PLAYER_VISIBLE_FALSE');
+    if (p.alpha <= 0.02) warnings.push('PLAYER_ALPHA_LOW');
+    if (pRenderFlags === 0) warnings.push('PLAYER_RENDERFLAGS_0');
+
+    this.debugText.setText(
+      [
+        `t=${Math.floor(time)} camScroll=(${cam.scrollX.toFixed(1)},${cam.scrollY.toFixed(1)}) zoom=${cam.zoom.toFixed(2)}`,
+        `player pos=(${p.x.toFixed(1)},${p.y.toFixed(1)}) inView=${pInView} vis=${p.visible} a=${p.alpha.toFixed(2)} d=${p.depth} rf=${pRenderFlags}`,
+        `weapon pos=(${w.x.toFixed(1)},${w.y.toFixed(1)}) vis=${w.visible} a=${w.alpha.toFixed(2)} d=${w.depth} rf=${wRenderFlags}`,
+        `fog depth=${overlayDepth}`,
+        warnings.length ? `WARN: ${warnings.join(' ')}` : 'WARN: (none)',
+      ].join('\n')
+    );
+
+    this.debugMarker.clear();
+    this.debugMarker.lineStyle(1, 0x00ffcc, 1);
+    this.debugMarker.strokeCircle(p.x, p.y, 8);
+    this.debugMarker.lineStyle(1, 0xffcc00, 1);
+    this.debugMarker.beginPath();
+    this.debugMarker.moveTo(p.x - 10, p.y);
+    this.debugMarker.lineTo(p.x + 10, p.y);
+    this.debugMarker.moveTo(p.x, p.y - 10);
+    this.debugMarker.lineTo(p.x, p.y + 10);
+    this.debugMarker.strokePath();
   }
 
   private updateShieldRing(time: number): void {

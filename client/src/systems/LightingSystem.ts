@@ -77,6 +77,10 @@ export class LightingSystem {
     }
   }
 
+  getOverlayDepth(): number {
+    return this.overlay.depth ?? 0;
+  }
+
   getLightFactor(worldX: number, worldY: number, playerX: number, playerY: number): number {
     const player = this.falloff(worldX, worldY, playerX, playerY, PLAYER_LIGHT_RADIUS, this.softEdgePx);
     let torch = 0;
