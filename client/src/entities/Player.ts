@@ -65,10 +65,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   updateBlink(now: number): void {
+    // Defensive: if `now` is ever invalid (e.g. NaN), never leave the player invisible.
+    if (!Number.isFinite(now)) {
+      this.setVisible(true);
+      this.setAlpha(1);
+      return;
+    }
+
     if (this.isInvincible(now)) {
       const t = (now % 200) / 200;
-      this.setAlpha(0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI * 2)));
+      const nextAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI * 2));
+      this.setVisible(true);
+      this.setAlpha(Number.isFinite(nextAlpha) ? nextAlpha : 1);
     } else {
+      this.setVisible(true);
       this.setAlpha(1);
     }
   }

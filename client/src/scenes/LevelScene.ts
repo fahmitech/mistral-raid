@@ -200,6 +200,10 @@ export class LevelScene extends Phaser.Scene {
     this.handleInput(time);
 
     this.player.updateBlink(time);
+    if (!Number.isFinite(this.player.alpha) || this.player.alpha <= 0) {
+      this.player.setAlpha(1);
+      this.player.setVisible(true);
+    }
     this.player.updateWeaponPosition();
     this.updateShieldRing(time);
     this.checkAutoCollect();
