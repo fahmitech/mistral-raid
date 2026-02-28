@@ -211,28 +211,12 @@ export class PlayerSelectScene extends Phaser.Scene {
     const state = GameState.get();
     state.reset();
     state.setCharacter(type);
-    let transitioned = false;
-    const startLevel = () => {
-      if (transitioned) return;
-      transitioned = true;
-      this.scene.start('LevelScene', { level: 1 });
-    };
-
-    this.cameras.main.fadeOut(600, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, startLevel);
-    this.time.delayedCall(700, startLevel);
+    // Start immediately (no fade-out). If LevelScene throws during create,
+    // a fade can leave the game stuck on a black screen with no signal.
+    this.scene.start('LevelScene', { level: 1 });
   }
 
   private back(): void {
-    let transitioned = false;
-    const startMenu = () => {
-      if (transitioned) return;
-      transitioned = true;
-      this.scene.start('MenuScene');
-    };
-
-    this.cameras.main.fadeOut(280, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, startMenu);
-    this.time.delayedCall(380, startMenu);
+    this.scene.start('MenuScene');
   }
 }
