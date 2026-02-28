@@ -74,7 +74,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (this.isInvincible(now)) {
       const t = (now % 200) / 200;
-      const nextAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * Math.PI * 2));
+      // Keep the player clearly visible even under the fog-of-war multiply overlay.
+      const nextAlpha = 0.7 + 0.3 * Math.abs(Math.sin(t * Math.PI * 2));
       this.setVisible(true);
       this.setAlpha(Number.isFinite(nextAlpha) ? nextAlpha : 1);
     } else {
