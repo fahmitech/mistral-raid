@@ -22,6 +22,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(10);
     this.setOrigin(0.5, 0.6);
     this.setScale(1);
+  }
+
+  initPhysics(): void {
+    // Arcade body is created only after `scene.physics.add.existing(this)`.
     this.setCollideWorldBounds(true);
     this.body?.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT).setOffset(PLAYER_BODY_OFFSET_X, PLAYER_BODY_OFFSET_Y);
   }

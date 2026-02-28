@@ -309,6 +309,7 @@ export class LevelScene extends Phaser.Scene {
     this.player = new Player(this, spawnX, spawnY, `${this.playerSpriteKey}_idle_anim_f0`, weaponConfig);
     this.add.existing(this.player);
     this.physics.add.existing(this.player);
+    this.player.initPhysics();
     if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
       this.player.play(`${this.playerSpriteKey}_idle`);
     }
