@@ -1,6 +1,7 @@
-const frameImports = import.meta.glob('../../assets/0x72/frames/*.png', {
+const frameImports = import.meta.glob('../../../assets/0x72/frames/*.png', {
   eager: true,
-  as: 'url',
+  query: '?url',
+  import: 'default',
 }) as Record<string, string>;
 
 export const FRAME_LIST = Object.entries(frameImports).map(([path, url]) => {
