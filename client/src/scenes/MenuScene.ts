@@ -10,10 +10,10 @@ interface MenuItem {
 }
 
 export class MenuScene extends Phaser.Scene {
-  private items: MenuItem[] = [];
+  private items: MenuItem[] =[];
   private selectedIndex = 0;
-  private fogBlobs: Phaser.GameObjects.Ellipse[] = [];
-  private dustParticles: { sprite: Phaser.GameObjects.Ellipse; vx: number; vy: number }[] = [];
+  private fogBlobs: Phaser.GameObjects.Ellipse[] =[];
+  private dustParticles: { sprite: Phaser.GameObjects.Ellipse; vx: number; vy: number }[] =[];
 
   constructor() {
     super('MenuScene');
@@ -92,7 +92,7 @@ export class MenuScene extends Phaser.Scene {
       this.fogBlobs.push(blob);
     }
 
-    const colors = [0x334499, 0x2255bb, 0x5522aa, 0x1199bb];
+    const colors =[0x334499, 0x2255bb, 0x5522aa, 0x1199bb];
     for (let i = 0; i < 55; i += 1) {
       const size = Phaser.Math.FloatBetween(0.5, 2.0);
       const sprite = this.add.ellipse(
@@ -122,20 +122,22 @@ export class MenuScene extends Phaser.Scene {
     const title = this.add
       .text(160, 26, 'MISTRAL RAID', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '16px',
+        fontSize: '16px', // 16px is a multiple of 8
         color: '#ffffff',
         stroke: '#cc33ff',
         strokeThickness: 4,
+        resolution: 2, // Forces internal high-res render to prevent blur
       })
       .setOrigin(0.5);
 
     const subtitle = this.add
       .text(160, 46, 'THE WATCHER', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
+        fontSize: '8px', // Fixed from 7px to 8px
         color: '#00ccff',
         stroke: '#001122',
         strokeThickness: 2,
+        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -181,7 +183,7 @@ export class MenuScene extends Phaser.Scene {
     panel.strokeRoundedRect(88, 62, 144, 96, 6);
 
     const hasSave = SaveSystem.hasSave();
-    this.items = [
+    this.items =[
       {
         label: 'New Game',
         enabled: true,
@@ -214,10 +216,12 @@ export class MenuScene extends Phaser.Scene {
       const text = this.add
         .text(160, startY + idx * 16, item.label, {
           fontFamily: '"Press Start 2P"',
-          fontSize: '6px',
+          fontSize: '8px', // Fixed from 6px to 8px
           color: '#aabbcc',
+          resolution: 2,
         })
         .setOrigin(0.5);
+      
       item.text = text;
     });
 
@@ -232,8 +236,9 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(160, 172, '↑↓ Navigate   Enter Select', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
+        fontSize: '8px', // Fixed from 4px to 8px
         color: '#cccccc',
+        resolution: 2,
       })
       .setOrigin(0.5, 1);
   }

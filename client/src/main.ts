@@ -32,7 +32,7 @@ const config: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     autoRound: true,
   },
-  scene: [
+  scene:[
     BootScene,
     MenuScene,
     PlayerSelectScene,
@@ -49,17 +49,25 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// Keep the canvas scaling to an integer multiple of the internal resolution.
-// This prevents browser sub-pixel scaling that makes UI text look blurry.
+
 const updateIntegerZoom = () => {
   const maxZoom = game.scale.getMaxZoom();
-  const nextZoom = Math.max(1, Math.min(ZOOM, maxZoom));
+  
+  const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
+  
   if (game.scale.zoom !== nextZoom) {
     game.scale.setZoom(nextZoom);
   }
 };
+
 window.addEventListener('resize', updateIntegerZoom);
 updateIntegerZoom();
+
+setTimeout(() => {
+  if (game.canvas) {
+    game.canvas.style.imageRendering = 'pixelated';
+  }
+}, 0);
 
 const ensureErrorOverlay = (): HTMLPreElement => {
   const existing = document.getElementById('error-overlay');
@@ -92,7 +100,7 @@ const showErrorOverlay = (title: string, details: string) => {
 };
 
 window.addEventListener('error', (event: ErrorEvent) => {
-  const details = [event.message, event.filename ? `at ${event.filename}:${event.lineno}:${event.colno}` : '', event.error?.stack ?? '']
+  const details =[event.message, event.filename ? `at ${event.filename}:${event.lineno}:${event.colno}` : '', event.error?.stack ?? '']
     .filter(Boolean)
     .join('\n');
   showErrorOverlay('Runtime error', details);
