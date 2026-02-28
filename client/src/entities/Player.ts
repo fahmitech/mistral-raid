@@ -101,22 +101,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.aimAngle = Phaser.Math.Angle.Between(this.x, this.y, targetX, targetY);
     }
 
-    const step = (Math.PI * 2) / 8;
-    const snapped = Math.round(this.aimAngle / step) * step;
+    const angle = this.aimAngle;
 
     const holdRadius = 9;
-    const offsetX = Math.cos(snapped) * holdRadius;
-    const offsetY = Math.sin(snapped) * holdRadius;
+    const offsetX = Math.cos(angle) * holdRadius;
+    const offsetY = Math.sin(angle) * holdRadius;
 
     const baseX = this.x + this.weaponHoldOffset.x;
     const baseY = this.y + this.weaponHoldOffset.y;
     this.weaponSprite.setPosition(baseX + offsetX, baseY + offsetY);
 
     // Most 0x72 weapon sprites are oriented "up" by default, so rotate from up -> angle.
-    this.weaponSprite.setRotation(snapped + Math.PI / 2);
+    this.weaponSprite.setRotation(angle + Math.PI / 2);
 
     // Put weapon behind player when aiming upwards, in front otherwise.
     const playerDepth = this.depth ?? 0;
-    this.weaponSprite.setDepth(Math.sin(snapped) < -0.2 ? playerDepth - 1 : playerDepth + 1);
+    this.weaponSprite.setDepth(Math.sin(angle) < -0.2 ? playerDepth - 1 : playerDepth + 1);
+  }
+
+  setAimAngle(angle: number): void {
+    if (!Number.isFinite(angle)) return;
+    this.aimAngle = angle;
   }
 }

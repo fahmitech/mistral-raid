@@ -665,13 +665,18 @@ export class LevelScene extends Phaser.Scene {
     }
 
     const pointer = this.input.activePointer;
-    this.player.updateWeaponPosition(pointer.worldX, pointer.worldY);
+    // Aim using screen-space so the weapon stays visually synced to the cursor even with camera follow smoothing.
+    const cam = this.cameras.main;
+    const playerScreenX = this.player.x - cam.scrollX;
+    const playerScreenY = this.player.y - cam.scrollY;
+    const aimAngle = Phaser.Math.Angle.Between(playerScreenX, playerScreenY, pointer.x, pointer.y);
+    this.player.setAimAngle(aimAngle);
 
     const primaryDown = pointer.isDown && (pointer.leftButtonDown() || pointer.primaryDown);
     if (primaryDown) {
       if (time - this.lastShotAt >= state.playerFireRate) {
         this.lastShotAt = time;
-        this.shootProjectile(pointer.worldX, pointer.worldY);
+        this.shootProjectile();
       }
     }
 
@@ -719,12 +724,12 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private shootProjectile(targetX: number, targetY: number): void {
+  private shootProjectile(): void {
     const state = GameState.get().getData();
     const weaponMult = getWeaponDamageMultiplier(state.equippedWeapon);
     const damage = state.playerDamage * weaponMult;
 
-    const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, targetX, targetY);
+    const baseAngle = this.player.aimAngle;
     const angles = state.isMultiShot ? [baseAngle, baseAngle - 0.2, baseAngle + 0.2] : [baseAngle];
 
     const muzzleX = this.player.x + Math.cos(baseAngle) * 10;
@@ -741,9 +746,7 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.spawnMuzzleFlash(muzzleX, muzzleY);
-    const snap = (Math.PI * 2) / 8;
-    const snapped = Math.round(baseAngle / snap) * snap;
-    this.player.weaponSprite.setRotation(snapped + Math.PI / 2);
+    this.player.weaponSprite.setRotation(baseAngle + Math.PI / 2);
     this.player.weaponSprite.setTint(0xffffff);
     this.time.delayedCall(50, () => this.player.weaponSprite.clearTint());
     this.shakeCamera(28, 0.002);
