@@ -91,4 +91,10 @@ export class MiniMap {
       }
     }
   }
+
+  destroy(): void {
+    this.graphics?.destroy();
+    // @ts-expect-error - best-effort cleanup.
+    this.scene = undefined;
+  }
 }

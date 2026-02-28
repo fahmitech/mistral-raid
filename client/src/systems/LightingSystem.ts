@@ -81,6 +81,13 @@ export class LightingSystem {
     return this.overlay.depth ?? 0;
   }
 
+  destroy(): void {
+    this.overlay?.destroy();
+    this.lightSprite?.destroy();
+    // @ts-expect-error - best-effort cleanup.
+    this.scene = undefined;
+  }
+
   getLightFactor(worldX: number, worldY: number, playerX: number, playerY: number): number {
     const player = this.falloff(worldX, worldY, playerX, playerY, PLAYER_LIGHT_RADIUS, this.softEdgePx);
     let torch = 0;

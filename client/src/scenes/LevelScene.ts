@@ -119,14 +119,12 @@ export class LevelScene extends Phaser.Scene {
     AudioManager.get().setOptions(this.options);
     this.cameras.main.setBackgroundColor(this.levelData.bgColor);
 
-    this.events.on('resume', () => {
-      this.options = SaveSystem.loadOptions();
-      AudioManager.get().setOptions(this.options);
-      if (this.player) {
-        this.player.setAlpha(1);
-        this.player.invincibleUntil = 0;
-      }
-    });
+    // Scene instances are reused across `scene.start('LevelScene', ...)`.
+    // Make event binding idempotent to avoid leaking handlers across long sessions / retries.
+    this.events.off('resume', this.handleResume, this);
+    this.events.on('resume', this.handleResume, this);
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
     this.createBulletTextures();
 
@@ -200,11 +198,8 @@ export class LevelScene extends Phaser.Scene {
     };
     this.debugToggleKey = this.keys.F2;
 
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) {
-        this.tryShield();
-      }
-    });
+    this.input.off('pointerdown', this.handlePointerDown, this);
+    this.input.on('pointerdown', this.handlePointerDown, this);
   }
 
   update(time: number): void {
@@ -253,6 +248,79 @@ export class LevelScene extends Phaser.Scene {
     this.updateHUD(time);
     this.lighting.update(this.player.x, this.player.y);
     this.updateDebug(time);
+  }
+
+  private handleResume(): void {
+    this.options = SaveSystem.loadOptions();
+    AudioManager.get().setOptions(this.options);
+    if (this.player) {
+      this.player.setAlpha(1);
+      this.player.setVisible(true);
+      this.player.invincibleUntil = 0;
+    }
+  }
+
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (pointer.rightButtonDown()) {
+      this.tryShield();
+    }
+  }
+
+  private handleShutdown(): void {
+    // Remove per-run handlers (avoid accumulation across retries).
+    this.events.off('resume', this.handleResume, this);
+    this.input?.off('pointerdown', this.handlePointerDown, this);
+
+    // Timers / delayed calls.
+    this.stairsCheck?.remove(false);
+    this.stairsCheck = undefined;
+    this.minimapTimer?.remove(false);
+    this.minimapTimer = undefined;
+    this.time.removeAllEvents();
+
+    // Kill tweens created by this Scene.
+    this.tweens.killAll();
+
+    // Systems / overlays.
+    this.minimap?.destroy();
+    // @ts-expect-error - minimap is set in create.
+    this.minimap = undefined;
+    this.lighting?.destroy();
+    // @ts-expect-error - lighting is set in create.
+    this.lighting = undefined;
+
+    // Destroy game objects we keep references to (the Scene will also clear display lists, but be explicit).
+    this.debugText?.destroy();
+    this.debugText = undefined;
+    this.debugMarker?.destroy();
+    this.debugMarker = undefined;
+
+    this.wallShadows?.destroy();
+    this.wallShadows = undefined;
+    this.shieldRing?.destroy();
+    // @ts-expect-error - shieldRing is set in create.
+    this.shieldRing = undefined;
+
+    this.dashBar?.destroy();
+    this.dashBar = undefined;
+    this.shieldIndicator?.destroy();
+    this.shieldIndicator = undefined;
+    this.bossBar?.destroy();
+    this.bossBar = undefined;
+    this.bossNameText?.destroy();
+    this.bossNameText = undefined;
+    this.stairsSprite?.destroy();
+    this.stairsSprite = undefined;
+
+    this.player?.weaponSprite?.destroy();
+    this.player?.destroy();
+
+    this.enemies?.clear(true, true);
+    this.items?.clear(true, true);
+    this.playerProjectiles?.clear(true, true);
+    this.enemyProjectiles?.clear(true, true);
+    this.bossGroup?.clear(true, true);
+    this.walls?.clear(true, true);
   }
 
   private createBulletTextures(): void {
