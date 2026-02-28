@@ -15,7 +15,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   shieldActiveUntil = 0;
   lastDir = new Phaser.Math.Vector2(1, 0);
   aimAngle = 0;
-  private blinkOn = false;
+  private invincibleTintOn = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, spriteKey: string, weaponConfig: ItemConfig) {
     super(scene, x, y, spriteKey);
@@ -70,27 +70,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (!Number.isFinite(now)) {
       this.setVisible(true);
       this.setAlpha(1);
-      this.blinkOn = false;
+      this.invincibleTintOn = false;
       this.clearTint();
       return;
     }
 
     if (this.isInvincible(now)) {
-      // Keep the body fully visible; use tint-based blinking instead of alpha (alpha can
-      // make the sprite appear to vanish depending on lighting/overlay).
-      const on = Math.floor(now / 100) % 2 === 0;
-      if (on !== this.blinkOn) {
-        this.blinkOn = on;
-        if (on) this.setTintFill(0xffffff);
-        else this.clearTint();
+      // Keep the body fully visible. Under the fog-of-war multiply overlay, alpha blinking
+      // (and even some tint-fill approaches) can make the sprite appear to disappear on
+      // certain frames/palettes. Use a stable tint instead.
+      if (!this.invincibleTintOn) {
+        this.invincibleTintOn = true;
+        this.setTint(0xff7777);
       }
       this.setVisible(true);
       this.setAlpha(1);
     } else {
       this.setVisible(true);
       this.setAlpha(1);
-      if (this.blinkOn) {
-        this.blinkOn = false;
+      if (this.invincibleTintOn) {
+        this.invincibleTintOn = false;
         this.clearTint();
       }
     }
