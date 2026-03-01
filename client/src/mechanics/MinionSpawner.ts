@@ -29,6 +29,7 @@ export class MinionSpawner implements MechanicInstance {
   private onMinionKilled: () => void;
   private minions: Minion[] = [];
   private lifetime: number;
+  private baseDamage: number;
 
   constructor(ctx: Context, config: MechanicConfig) {
     this.scene = ctx.scene;
@@ -44,6 +45,7 @@ export class MinionSpawner implements MechanicInstance {
     const hp = Number(config.minion_hp ?? 18);
     const behavior = String(config.behavior ?? 'chase');
     const spawnLocation = String(config.spawn_location ?? 'edges');
+    this.baseDamage = Phaser.Math.Clamp(Number(config.minion_damage ?? 2), 1, 4);
     this.lifetime = Number(config.duration_seconds ?? 10) * 1000;
 
     for (let i = 0; i < Math.max(1, count); i += 1) {
@@ -79,7 +81,9 @@ export class MinionSpawner implements MechanicInstance {
 
       const dist = Phaser.Math.Distance.Between(minion.sprite.x, minion.sprite.y, this.player.x, this.player.y);
       if (dist < 12) {
-        const damage = minion.behavior === 'kamikaze' ? 20 : 10;
+        const damage = minion.behavior === 'kamikaze'
+          ? Math.min(4, this.baseDamage * 2)
+          : this.baseDamage;
         this.onDamage(damage, 'melee');
         if (minion.behavior === 'kamikaze') {
           minion.sprite.destroy();

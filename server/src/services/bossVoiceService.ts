@@ -92,24 +92,30 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
       ws.send(JSON.stringify({ text: '', flush: true }));
     });
 
-    ws.on('message', (data: RawData) => {
+    ws.on('message', (data: RawData, isBinary: boolean) => {
       if (controller.signal.aborted) return;
 
       try {
-        if (typeof data === 'string') {
-          const msg = JSON.parse(data) as { audio?: string; isFinal?: boolean };
-          if (msg.audio) {
-            audioChunks.push(Buffer.from(msg.audio, 'base64'));
-          }
-          if (msg.isFinal) {
-            ws.close();
-          }
+        if (!isBinary) {
+          const text = typeof data === 'string' ? data : data.toString();
+          const msg = JSON.parse(text) as { audio?: string; isFinal?: boolean };
+          if (msg.audio) audioChunks.push(Buffer.from(msg.audio, 'base64'));
+          if (msg.isFinal) ws.close();
           return;
         }
 
         if (Buffer.isBuffer(data)) {
           audioChunks.push(data);
           return;
+        }
+
+        if (data instanceof ArrayBuffer) {
+          audioChunks.push(Buffer.from(data));
+          return;
+        }
+
+        if (Array.isArray(data)) {
+          data.forEach((chunk) => audioChunks.push(chunk));
         }
       } catch (err) {
         console.warn('[tts] Failed to parse ElevenLabs message:', err);

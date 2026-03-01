@@ -41,7 +41,7 @@ export class WallOfDeath implements MechanicInstance {
     this.speed = Number(config.speed ?? 2) * 60 / ZOOM;
     this.gapPosition = Number(config.gap_position ?? 0.5);
     this.gapWidth = Number(config.gap_width ?? 90) / ZOOM;
-    this.damage = Number(config.damage_on_hit ?? 30);
+    this.damage = Phaser.Math.Clamp(Number(config.damage_on_hit ?? 2), 1, 4);
     this.duration = Number(config.duration_seconds ?? 6) * 1000;
     this.startTime = this.scene.time.now;
 

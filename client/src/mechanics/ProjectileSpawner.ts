@@ -33,6 +33,7 @@ export class ProjectileSpawner implements MechanicInstance {
   private fireRate: number;
   private size: number;
   private homing: boolean;
+  private damage: number;
   private spiralAngle = 0;
   private projectileLifetime = 1500;
 
@@ -48,6 +49,7 @@ export class ProjectileSpawner implements MechanicInstance {
     this.fireRate = Number(config.fire_rate ?? 1.5);
     this.size = Number(config.projectile_size ?? 8) / ZOOM;
     this.homing = Boolean(config.homing ?? false);
+    this.damage = Phaser.Math.Clamp(Number((config as Record<string, unknown>).damage_on_hit ?? 2), 1, 4);
 
     const duration = Number(config.duration_seconds ?? 6);
     this.endTime = this.scene.time.now + duration * 1000;
@@ -79,7 +81,7 @@ export class ProjectileSpawner implements MechanicInstance {
       }
       const dist = Phaser.Math.Distance.Between(proj.obj.x, proj.obj.y, this.player.x, this.player.y);
       if (dist <= proj.radius + 4) {
-        this.onDamage(10, 'projectile');
+        this.onDamage(this.damage, 'projectile');
         proj.obj.destroy();
       }
     });

@@ -41,7 +41,7 @@ export class LaserBeam implements MechanicInstance {
     this.direction = String(config.direction ?? 'horizontal');
     this.speed = Number(config.speed ?? 2);
     this.width = Number(config.width ?? 28) / ZOOM;
-    this.damage = Number(config.damage_on_hit ?? 20);
+    this.damage = Phaser.Math.Clamp(Number(config.damage_on_hit ?? 3), 1, 4);
     this.duration = Number(config.duration_seconds ?? 5);
     this.telegraphTime = Number(config.telegraph_time ?? 1);
     this.startTime = this.scene.time.now;

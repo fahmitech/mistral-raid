@@ -257,7 +257,7 @@ export class ArenaScene extends Phaser.Scene {
         break;
       case 'AUDIO_READY':
         this.devConsole.setTTSStatus('playing');
-        bossVoicePlayer.play(msg.payload.audioBase64);
+        bossVoicePlayer.play(msg.payload.audioBase64, msg.payload.format);
         break;
       case 'director_update':
         this.directorPanel.update(msg.payload);

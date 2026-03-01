@@ -39,7 +39,7 @@ export class HomingOrb implements MechanicInstance {
 
     const count = Number(config.count ?? 2);
     this.speed = Number(config.speed ?? 4) * 15;
-    this.damage = Number(config.damage_on_hit ?? 25);
+    this.damage = Phaser.Math.Clamp(Number(config.damage_on_hit ?? 3), 1, 4);
     this.lifetime = Number(config.lifetime_seconds ?? 8) * 1000;
     this.size = Number(config.size ?? 18) / ZOOM;
 

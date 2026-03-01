@@ -37,7 +37,7 @@ export class HazardZoneSpawner implements MechanicInstance {
     this.radius = Number(config.radius ?? 140) / ZOOM;
     this.warningTime = Number(config.warning_time ?? 1);
     this.duration = Number(config.duration_seconds ?? 6);
-    this.damage = Number(config.damage_per_tick ?? 10);
+    this.damage = Phaser.Math.Clamp(Number(config.damage_per_tick ?? 2), 1, 4);
     this.startTime = this.scene.time.now;
     this.shape = String(config.shape ?? 'circle');
   }
