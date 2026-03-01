@@ -56,12 +56,15 @@ export function setTurnState(session: Session, state: TurnState): void {
 }
 
 export function handleBargeIn(session: Session): void {
+  // Only abort in-flight LLM/TTS. Do NOT touch sttStream —
+  // its lifecycle is managed by startStreaming/stopStreaming.
+  // The barge_in message often arrives right after vad_state:speaking=true,
+  // which already created a fresh sttStream; destroying it here would
+  // silently kill the new transcription.
   session.activeLLMAbort?.abort();
   session.activeTTSAbort?.abort();
   session.activeLLMAbort = null;
   session.activeTTSAbort = null;
-  session.sttStream?.queue.close();
-  session.sttStream = null;
   setTurnState(session, 'LISTENING');
 }
 

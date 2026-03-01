@@ -195,6 +195,17 @@ async function* singleUtteranceStream(buffer: Buffer): AsyncGenerator<Uint8Array
 export function startStreaming(session: Session): void {
   if (!ENABLE_AI_SPEECH) return;
 
+  // Abort any in-flight LLM/TTS from a previous turn (inline barge-in).
+  // This must happen atomically with stream creation so that a separate
+  // barge_in message can't destroy the stream we're about to create.
+  if (session.activeLLMAbort || session.activeTTSAbort) {
+    session.activeLLMAbort?.abort();
+    session.activeTTSAbort?.abort();
+    session.activeLLMAbort = null;
+    session.activeTTSAbort = null;
+    console.log('[stt] Barge-in: aborted in-flight LLM/TTS');
+  }
+
   // If a stale stream exists, force-close it so we can start fresh.
   if (session.sttStream) {
     console.warn('[stt] Clearing stale sttStream before starting new one');
