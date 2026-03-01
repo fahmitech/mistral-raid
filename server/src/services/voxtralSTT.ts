@@ -193,7 +193,13 @@ async function* singleUtteranceStream(buffer: Buffer): AsyncGenerator<Uint8Array
 
 export function startStreaming(session: Session): void {
   if (!ENABLE_AI_SPEECH) return;
-  if (session.sttStream) return;
+
+  // If a stale stream exists, force-close it so we can start fresh.
+  if (session.sttStream) {
+    console.warn('[stt] Clearing stale sttStream before starting new one');
+    session.sttStream.queue.close();
+    session.sttStream = null;
+  }
 
   const queue = new AudioChunkQueue();
   const stt = { queue, task: null as Promise<void> | null, finalTranscript: '' };
