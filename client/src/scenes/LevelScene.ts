@@ -646,7 +646,7 @@ this.hintBg = undefined;
 
     const topStyle = {
       fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
+      fontSize: '6px',
       resolution: 1,
     } as const;
 
@@ -654,42 +654,41 @@ this.hintBg = undefined;
       .text(10, 10, `LEVEL ${this.levelData.level}`, { ...topStyle, color: '#ffd700' })
       .setScrollFactor(0)
       .setDepth(20)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
 
     this.coinText = this.add
-      .text(10, 28, 'COINS: 0', { ...topStyle, color: '#ffeb3b' })
+      .text(10, 20, 'COINS: 0', { ...topStyle, color: '#ffeb3b' })
       .setScrollFactor(0)
       .setDepth(20)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
 
     this.scoreText = this.add
       .text(INTERNAL_WIDTH - 10, 10, 'SCORE: 0', { ...topStyle, color: '#ffffff' })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(20)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
 
     // Hearts stay exactly as they are
     const heartConfig = this.createHearts();
 
-    // Smaller bars, centered, leaving room for weapons (fix overlap)
-    const abilityW = 64;
+    // Smaller bars, positioned after hearts
+    const abilityW = 56;
     const abilityH = 6;
-    const gap = 12;
-    const totalW = abilityW * 2 + gap;
+    const gap = 8;
 
     const dashRect = {
-      x: Math.round(centerX - totalW / 2),
-      y: INTERNAL_HEIGHT - 30,
+      x: heartConfig.endX + 8,
+      y: INTERNAL_HEIGHT - 14,
       width: abilityW,
       height: abilityH,
     };
     const shieldRect = {
-      x: Math.round(dashRect.x + abilityW + gap),
-      y: INTERNAL_HEIGHT - 30,
+      x: Math.round(dashRect.x + abilityW + gap + 14),
+      y: INTERNAL_HEIGHT - 14,
       width: abilityW,
       height: abilityH,
     };
@@ -705,48 +704,47 @@ this.hintBg = undefined;
     this.drawAbilityBackground(this.dashBarBg, dashRect);
     this.drawAbilityBackground(this.shieldBarBg, shieldRect);
 
+    // Labels: same style as LEVEL text (6px, stroke 1)
     const labelStyle = {
       fontFamily: '"Press Start 2P"',
-      fontSize: '7px',
+      fontSize: '6px',
       resolution: 1,
     } as const;
 
     this.dashLabel = this.add
-      .text(dashRect.x, dashRect.y - 6, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
+      .text(dashRect.x, dashRect.y - 4, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
       .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(20)
-      .setAlpha(0.95)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
 
     this.shieldLabel = this.add
-      .text(shieldRect.x, shieldRect.y - 6, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
+      .text(shieldRect.x, shieldRect.y - 4, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
       .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(20)
-      .setAlpha(0.95)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
 
     this.leftSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
     this.rightSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
     this.drawSeparators(heartConfig);
 
-    // WEAPONS: bigger font + darker box for readability
+    // WEAPONS: same style as LEVEL text (6px)
     this.weaponBoxBg = this.add.graphics().setScrollFactor(0).setDepth(18);
     this.weaponText = this.add
-      .text(INTERNAL_WIDTH - 10, INTERNAL_HEIGHT - 20, '', {
+      .text(INTERNAL_WIDTH - 8, INTERNAL_HEIGHT - 14, '', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
+        fontSize: '6px',
         color: '#ffb74d',
         resolution: 1,
       })
       .setOrigin(1, 1)
       .setScrollFactor(0)
       .setDepth(19)
-      .setStroke('#000000', 2)
-      .setShadow(2, 2, '#000000', 0, true, true);
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true);
     this.updateWeaponLabel();
 
     this.hintBg = this.add.graphics().setScrollFactor(0).setDepth(19).setVisible(false);
@@ -754,14 +752,15 @@ this.hintBg = undefined;
     this.hintText = this.add
       .text(centerX, INTERNAL_HEIGHT / 2, '[E] Pick up', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
+        fontSize: '6px',
         color: '#a8e6cf',
         resolution: 1,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(20)
-      .setStroke('#000000', 2)
+      .setStroke('#000000', 1)
+      .setShadow(1, 1, '#000000', 0, true, true)
       .setVisible(false);
 
     this.updateDashChargesDisplay();
@@ -808,25 +807,25 @@ this.hintBg = undefined;
   private drawWeaponBox(): void {
     if (!this.weaponText || !this.weaponBoxBg) return;
     const bounds = this.weaponText.getBounds();
-    const padX = 8;
-    const padY = 6;
+    const padX = 4;
+    const padY = 3;
 
     this.weaponBoxBg.clear();
-    this.weaponBoxBg.fillStyle(0x000000, 0.65);
+    this.weaponBoxBg.fillStyle(0x000000, 0.6);
     this.weaponBoxBg.fillRoundedRect(
       bounds.x - padX,
       bounds.y - padY,
       bounds.width + padX * 2,
       bounds.height + padY * 2,
-      6
+      3
     );
-    this.weaponBoxBg.lineStyle(1, 0xffb74d, 0.8);
+    this.weaponBoxBg.lineStyle(1, 0xffb74d, 0.7);
     this.weaponBoxBg.strokeRoundedRect(
       bounds.x - padX,
       bounds.y - padY,
       bounds.width + padX * 2,
       bounds.height + padY * 2,
-      6
+      3
     );
   }
 
@@ -864,9 +863,9 @@ this.hintBg = undefined;
     this.heartSprites = [];
 
     const maxHearts = Math.ceil(GameState.get().getData().playerMaxHP / 2);
-    const startX = 16;
+    const startX = 6;
     const spacing = 18;
-    const heartY = INTERNAL_HEIGHT - 18;
+    const heartY = INTERNAL_HEIGHT - 12;
 
     for (let i = 0; i < maxHearts; i += 1) {
       const heart = this.add
