@@ -11,8 +11,9 @@ import { attachWebSocketServer } from './ws/WebSocketServer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load .env from the server/ directory (one level above src/)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+// Load .env from the server/ directory (one level above src/).
+// override=true ensures local .env wins over stale shell exports.
+dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
 
 const GENERATED_DIR = path.join(__dirname, '..', 'generated-audio');
 
@@ -60,5 +61,13 @@ httpServer.listen(PORT, () => {
     console.warn('[server] WARNING: ELEVENLABS_API_KEY is not set – audio generation will fail');
   } else {
     console.log('[server] ElevenLabs API key loaded');
+  }
+
+  if (!process.env.MISTRAL_API_KEY) {
+    console.warn('[server] WARNING: MISTRAL_API_KEY is not set – AI responses will fail');
+  } else {
+    const key = process.env.MISTRAL_API_KEY;
+    const preview = key.length >= 8 ? `${key.slice(0, 4)}…${key.slice(-4)}` : '****';
+    console.log(`[server] Mistral API key loaded (${preview})`);
   }
 });
