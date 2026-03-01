@@ -1,8 +1,8 @@
-import { MicVAD } from '@ricky0123/vad-web';
+import * as vad from '@ricky0123/vad-web';
 import { wsClient } from '../network/WebSocketClient';
 
 class MicCapture {
-  private vad: Awaited<ReturnType<typeof MicVAD.new>> | null = null;
+  private vad: any | null = null;
   private active = false;
   private errorHandler: ((err: Error) => void) | null = null;
   private speechStartHandler: (() => void) | null = null;
@@ -10,7 +10,12 @@ class MicCapture {
 
   async start(): Promise<void> {
     try {
-      this.vad = await MicVAD.new({
+      const MicVADRef = (vad as any).MicVAD ?? (vad as any).default?.MicVAD;
+      if (!MicVADRef) {
+        throw new Error('MicVAD export not found from @ricky0123/vad-web');
+      }
+
+      this.vad = await MicVADRef.new({
         onSpeechStart: () => {
           wsClient.send({ type: 'vad_state', payload: { speaking: true } });
           this.speechStartHandler?.();
