@@ -48,6 +48,8 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
     textLength: tauntText.length, voiceId: BOSS_VOICE.voice_id, streaming: ENABLE_STREAMING_TTS,
   });
 
+  console.log(`[tts] Boss speaking: "${tauntText}"`);
+
   const controller = new AbortController();
   session.activeTTSAbort = controller;
 

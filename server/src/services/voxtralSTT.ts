@@ -2,13 +2,12 @@ import { RealtimeTranscription, AudioEncoding } from '@mistralai/mistralai/extra
 import type { Session } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { canStartBossReply, setTurnState } from './sessionManager.js';
-import { generateBossReply } from './mistralService.js';
+import { generateBossReply as generateBossReplyInMistral } from './mistralService.js';
 import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
 import { trackStart, trackEnd, trackError } from './telemetry.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_CAPTIONS = process.env.ENABLE_CAPTIONS !== 'false';
-const STT_TARGET_DELAY_MS = Number(process.env.STT_TARGET_DELAY_MS ?? 160);
 
 let client: RealtimeTranscription | null = null;
 
@@ -70,7 +69,7 @@ export function startStreaming(session: Session): void {
   if (session.sttStream) return;
 
   const queue = new AudioChunkQueue();
-  session.sttStream = { queue, task: null, finalTranscript: '' };
+  session.sttStream = { queue, task: null, finalTranscript: '', hasSentAudio: false };
   setTurnState(session, 'USER_SPEAKING');
   session.partialTranscript = '';
   session.stableTranscript = '';
@@ -79,55 +78,62 @@ export function startStreaming(session: Session): void {
     mode: 'streaming',
   });
 
-  session.sttStream.task = (async () => {
-    try {
-      for await (const event of getClient().transcribeStream(
-        queue,
-        'voxtral-mini-transcribe-realtime-2602',
-        { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
-      )) {
-        if (event.type === 'transcription.text.delta') {
-          const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
-          if (delta) {
-            session.partialTranscript += delta;
-            if (ENABLE_CAPTIONS) {
-              sendToClient(session, { type: 'captions_partial', payload: { text: session.partialTranscript } });
+  if (session.sttStream) {
+    session.sttStream.task = (async () => {
+      try {
+        for await (const event of getClient().transcribeStream(
+          queue,
+          'voxtral-mini-transcribe-realtime-2602',
+          { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
+        )) {
+          if (event.type === 'transcription.text.delta') {
+            const delta = (event as any).text ?? (event as any).delta ?? '';
+            if (delta) {
+              session.partialTranscript += delta;
+              if (ENABLE_CAPTIONS) {
+                sendToClient(session, { type: 'captions_partial', payload: { text: session.partialTranscript } });
+              }
             }
           }
-        }
-        if (event.type === 'transcription.done') {
-          const finalTranscript = session.partialTranscript.trim();
-          session.stableTranscript = finalTranscript;
-          session.lastSpeechEndTime = Date.now();
-          if (session.sttStream) {
-            session.sttStream.finalTranscript = finalTranscript;
+          if (event.type === 'transcription.done') {
+            const finalTranscript = (event as any).text?.trim() || session.partialTranscript.trim();
+            session.stableTranscript = finalTranscript;
+            session.lastSpeechEndTime = Date.now();
+            if (session.sttStream) {
+              session.sttStream.finalTranscript = finalTranscript;
+            }
+            if (ENABLE_CAPTIONS) {
+              sendToClient(session, { type: 'captions_final', payload: { text: finalTranscript } });
+            }
+            trackEnd(sttCtx, 'stt', 'stt.call.end', {
+              transcriptLength: finalTranscript.length,
+              wordCount: finalTranscript.split(/\s+/).filter(Boolean).length,
+              mode: 'streaming',
+            });
+            break;
           }
-          if (ENABLE_CAPTIONS) {
-            sendToClient(session, { type: 'captions_final', payload: { text: finalTranscript } });
+          if (event.type === 'error') {
+            console.warn('[stt] Voxtral error event:', event);
+            break;
           }
-          trackEnd(sttCtx, 'stt', 'stt.call.end', {
-            transcriptLength: finalTranscript.length,
-            wordCount: finalTranscript.split(/\s+/).filter(Boolean).length,
-            mode: 'streaming',
-          });
-          break;
         }
-        if (event.type === 'error') {
-          console.warn('[stt] Voxtral error event:', event);
-          break;
+      } catch (err: any) {
+        if (err.message?.includes('Cannot flush audio')) {
+          // Safe to ignore: user stopped speaking before any audio bytes were sent
+          return;
         }
+        trackError(sttCtx, 'stt', 'stt.call.error', {
+          error: err instanceof Error ? err.message : String(err), mode: 'streaming',
+        });
+        console.warn('[stt] Voxtral stream error:', err);
       }
-    } catch (err) {
-      trackError(sttCtx, 'stt', 'stt.call.error', {
-        error: err instanceof Error ? err.message : String(err), mode: 'streaming',
-      });
-      console.warn('[stt] Voxtral stream error:', err);
-    }
-  })();
+    })();
+  }
 }
 
 export function pushStreamingAudio(session: Session, chunk: Buffer): boolean {
   if (!session.sttStream) return false;
+  session.sttStream.hasSentAudio = true;
   session.sttStream.queue.push(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
   return true;
 }
@@ -141,6 +147,10 @@ export async function stopStreaming(session: Session): Promise<void> {
   }
   const finalTranscript = stt.finalTranscript.trim();
   session.sttStream = null;
+
+  if (finalTranscript) {
+    console.log(`[stt] User said: "${finalTranscript}"`);
+  }
 
   if (!finalTranscript) {
     setTurnState(session, 'LISTENING');
@@ -175,73 +185,61 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
     mode: 'single_utterance', audioBytes: utteranceBuffer.length,
   });
 
-  let finalTranscript = '';
-  let sawDelta = false;
-
   try {
+    let finalTranscript = '';
     for await (const event of getClient().transcribeStream(
       singleUtteranceStream(utteranceBuffer),
       'voxtral-mini-transcribe-realtime-2602',
       { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
     )) {
       if (event.type === 'transcription.text.delta') {
-        const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
+        const delta = (event as any).text ?? (event as any).delta ?? '';
         if (delta) {
-          if (!sawDelta) {
-            sawDelta = true;
-          }
           session.partialTranscript += delta;
-          if (ENABLE_CAPTIONS) {
-            sendToClient(session, { type: 'captions_partial', payload: { text: session.partialTranscript } });
-          }
         }
       }
       if (event.type === 'transcription.done') {
-        finalTranscript = session.partialTranscript.trim();
-        session.stableTranscript = finalTranscript;
-        session.lastSpeechEndTime = Date.now();
-        if (ENABLE_CAPTIONS) {
-          sendToClient(session, { type: 'captions_final', payload: { text: finalTranscript } });
-        }
+        finalTranscript = (event as any).text?.trim() || session.partialTranscript.trim();
         break;
       }
-      if (event.type === 'error') {
-        console.warn('[stt] Voxtral error event:', event);
-        setTurnState(session, 'LISTENING');
-        return;
-      }
     }
+
+    trackEnd(sttCtx, 'stt', 'stt.call.end', {
+      transcriptLength: finalTranscript.length,
+      wordCount: finalTranscript.split(/\s+/).filter(Boolean).length,
+      mode: 'single_utterance',
+    });
+
+    if (finalTranscript) {
+      console.log(`[stt] User said: "${finalTranscript}"`);
+    }
+
+    const wordCount = finalTranscript.split(/\s+/).filter(Boolean).length;
+    if (wordCount < 2 || !canStartBossReply(session)) {
+      setTurnState(session, 'LISTENING');
+      return;
+    }
+
+    setTurnState(session, 'THINKING');
+    const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session);
+    sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
+    setTurnState(session, 'AI_SPEAKING');
+    void synthesizeBossVoice(session, bossResponse.taunt);
+
   } catch (err) {
     trackError(sttCtx, 'stt', 'stt.call.error', {
-      error: err instanceof Error ? err.message : String(err), mode: 'single_utterance',
+      error: err instanceof Error ? err.message : String(err),
+      mode: 'single_utterance',
     });
-    console.warn('[stt] Voxtral stream error:', err);
+    console.warn('[stt] Transcribe single failed:', err);
     setTurnState(session, 'LISTENING');
-    return;
   }
+}
 
-  if (!finalTranscript) {
-    console.warn('[stt] empty transcript');
-    setTurnState(session, 'LISTENING');
-    return;
-  }
-
-  trackEnd(sttCtx, 'stt', 'stt.call.end', {
-    transcriptLength: finalTranscript.length,
-    wordCount: finalTranscript.split(/\s+/).filter(Boolean).length,
-    mode: 'single_utterance',
-  });
-
-  const wordCount = finalTranscript.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 2 || !canStartBossReply(session)) {
-    setTurnState(session, 'LISTENING');
-    return;
-  }
-
-  setTurnState(session, 'THINKING');
-  const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session);
-  sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
-  setTurnState(session, 'AI_SPEAKING');
-  void synthesizeBossVoice(session, bossResponse.taunt);
-  session.partialTranscript = '';
+async function generateBossReply(
+  playerSaid: string,
+  telemetry: any,
+  session: Session
+): Promise<any> {
+  return generateBossReplyInMistral(playerSaid, telemetry, session);
 }

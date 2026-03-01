@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 export class VictoryScene extends Phaser.Scene {
   private confetti: { sprite: Phaser.GameObjects.Rectangle; speed: number; drift: number }[] = [];
@@ -10,6 +11,7 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'VictoryScene');
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
     AudioManager.playMusic(this, 'victory_music');
@@ -122,6 +124,7 @@ export class VictoryScene extends Phaser.Scene {
   private playAgain(): void {
     AudioManager.stopAll(this);
     GameState.get().reset();
+    gameTelemetry.trackSceneTransition('VictoryScene', 'MenuScene');
     this.scene.start('MenuScene');
   }
 }

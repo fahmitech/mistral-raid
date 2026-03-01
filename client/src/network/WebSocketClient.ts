@@ -10,7 +10,7 @@ class WebSocketClient {
   private handlers: Set<MessageHandler> = new Set();
   private statusHandlers: Set<StatusHandler> = new Set();
   private retries = 0;
-  private maxRetries = 3;
+  private maxRetries = 100; // allow many retries for dev flow
   private intentionallyClosed = false;
 
   connect(url?: string): void {

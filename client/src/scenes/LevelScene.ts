@@ -49,6 +49,7 @@ import { TelemetryTracker } from '../systems/TelemetryTracker';
 import { wsClient } from '../network/WebSocketClient';
 
 import { MusicLayer } from '../types/AudioTypes';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 export class LevelScene extends Phaser.Scene {
   private levelData!: LevelData;
@@ -147,6 +148,7 @@ export class LevelScene extends Phaser.Scene {
     audio.init(this);
 
     this.setupTelemetry();
+    gameTelemetry.trackSceneTransition('', 'LevelScene', this.levelData.level);
 
     // Reset combat music state.
     this.activeAudioLayer = 'ambient';
@@ -359,7 +361,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private setupTelemetry(): void {
-    const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:8787';
+    const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:3001';
     wsClient.connect(url);
     this.telemetry.startPhase(0);
     this.telemetryActive = true;
@@ -368,6 +370,15 @@ export class LevelScene extends Phaser.Scene {
       delay: 150,
       loop: true,
       callback: () => this.sendTelemetry(),
+    });
+    this.time.addEvent({
+      delay: 2000,
+      loop: true,
+      callback: () => {
+        if (this.player) {
+          gameTelemetry.trackPlayerAction('move', undefined, { x: Math.round(this.player.x), y: Math.round(this.player.y) });
+        }
+      },
     });
   }
 
@@ -1691,6 +1702,7 @@ export class LevelScene extends Phaser.Scene {
 
     if (this.levelData.level === 5) {
       this.time.delayedCall(2500, () => {
+        gameTelemetry.trackSceneTransition('LevelScene', 'VictoryScene');
         this.scene.start('VictoryScene');
       });
     }
@@ -1820,6 +1832,7 @@ export class LevelScene extends Phaser.Scene {
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         GameState.get().nextLevel();
+        gameTelemetry.trackSceneTransition('LevelScene', 'LevelScene', GameState.get().getData().level);
         this.scene.start('LevelScene', { level: GameState.get().getData().level });
       });
     }
@@ -1887,6 +1900,7 @@ export class LevelScene extends Phaser.Scene {
     if (GameState.get().isDead()) {
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        gameTelemetry.trackSceneTransition('LevelScene', 'GameOverScene');
         this.scene.start('GameOverScene');
       });
     }

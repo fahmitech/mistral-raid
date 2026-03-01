@@ -10,6 +10,7 @@ interface SampleEntry {
 interface SessionTelemetryState {
   recentSamples: SampleEntry[];
   longSamples: SampleEntry[];
+  recentMovement: { x: number; y: number; time: number }[];
   lastSummaryAt: number;
   lastDashCount: number | null;
 }
@@ -26,6 +27,7 @@ function getState(sessionId: string): SessionTelemetryState {
   const state: SessionTelemetryState = {
     recentSamples: [],
     longSamples: [],
+    recentMovement: [],
     lastSummaryAt: 0,
     lastDashCount: null,
   };
@@ -48,7 +50,7 @@ export function ingest(session: Session, raw: RawTelemetry): void {
 
   if (now - state.lastSummaryAt >= SUMMARY_INTERVAL_MS) {
     state.lastSummaryAt = now;
-    session.latestTelemetrySummary = buildSummary(state.recentSamples, state.longSamples, now);
+    session.latestTelemetrySummary = buildSummary(state, now);
     emit(makeEvent(session.id, 'telemetry', 'telemetry.ingest', {
       sampleCount: state.recentSamples.length,
       playerHpPercent: session.latestTelemetrySummary.playerHpPercent,
@@ -57,11 +59,28 @@ export function ingest(session: Session, raw: RawTelemetry): void {
   }
 }
 
+export function trackGameEvent(session: Session, event: any): void {
+  const state = getState(session.id);
+  const now = Date.now();
+
+  if (event.type === 'game.player.action' && event.data?.action === 'move') {
+    const { x, y } = event.data;
+    if (typeof x === 'number' && typeof y === 'number') {
+      state.recentMovement.push({ x, y, time: now });
+      // Keep last 15 movement samples (approx 30s of movement at 2s interval)
+      if (state.recentMovement.length > 15) {
+        state.recentMovement.shift();
+      }
+    }
+  }
+}
+
 export function getSummary(session: Session): TelemetrySummary | null {
   return session.latestTelemetrySummary;
 }
 
-function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], timestamp: number): TelemetrySummary {
+function buildSummary(state: SessionTelemetryState, timestamp: number): TelemetrySummary {
+  const { recentSamples, longSamples, recentMovement } = state;
   if (!recentSamples.length && !longSamples.length) {
     return {
       avgAccuracy: 0,
@@ -117,7 +136,44 @@ function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], 
       sampleCount: long.sampleCount,
       windowSeconds: long.windowSeconds,
     },
+    movementSummary: summarizeMovement(recentMovement),
+    recentPath: recentMovement.length > 0
+      ? recentMovement.slice(-5).map(m => `(${Math.round(m.x)},${Math.round(m.y)})`).join(' -> ')
+      : undefined,
   };
+}
+
+function summarizeMovement(movement: { x: number; y: number; time: number }[]): string | undefined {
+  if (movement.length < 2) return undefined;
+
+  const first = movement[0];
+  const last = movement[movement.length - 1];
+  const dx = last.x - first.x;
+  const dy = last.y - first.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist < 20) return "Staying relatively stationary.";
+
+  let direction = "";
+  if (Math.abs(dy) > Math.abs(dx)) {
+    direction = dy > 0 ? "downwards" : "upwards";
+  } else {
+    direction = dx > 0 ? "to the right" : "to the left";
+  }
+
+  // Check if they are in a corner area (rough heuristic)
+  const isFarX = last.x < 100 || last.x > 700;
+  const isFarY = last.y < 100 || last.y > 500;
+
+  if (isFarX && isFarY) {
+    return `Hugging the corners, moving ${direction}.`;
+  }
+
+  if (dist > 150) {
+    return `Moving rapidly ${direction}.`;
+  }
+
+  return `Moving ${direction}.`;
 }
 
 function pruneSamples(samples: SampleEntry[], cutoff: number): void {

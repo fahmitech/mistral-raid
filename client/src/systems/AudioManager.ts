@@ -11,129 +11,129 @@ import {
   AUDIO_VOLUMES_KEY,
 } from '../types/AudioTypes';
 
-const SERVER_URL = 'http://localhost:8787';
+const SERVER_URL = 'http://localhost:3001';
 const MAX_BUFFERS = 60; // evict LRU beyond this
 
 // ─── Cooldowns (ms) ────────────────────────────────────────────────────────────
 const SOUND_COOLDOWNS: Readonly<Record<string, number>> = {
-  footstep_stone:    200,
-  sword_slash:       100,
-  dagger_slash:      100,
-  katana_slice:      100,
-  hammer_impact:     120,
-  bomb_explosion:    300,
-  player_hit:        150,
-  player_death:   10_000,
-  heartbeat_low_hp:  850,
-  goblin_attack:     400,
-  orc_roar:          600,
-  skeleton_rattle:   400,
-  zombie_growl:      400,
-  elemental_magic:   350,
-  enemy_kill:         80,
-  xp_tone:           100,
-  coin_pickup:        80,
-  character_hover:   120,
+  footstep_stone: 200,
+  sword_slash: 100,
+  dagger_slash: 100,
+  katana_slice: 100,
+  hammer_impact: 120,
+  bomb_explosion: 300,
+  player_hit: 150,
+  player_death: 10_000,
+  heartbeat_low_hp: 850,
+  goblin_attack: 400,
+  orc_roar: 600,
+  skeleton_rattle: 400,
+  zombie_growl: 400,
+  elemental_magic: 350,
+  enemy_kill: 80,
+  xp_tone: 100,
+  coin_pickup: 80,
+  character_hover: 120,
   character_confirm: 500,
-  game_start:     10_000,
-  menu_hover:        120,
-  menu_select:       150,
-  menu_open:         200,
-  menu_close:        200,
-  inventory_open:    300,
-  weapon_swap:       200,
-  pause_whoosh:      400,
-  chest_open:        400,
-  potion_drink:      300,
-  item_pickup:       100,
-  door_open:         600,
-  stairs_descend:  1_500,
-  dash:              100,
-  shield_activate:   300,
-  suspense_build:  6_000,
-  low_rumble:      4_000,
-  boss_intro:     15_000,
-  boss_death:     15_000,
-  game_over_theme:15_000,
-  victory_theme:  15_000,
+  game_start: 10_000,
+  menu_hover: 120,
+  menu_select: 150,
+  menu_open: 200,
+  menu_close: 200,
+  inventory_open: 300,
+  weapon_swap: 200,
+  pause_whoosh: 400,
+  chest_open: 400,
+  potion_drink: 300,
+  item_pickup: 100,
+  door_open: 600,
+  stairs_descend: 1_500,
+  dash: 100,
+  shield_activate: 300,
+  suspense_build: 6_000,
+  low_rumble: 4_000,
+  boss_intro: 15_000,
+  boss_death: 15_000,
+  game_over_theme: 15_000,
+  victory_theme: 15_000,
 };
 
 // ─── Fallback oscillator tones ─────────────────────────────────────────────────
 const FALLBACK_TONES: Readonly<Record<string, [number, number, OscillatorType, number]>> = {
-  character_hover:   [560,  25, 'sine',     0.04],
-  character_confirm: [880,  80, 'square',   0.07],
-  game_start:        [60, 500, 'sawtooth',  0.14],
-  sword_slash:       [620,  40, 'square',   0.06],
-  dagger_slash:      [720,  30, 'square',   0.05],
-  katana_slice:      [800,  35, 'square',   0.05],
-  hammer_impact:     [200,  80, 'sawtooth', 0.09],
-  bomb_explosion:    [100, 200, 'sawtooth', 0.12],
-  player_hit:        [180, 120, 'triangle', 0.10],
-  player_death:      [90,  600, 'sawtooth', 0.12],
-  dash:              [420,  80, 'sawtooth', 0.08],
-  item_pickup:       [900,  80, 'square',   0.05],
-  coin_pickup:       [1100, 60, 'square',   0.04],
-  xp_tone:           [750,  50, 'square',   0.05],
-  enemy_kill:        [660,  60, 'square',   0.06],
-  boss_death:        [140, 220, 'sawtooth', 0.12],
-  boss_intro:        [90,  300, 'sawtooth', 0.14],
-  chest_open:        [550, 150, 'sine',     0.07],
-  potion_drink:      [440, 100, 'sine',     0.06],
-  inventory_open:    [380,  80, 'sine',     0.05],
-  weapon_swap:       [500,  60, 'square',   0.06],
-  pause_whoosh:      [300, 120, 'sine',     0.06],
-  menu_hover:        [480,  30, 'sine',     0.04],
-  menu_select:       [660,  60, 'square',   0.05],
-  menu_open:         [380, 120, 'sine',     0.05],
-  menu_close:        [280,  80, 'sine',     0.04],
-  shield_activate:   [550, 140, 'sine',     0.07],
-  stairs_descend:    [220, 400, 'sine',     0.06],
-  heartbeat_low_hp:  [80,   80, 'sine',     0.08],
-  suspense_build:    [60,  800, 'sine',     0.06],
+  character_hover: [560, 25, 'sine', 0.04],
+  character_confirm: [880, 80, 'square', 0.07],
+  game_start: [60, 500, 'sawtooth', 0.14],
+  sword_slash: [620, 40, 'square', 0.06],
+  dagger_slash: [720, 30, 'square', 0.05],
+  katana_slice: [800, 35, 'square', 0.05],
+  hammer_impact: [200, 80, 'sawtooth', 0.09],
+  bomb_explosion: [100, 200, 'sawtooth', 0.12],
+  player_hit: [180, 120, 'triangle', 0.10],
+  player_death: [90, 600, 'sawtooth', 0.12],
+  dash: [420, 80, 'sawtooth', 0.08],
+  item_pickup: [900, 80, 'square', 0.05],
+  coin_pickup: [1100, 60, 'square', 0.04],
+  xp_tone: [750, 50, 'square', 0.05],
+  enemy_kill: [660, 60, 'square', 0.06],
+  boss_death: [140, 220, 'sawtooth', 0.12],
+  boss_intro: [90, 300, 'sawtooth', 0.14],
+  chest_open: [550, 150, 'sine', 0.07],
+  potion_drink: [440, 100, 'sine', 0.06],
+  inventory_open: [380, 80, 'sine', 0.05],
+  weapon_swap: [500, 60, 'square', 0.06],
+  pause_whoosh: [300, 120, 'sine', 0.06],
+  menu_hover: [480, 30, 'sine', 0.04],
+  menu_select: [660, 60, 'square', 0.05],
+  menu_open: [380, 120, 'sine', 0.05],
+  menu_close: [280, 80, 'sine', 0.04],
+  shield_activate: [550, 140, 'sine', 0.07],
+  stairs_descend: [220, 400, 'sine', 0.06],
+  heartbeat_low_hp: [80, 80, 'sine', 0.08],
+  suspense_build: [60, 800, 'sine', 0.06],
 };
 
 // ─── Static Phaser audio volumes ──────────────────────────────────────────────
 const STATIC_MUSIC_VOLUMES: Record<string, number> = {
-  menu_theme:      0.5,
+  menu_theme: 0.5,
   dungeon_ambient: 0.4,
-  combat_music:    0.6,
-  boss_music:      0.8,
+  combat_music: 0.6,
+  boss_music: 0.8,
   game_over_music: 0.7,
-  victory_music:   0.7,
-  credits_theme:   0.5,
+  victory_music: 0.7,
+  credits_theme: 0.5,
 };
 const STATIC_SFX_VOLUMES: Record<string, number> = {
   sword_attack: 0.7,
-  enemy_hit:    0.9,
-  enemy_die:    0.75,
-  dash:         0.8,
-  shield:       0.8,
-  footstep:     0.4,
-  ui_click:     0.7,
-  menu_hover:   0.5,
-  chest_open:   0.9,
+  enemy_hit: 0.9,
+  enemy_die: 0.75,
+  dash: 0.8,
+  shield: 0.8,
+  footstep: 0.4,
+  ui_click: 0.7,
+  menu_hover: 0.5,
+  chest_open: 0.9,
   potion_drink: 0.85,
-  boss_roar:    0.9,
+  boss_roar: 0.9,
 };
 
 // ─── Music track mapping ───────────────────────────────────────────────────────
 const MUSIC_TRACK: Partial<Record<MusicLayer, string>> = {
-  menu:        'menu_ambient',
+  menu: 'menu_ambient',
   hero_select: 'hero_select_music',
-  ambient:     'dungeon_ambient_loop',
-  combat:      'combat_music',
-  boss:        'boss_music_loop',
-  credits:     'credits_music',
+  ambient: 'dungeon_ambient_loop',
+  combat: 'combat_music',
+  boss: 'boss_music_loop',
+  credits: 'credits_music',
 };
 
 // Static Phaser audio keys (preloaded in BootScene from client/public/audio/)
 const PHASER_MUSIC_KEYS: Partial<Record<MusicLayer, string>> = {
-  menu:        'menu_theme',
+  menu: 'menu_theme',
   hero_select: 'menu_theme',
-  ambient:     'dungeon_ambient',
-  combat:      'combat_music',
-  boss:        'boss_music',
-  credits:     'credits_theme',
+  ambient: 'dungeon_ambient',
+  combat: 'combat_music',
+  boss: 'boss_music',
+  credits: 'credits_theme',
 };
 
 interface MusicNode {
@@ -150,8 +150,8 @@ function loadVolumes(): AudioVolumes {
       const parsed = JSON.parse(raw) as Partial<AudioVolumes>;
       return {
         master: parsed.master ?? DEFAULT_VOLUMES.master,
-        music:  parsed.music  ?? DEFAULT_VOLUMES.music,
-        sfx:    parsed.sfx    ?? DEFAULT_VOLUMES.sfx,
+        music: parsed.music ?? DEFAULT_VOLUMES.music,
+        sfx: parsed.sfx ?? DEFAULT_VOLUMES.sfx,
       };
     }
   } catch { /* ignore */ }
@@ -248,8 +248,8 @@ export class AudioManager {
 
   private applyGains(): void {
     if (this.masterGain) this.masterGain.gain.value = this.soundOn ? this.volumes.master : 0;
-    if (this.musicGain)  this.musicGain.gain.value  = this.musicOn  ? this.volumes.music  : 0;
-    if (this.sfxGain)    this.sfxGain.gain.value    = this.soundOn  ? this.volumes.sfx    : 1;
+    if (this.musicGain) this.musicGain.gain.value = this.musicOn ? this.volumes.music : 0;
+    if (this.sfxGain) this.sfxGain.gain.value = this.soundOn ? this.volumes.sfx : 1;
     // Also update Phaser track volume
     if (this.activePhaserTrack) {
       this.activePhaserTrack.volume = this.musicOn ? this.volumes.music * this.volumes.master : 0;
@@ -267,8 +267,8 @@ export class AudioManager {
       this.ctx = new AudioContext();
 
       this.masterGain = this.ctx.createGain();
-      this.sfxGain    = this.ctx.createGain();
-      this.musicGain  = this.ctx.createGain();
+      this.sfxGain = this.ctx.createGain();
+      this.musicGain = this.ctx.createGain();
 
       this.sfxGain.connect(this.masterGain);
       this.musicGain.connect(this.masterGain);
@@ -608,7 +608,7 @@ export class AudioManager {
 
   // ─── Global Volume ────────────────────────────────────────────────────────────
 
-  mute(): void   { this.setMasterVolume(0); }
+  mute(): void { this.setMasterVolume(0); }
   unmute(): void { this.setMasterVolume(this.volumes.master); }
 
   // ─── Heartbeat ────────────────────────────────────────────────────────────────
@@ -635,10 +635,10 @@ export class AudioManager {
     else this.stopHeartbeat();
 
     let mood: MusicMood = 'calm';
-    if (bossHp > 0)                         mood = 'intense';
-    else if (hp / maxHp < 0.3)              mood = 'critical';
-    else if (data.recentDamageTaken > 4)    mood = 'tense';
-    else if (data.enemyCount > 4)           mood = 'tense';
+    if (bossHp > 0) mood = 'intense';
+    else if (hp / maxHp < 0.3) mood = 'critical';
+    else if (data.recentDamageTaken > 4) mood = 'tense';
+    else if (data.enemyCount > 4) mood = 'tense';
     this.lastMood = mood;
 
     if (bossMaxHp > 0 && this.currentLayer === 'boss' && this.ctx && this.musicGain && this.musicOn) {
@@ -679,11 +679,11 @@ export class AudioManager {
 
   playWeaponSFX(weapon: ItemType): void {
     const sfxMap: Partial<Record<ItemType, string>> = {
-      [ItemType.WeaponSword]:   'sword_slash',
-      [ItemType.WeaponDagger]:  'dagger_slash',
-      [ItemType.WeaponKatana]:  'katana_slice',
-      [ItemType.WeaponHammer]:  'hammer_impact',
-      [ItemType.WeaponBomb]:    'bomb_explosion',
+      [ItemType.WeaponSword]: 'sword_slash',
+      [ItemType.WeaponDagger]: 'dagger_slash',
+      [ItemType.WeaponKatana]: 'katana_slice',
+      [ItemType.WeaponHammer]: 'hammer_impact',
+      [ItemType.WeaponBomb]: 'bomb_explosion',
     };
     this.playSFX(sfxMap[weapon] ?? 'sword_slash', 0.75);
   }
@@ -791,10 +791,10 @@ export class AudioManager {
 
   // ─── Backward-Compatible Wrappers ─────────────────────────────────────────────
 
-  shoot(): void     { this.playSFX('sword_slash', 0.7); }
-  dash(): void      { this.playSFX('dash', 0.8); }
-  hit(): void       { this.playSFX('player_hit', 0.9); }
-  pickup(): void    { this.playSFX('item_pickup', 0.8); }
+  shoot(): void { this.playSFX('sword_slash', 0.7); }
+  dash(): void { this.playSFX('dash', 0.8); }
+  hit(): void { this.playSFX('player_hit', 0.9); }
+  pickup(): void { this.playSFX('item_pickup', 0.8); }
   bossDeath(): void { this.playSFX('boss_death', 1.0); }
 
   // ─── Debug ────────────────────────────────────────────────────────────────────
@@ -811,24 +811,24 @@ export class AudioManager {
 
   getDebugInfo(): AudioDebugInfo {
     return {
-      layer:        this.currentLayer,
-      loaded:       this.buffers.size,
-      loading:      this.loading.size,
-      heartbeat:    this.heartbeatTimer !== null,
-      presence:     this.presenceStarted,
-      musicTracks:  this.activePhaserKey
+      layer: this.currentLayer,
+      loaded: this.buffers.size,
+      loading: this.loading.size,
+      heartbeat: this.heartbeatTimer !== null,
+      presence: this.presenceStarted,
+      musicTracks: this.activePhaserKey
         ? [...this.musicNodes.keys(), `[phaser:${this.activePhaserKey}]`]
         : [...this.musicNodes.keys()],
-      recent:       [...this.recentSFX],
-      hp:           this.lastTelemetry.hp,
-      maxHp:        this.lastTelemetry.maxHp,
-      bossHp:       this.lastTelemetry.bossHp,
-      bossMaxHp:    this.lastTelemetry.bossMaxHp,
-      enemyCount:   this.lastTelemetry.enemyCount,
+      recent: [...this.recentSFX],
+      hp: this.lastTelemetry.hp,
+      maxHp: this.lastTelemetry.maxHp,
+      bossHp: this.lastTelemetry.bossHp,
+      bossMaxHp: this.lastTelemetry.bossMaxHp,
+      enemyCount: this.lastTelemetry.enemyCount,
       intensityLevel: this.lastMood,
       masterVolume: this.volumes.master,
-      musicVolume:  this.volumes.music,
-      sfxVolume:    this.volumes.sfx,
+      musicVolume: this.volumes.music,
+      sfxVolume: this.volumes.sfx,
     };
   }
 

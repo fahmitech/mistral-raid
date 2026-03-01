@@ -27,6 +27,7 @@ export interface Session {
     queue: { push: (chunk: Uint8Array) => void; close: () => void };
     task: Promise<void> | null;
     finalTranscript: string;
+    hasSentAudio: boolean;
   } | null;
   // Director state
   directorInterval: ReturnType<typeof setInterval> | null;
@@ -68,6 +69,8 @@ export interface TelemetrySummary {
     sampleCount: number;
     windowSeconds: number;
   };
+  movementSummary?: string;
+  recentPath?: string; // e.g. "(100,200) -> (150,250) -> (200,300)"
 }
 
 // ── Boss Response (Mistral LLM output) ─────────────────────────

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 export class CreditsScene extends Phaser.Scene {
   private container!: Phaser.GameObjects.Container;
@@ -11,6 +12,7 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'CreditsScene');
     AudioManager.playMusic(this, 'credits_theme');
 
     this.createBackground();

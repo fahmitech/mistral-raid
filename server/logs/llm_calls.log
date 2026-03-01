@@ -1,10 +1,46 @@
 
 ================================================================================
-TIMESTAMP: 2026-03-01T15:01:02.070Z
-SESSION:   a2a759b2-ea55-45d3-9635-0d179432e268
+TIMESTAMP: 2026-03-01T16:55:53.726Z
+SESSION:   abc96418-de9e-4a2b-aa93-8374b14936ee
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   995ms
+
+--- PROMPT ---
+Accuracy: 63.1% | Boss HP: 53% | Player HP: 67% | Corner time: 45% | Hits taken: 0 | Dashes: 0 | Long Acc: 61% | Long Corner: 46% | Long Dash/min: 0.0 | Long Zone: bot_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is maintaining decent accuracy and HP, but no dashes or hits taken indicate they're playing defensively."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T16:56:13.880Z
+SESSION:   abc96418-de9e-4a2b-aa93-8374b14936ee
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   1151ms
+
+--- PROMPT ---
+Accuracy: 80.1% | Boss HP: 38% | Player HP: 67% | Corner time: 44% | Hits taken: 0 | Dashes: 0 | Long Acc: 67% | Long Corner: 46% | Long Dash/min: 0.0 | Long Zone: bot_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is maintaining good accuracy and corner control, so hold the difficulty and keep the enemy at a distance."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T16:59:01.921Z
+SESSION:   790ed3c4-e1bc-4b02-b851-bd1db6f0d130
 MODEL:     mistral-small-latest
 PURPOSE:   boss_reply
-LATENCY:   2473ms
+LATENCY:   2018ms
 
 --- PROMPT ---
 Player said: "I have entered your arena. Show me what you are."
@@ -17,7 +53,8 @@ Live combat telemetry:
 - Recent hits taken: 0
 - Boss HP: 100.0%
 - Player HP: 100.0%
- - Long-term (long-term) accuracy: 0.0%
+
+- Long-term (long-term) accuracy: 0.0%
  - Long-term corner time: 0.0%
  - Long-term dash rate: 0.0/min
  - Long-term dominant zone: bot_center
@@ -26,25 +63,586 @@ Respond with a JSON BossResponse object only.
 
 --- RESPONSE ---
 {
-  "analysis": "You haven't moved an inch, standing in the center like a sitting duck. Your accuracy is 0%, so you can't even hit the broad side of a barn.",
-  "taunt": "You're frozen in fear, aren't you? Let's see how long you last when I start throwing things at you.",
+  "analysis": "You haven't fired a single shot, and you're stuck in the bottom center. You're an easy target.",
+  "taunt": "You're frozen in fear, aren't you? Let's see how you handle a little heat.",
   "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "bot_center",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 10,
+      "duration_seconds": 10,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "spiral",
+      "speed": 8,
+      "projectile_count": 6,
+      "fire_rate": 2,
+      "projectile_size": 8,
+      "homing": false,
+      "duration_seconds": 12
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T16:59:19.696Z
+SESSION:   790ed3c4-e1bc-4b02-b851-bd1db6f0d130
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   587ms
+
+--- PROMPT ---
+Accuracy: 63.4% | Boss HP: 57% | Player HP: 67% | Corner time: 32% | Hits taken: 0 | Dashes: 0 | Long Acc: 70% | Long Corner: 25% | Long Dash/min: 0.0 | Long Zone: mid_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is maintaining decent accuracy and boss is still at over half health."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T16:59:19.710Z
+SESSION:   790ed3c4-e1bc-4b02-b851-bd1db6f0d130
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2133ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 62.8%
+- Corner time (last 10s): 31.5%
+- Dominant zone: mid_left
+- Total dashes: 0
+- Recent hits taken: 0
+- Boss HP: 62.5%
+- Player HP: 66.7%
+- Movement: Staying relatively stationary.
+- Long-term (18s) accuracy: 70.3%
+ - Long-term corner time: 24.8%
+ - Long-term dash rate: 0.0/min
+ - Long-term dominant zone: mid_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, staying in mid_left 70.3% of the time and dashing 0.0 times per minute. Your 62.8% accuracy suggests you're not taking enough risks.",
+  "taunt": "Staying in one place? How boring. Let me show you the true meaning of pain.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "mid_left",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 10,
+      "duration_seconds": 5,
+      "warning_time": 1
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    },
+    {
+      "type": "homing_orb",
+      "count": 2,
+      "speed": 4,
+      "damage_on_hit": 30,
+      "lifetime_seconds": 10,
+      "size": 20
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:20:59.216Z
+SESSION:   5720ba74-4c9c-4b77-8108-6d408e5ae6d7
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   1882ms
+
+--- PROMPT ---
+Player said: "I have entered your arena. Show me what you are."
+
+Live combat telemetry:
+- Accuracy: 0.0%
+- Corner time (last 10s): 0.0%
+- Dominant zone: bot_center
+- Total dashes: 0
+- Recent hits taken: 0
+- Boss HP: 100.0%
+- Player HP: 100.0%
+
+
+- Long-term (long-term) accuracy: 0.0%
+ - Long-term corner time: 0.0%
+ - Long-term dash rate: 0.0/min
+ - Long-term dominant zone: bot_center
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You haven't fired a single shot (accuracy: 0.0%) and haven't moved an inch (dash rate: 0.0/min).",
+  "taunt": "You stand frozen, a statue in my arena. Let's see how you fare when the walls start closing in.",
+  "mechanics": [
+    {
+      "type": "wall_of_death",
+      "direction": "closing",
+      "speed": 2,
+      "gap_position": 0.5,
+      "gap_width": 100,
+      "damage_on_hit": 30
+    },
+    {
+      "type": "hazard_zone",
+      "location": "bot_center",
+      "shape": "circle",
+      "radius": 200,
+      "damage_per_tick": 10,
+      "duration_seconds": 10,
+      "warning_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:21:17.129Z
+SESSION:   5720ba74-4c9c-4b77-8108-6d408e5ae6d7
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   596ms
+
+--- PROMPT ---
+Accuracy: 59.6% | Boss HP: 63% | Player HP: 33% | Corner time: 45% | Hits taken: 1 | Dashes: 3 | Long Acc: 48% | Long Corner: 47% | Long Dash/min: 9.5 | Long Zone: bot_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is in the corner and has low health, so keep the pressure consistent with ranged attacks."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:21:19.473Z
+SESSION:   5720ba74-4c9c-4b77-8108-6d408e5ae6d7
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2006ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 61.1%
+- Corner time (last 10s): 45.0%
+- Dominant zone: bot_center
+- Total dashes: 4
+- Recent hits taken: 1
+- Boss HP: 61.3%
+- Player HP: 33.3%
+- Movement: Moving rapidly to the right.
+- Recent Path: (52,92) -> (49,19) -> (226,123) -> (125,181) -> (122,32)
+- Long-term (20s) accuracy: 48.5%
+ - Long-term corner time: 46.5%
+ - Long-term dash rate: 11.9/min
+ - Long-term dominant zone: bot_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, darting between bottom corners with 46.5% corner time and 11.9 dashes per minute. Your 61.1% accuracy suggests you're not reckless, but I see your patterns.",
+  "taunt": "Your corners won't save you. I see every dash, every shot. Time to break your rhythm.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "bot_left",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 10,
+      "duration_seconds": 8,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "aimed",
+      "speed": 8,
+      "projectile_count": 3,
+      "fire_rate": 1.5,
+      "projectile_size": 10,
+      "homing": true,
+      "duration_seconds": 10
+    },
+    {
+      "type": "laser_beam",
+      "direction": "horizontal",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:33:38.599Z
+SESSION:   5a157033-e110-4544-963c-43f621818e83
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   1992ms
+
+--- PROMPT ---
+Player said: "I have entered your arena. Show me what you are."
+
+Live combat telemetry:
+- Accuracy: 0.0%
+- Corner time (last 10s): 0.0%
+- Dominant zone: bot_center
+- Total dashes: 0
+- Recent hits taken: 0
+- Boss HP: 100.0%
+- Player HP: 100.0%
+
+
+- Long-term (long-term) accuracy: 0.0%
+ - Long-term corner time: 0.0%
+ - Long-term dash rate: 0.0/min
+ - Long-term dominant zone: bot_center
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You haven't fired a single shot (0% accuracy) and refuse to leave the bottom center (100% corner time).",
+  "taunt": "Staying in one spot won't save you. Let's see how you handle a little heat.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "bot_center",
+      "shape": "circle",
+      "radius": 200,
+      "damage_per_tick": 15,
+      "duration_seconds": 10,
+      "warning_time": 1
+    },
     {
       "type": "projectile_spawner",
       "pattern": "spiral",
       "speed": 8,
       "projectile_count": 8,
-      "fire_rate": 2,
+      "fire_rate": 1,
       "projectile_size": 12,
+      "homing": false,
+      "duration_seconds": 12
+    },
+    {
+      "type": "laser_beam",
+      "direction": "vertical",
+      "speed": 3,
+      "width": 40,
+      "damage_on_hit": 30,
+      "duration_seconds": 8,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:34:15.901Z
+SESSION:   f4384672-acdf-4ab0-859d-c80cb202185b
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2412ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 79.2%
+- Corner time (last 10s): 34.3%
+- Dominant zone: bot_center
+- Total dashes: 4
+- Recent hits taken: 0
+- Boss HP: 62.5%
+- Player HP: 66.7%
+- Movement: Hugging the corners, moving to the right.
+- Recent Path: (25,85) -> (163,28) -> (200,181) -> (64,65)
+- Long-term (13s) accuracy: 73.6%
+ - Long-term corner time: 29.4%
+ - Long-term dash rate: 19.0/min
+ - Long-term dominant zone: bot_center
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, always hugging the bottom corners and favoring the right side. Your 73.6% accuracy is impressive, but your 19.0 dashes per minute are too few to evade my attacks.",
+  "taunt": "Your corners won't save you. I see your patterns, and soon, you'll see your end.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "bot_center",
+      "shape": "circle",
+      "radius": 200,
+      "damage_per_tick": 10,
+      "duration_seconds": 8,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "fan",
+      "speed": 8,
+      "projectile_count": 6,
+      "fire_rate": 2,
+      "projectile_size": 10,
       "homing": false,
       "duration_seconds": 10
     },
     {
+      "type": "laser_beam",
+      "direction": "horizontal",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:34:42.137Z
+SESSION:   914ecd1a-92cb-431f-b93e-30110a766281
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2193ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 71.5%
+- Corner time (last 10s): 41.6%
+- Dominant zone: bot_left
+- Total dashes: 4
+- Recent hits taken: 0
+- Boss HP: 61.3%
+- Player HP: 100.0%
+- Movement: Moving to the right.
+- Recent Path: (141,181) -> (112,70) -> (283,181) -> (294,117) -> (92,126)
+- Long-term (16s) accuracy: 61.0%
+ - Long-term corner time: 39.2%
+ - Long-term dash rate: 26.7/min
+ - Long-term dominant zone: bot_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You favor the bottom-left corner and dash infrequently (26.7/min), making you predictable. Your accuracy (61.0%) suggests you're not aggressive enough.",
+  "taunt": "You cling to the bottom-left like a coward. Your aim is weak, and your dashes are too few.",
+  "mechanics": [
+    {
       "type": "hazard_zone",
-      "location": "center",
+      "location": "bot_left",
       "shape": "circle",
       "radius": 150,
       "damage_per_tick": 10,
+      "duration_seconds": 8,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "aimed",
+      "speed": 8,
+      "projectile_count": 3,
+      "fire_rate": 1.5,
+      "projectile_size": 10,
+      "homing": true,
+      "duration_seconds": 10
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:34:44.573Z
+SESSION:   914ecd1a-92cb-431f-b93e-30110a766281
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   917ms
+
+--- PROMPT ---
+Accuracy: 73.6% | Boss HP: 60% | Player HP: 100% | Corner time: 42% | Hits taken: 0 | Dashes: 3 | Long Acc: 63% | Long Corner: 40% | Long Dash/min: 22.2 | Long Zone: bot_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is performing well with high accuracy and no hits taken, so maintain pressure with ranged attacks."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:35:13.333Z
+SESSION:   4e890815-0443-4214-8487-6e6d1784a350
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   1341ms
+
+--- PROMPT ---
+Accuracy: 51.1% | Boss HP: 73% | Player HP: 100% | Corner time: 46% | Hits taken: 0 | Dashes: 2 | Long Acc: 48% | Long Corner: 37% | Long Dash/min: 12.7 | Long Zone: top_center
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "mixed",
+  "reason": "Player is performing well with high accuracy and no hits taken, so maintain pressure with a mix of attacks."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:35:16.605Z
+SESSION:   4e890815-0443-4214-8487-6e6d1784a350
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   1867ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 52.9%
+- Corner time (last 10s): 46.5%
+- Dominant zone: top_center
+- Total dashes: 3
+- Recent hits taken: 0
+- Boss HP: 67.5%
+- Player HP: 100.0%
+- Movement: Moving to the right.
+- Recent Path: (77,156) -> (283,93) -> (183,13) -> (57,152) -> (114,14)
+- Long-term (22s) accuracy: 49.0%
+ - Long-term corner time: 38.5%
+ - Long-term dash rate: 13.6/min
+ - Long-term dominant zone: top_center
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, always hovering near the top. Your accuracy is mediocre, and you dash too infrequently to escape my attacks.",
+  "taunt": "Your top-center dance is charming, but it's time to end this waltz.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "top_center",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 10,
+      "duration_seconds": 5,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "aimed",
+      "speed": 8,
+      "projectile_count": 3,
+      "fire_rate": 1,
+      "projectile_size": 10,
+      "homing": true,
+      "duration_seconds": 10
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:43:34.728Z
+SESSION:   fbdaa735-28c8-4885-b564-94ca2caacd5f
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2269ms
+
+--- PROMPT ---
+Player said: "I have entered your arena. Show me what you are."
+
+Live combat telemetry:
+- Accuracy: 0.0%
+- Corner time (last 10s): 0.0%
+- Dominant zone: bot_center
+- Total dashes: 0
+- Recent hits taken: 0
+- Boss HP: 100.0%
+- Player HP: 100.0%
+
+
+- Long-term (long-term) accuracy: 0.0%
+ - Long-term corner time: 0.0%
+ - Long-term dash rate: 0.0/min
+ - Long-term dominant zone: bot_center
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You've not fired a single shot (0% accuracy) and refuse to leave the bottom center (100% corner time). You're a sitting duck.",
+  "taunt": "Staying put won't save you. I'll carve you up right where you stand.",
+  "mechanics": [
+    {
+      "type": "projectile_spawner",
+      "pattern": "aimed",
+      "speed": 8,
+      "projectile_count": 4,
+      "fire_rate": 1.5,
+      "projectile_size": 12,
+      "homing": true,
+      "duration_seconds": 10
+    },
+    {
+      "type": "hazard_zone",
+      "location": "bot_center",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 15,
       "duration_seconds": 8,
       "warning_time": 1
     },
@@ -62,25 +660,27 @@ Respond with a JSON BossResponse object only.
 ================================================================================
 
 ================================================================================
-TIMESTAMP: 2026-03-01T15:01:13.884Z
-SESSION:   a2a759b2-ea55-45d3-9635-0d179432e268
+TIMESTAMP: 2026-03-01T17:43:47.833Z
+SESSION:   dc4c5cb6-e077-4ec3-ad30-dc348b28a3a7
 MODEL:     mistral-small-latest
 PURPOSE:   boss_reply
-LATENCY:   1543ms
+LATENCY:   2132ms
 
 --- PROMPT ---
-Player said: "Phase transition analysis."
+Player said: "From this time I'll pull your profile."
 
 Live combat telemetry:
-- Accuracy: 77.4%
-- Corner time (last 10s): 20.0%
+- Accuracy: 33.5%
+- Corner time (last 10s): 1.3%
 - Dominant zone: bot_center
 - Total dashes: 0
 - Recent hits taken: 0
-- Boss HP: 63.7%
-- Player HP: 66.7%
- - Long-term (13s) accuracy: 75.9%
- - Long-term corner time: 17.1%
+- Boss HP: 95.0%
+- Player HP: 100.0%
+
+- Recent Path: (20,101)
+- Long-term (3s) accuracy: 33.5%
+ - Long-term corner time: 1.3%
  - Long-term dash rate: 0.0/min
  - Long-term dominant zone: bot_center
 
@@ -88,24 +688,24 @@ Respond with a JSON BossResponse object only.
 
 --- RESPONSE ---
 {
-  "analysis": "You're a precise shooter, 77.4% accuracy, but you're stuck in the bottom center, 20% corner time.",
-  "taunt": "Your aim is sharp, but your feet are rooted. Let's see how you handle this dance.",
+  "analysis": "You're too predictable, always lurking at the bottom center with a mere 33.5% accuracy. Your lack of dashes makes you an easy target.",
+  "taunt": "You're stuck in your ways, always at the bottom. Let's see how you handle my surprises.",
   "mechanics": [
     {
       "type": "projectile_spawner",
-      "pattern": "spiral",
+      "pattern": "aimed",
       "speed": 8,
-      "projectile_count": 6,
+      "projectile_count": 4,
       "fire_rate": 2,
-      "projectile_size": 10,
-      "homing": false,
+      "projectile_size": 12,
+      "homing": true,
       "duration_seconds": 10
     },
     {
       "type": "hazard_zone",
       "location": "bot_center",
       "shape": "circle",
-      "radius": 200,
+      "radius": 150,
       "damage_per_tick": 10,
       "duration_seconds": 8,
       "warning_time": 1
@@ -113,6 +713,214 @@ Respond with a JSON BossResponse object only.
     {
       "type": "laser_beam",
       "direction": "vertical",
+      "speed": 3,
+      "width": 40,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:43:58.462Z
+SESSION:   dc4c5cb6-e077-4ec3-ad30-dc348b28a3a7
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2077ms
+
+--- PROMPT ---
+Player said: "That series."
+
+Live combat telemetry:
+- Accuracy: 65.9%
+- Corner time (last 10s): 34.0%
+- Dominant zone: top_left
+- Total dashes: 3
+- Recent hits taken: 0
+- Boss HP: 76.3%
+- Player HP: 66.7%
+- Movement: Moving to the right.
+- Recent Path: (5,13) -> (193,80) -> (125,154) -> (130,13) -> (135,181)
+- Long-term (15s) accuracy: 58.7%
+ - Long-term corner time: 26.3%
+ - Long-term dash rate: 12.3/min
+ - Long-term dominant zone: top_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, favoring the top-left with 26.3% corner time and a 12.3 dash rate per minute, leaving you vulnerable to targeted attacks.",
+  "taunt": "Your top-left dance is charming, but it's time to waltz with death.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "top_left",
+      "shape": "circle",
+      "radius": 150,
+      "damage_per_tick": 10,
+      "duration_seconds": 8,
+      "warning_time": 1
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    },
+    {
+      "type": "homing_orb",
+      "count": 2,
+      "speed": 4,
+      "damage_on_hit": 30,
+      "lifetime_seconds": 10,
+      "size": 20
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:44:02.195Z
+SESSION:   dc4c5cb6-e077-4ec3-ad30-dc348b28a3a7
+MODEL:     mistral-small-latest
+PURPOSE:   director
+LATENCY:   747ms
+
+--- PROMPT ---
+Accuracy: 70.3% | Boss HP: 74% | Player HP: 67% | Corner time: 34% | Hits taken: 0 | Dashes: 3 | Long Acc: 61% | Long Corner: 28% | Long Dash/min: 12.7 | Long Zone: top_left
+
+--- RESPONSE ---
+{
+  "difficultyDelta": 0,
+  "enemyBias": "ranged",
+  "reason": "Player is maintaining decent accuracy and avoiding hits, so hold pressure and keep attacks ranged to prevent cornering."
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:44:07.538Z
+SESSION:   dc4c5cb6-e077-4ec3-ad30-dc348b28a3a7
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   1882ms
+
+--- PROMPT ---
+Player said: "Phase transition analysis."
+
+Live combat telemetry:
+- Accuracy: 69.5%
+- Corner time (last 10s): 36.1%
+- Dominant zone: top_left
+- Total dashes: 2
+- Recent hits taken: 1
+- Boss HP: 73.8%
+- Player HP: 33.3%
+- Movement: Hugging the corners, moving upwards.
+- Recent Path: (5,93) -> (137,26) -> (315,75) -> (115,168) -> (5,81)
+- Long-term (23s) accuracy: 62.5%
+ - Long-term corner time: 29.9%
+ - Long-term dash rate: 13.0/min
+ - Long-term dominant zone: top_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, always hugging the top-left corner with 36.1% corner time and only 2 dashes in the last 10 seconds.",
+  "taunt": "Your corner hugging is pathetic. I'll make sure you regret your predictable paths.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "top_left",
+      "shape": "circle",
+      "radius": 200,
+      "damage_per_tick": 10,
+      "duration_seconds": 8,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "aimed",
+      "speed": 8,
+      "projectile_count": 3,
+      "fire_rate": 2,
+      "projectile_size": 10,
+      "homing": true,
+      "duration_seconds": 10
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
+      "speed": 3,
+      "width": 30,
+      "damage_on_hit": 25,
+      "duration_seconds": 5,
+      "telegraph_time": 1
+    }
+  ]
+}
+================================================================================
+
+================================================================================
+TIMESTAMP: 2026-03-01T17:44:07.540Z
+SESSION:   dc4c5cb6-e077-4ec3-ad30-dc348b28a3a7
+MODEL:     mistral-small-latest
+PURPOSE:   boss_reply
+LATENCY:   2216ms
+
+--- PROMPT ---
+Player said: "Take this time."
+
+Live combat telemetry:
+- Accuracy: 69.5%
+- Corner time (last 10s): 36.1%
+- Dominant zone: top_left
+- Total dashes: 2
+- Recent hits taken: 1
+- Boss HP: 73.8%
+- Player HP: 33.3%
+- Movement: Hugging the corners, moving upwards.
+- Recent Path: (5,93) -> (137,26) -> (315,75) -> (115,168) -> (5,81)
+- Long-term (23s) accuracy: 62.5%
+ - Long-term corner time: 29.9%
+ - Long-term dash rate: 13.0/min
+ - Long-term dominant zone: top_left
+
+Respond with a JSON BossResponse object only.
+
+--- RESPONSE ---
+{
+  "analysis": "You're predictable, always hugging the corners and favoring the top left. Your accuracy is decent, but you only dash 13 times per minute.",
+  "taunt": "You're stuck in your little corner, aren't you? Let's see how you handle this.",
+  "mechanics": [
+    {
+      "type": "hazard_zone",
+      "location": "top_left",
+      "shape": "circle",
+      "radius": 200,
+      "damage_per_tick": 10,
+      "duration_seconds": 10,
+      "warning_time": 1
+    },
+    {
+      "type": "projectile_spawner",
+      "pattern": "fan",
+      "speed": 8,
+      "projectile_count": 6,
+      "fire_rate": 2,
+      "projectile_size": 10,
+      "homing": false,
+      "duration_seconds": 12
+    },
+    {
+      "type": "laser_beam",
+      "direction": "tracking",
       "speed": 3,
       "width": 30,
       "damage_on_hit": 25,

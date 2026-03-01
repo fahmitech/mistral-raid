@@ -18,7 +18,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
-import { emit, makeEvent, trackStart, trackEnd } from './telemetry.js';
+import { emit, makeEvent, trackStart, trackEnd, trackError } from './telemetry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUDIO_DIR = path.join(__dirname, '..', '..', 'generated-audio');
@@ -124,6 +124,7 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
 
   // ── Cache hit (new subfolder) ──────────────────────────────────────────────
   if (fs.existsSync(filePath)) {
+    console.log(`[audio] Cache hit: "${def.name}" (${def.type})`);
     emit(makeEvent('', 'audio', 'audio.cache.hit', { name: def.name, audioType: def.type, source: 'subfolder' }));
     return { url, fromCache: true };
   }
@@ -132,6 +133,7 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
   const legacyPath = path.join(AUDIO_DIR, filename);
   if (fs.existsSync(legacyPath)) {
     fs.copyFileSync(legacyPath, filePath);
+    console.log(`[audio] Cache hit (legacy): "${def.name}" (${def.type})`);
     emit(makeEvent('', 'audio', 'audio.cache.hit', { name: def.name, audioType: def.type, source: 'legacy' }));
     return { url, fromCache: true };
   }
@@ -147,47 +149,59 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
     name: def.name, audioType: def.type, durationSecs, prompt: def.prompt.slice(0, 100),
   });
 
-  const response = await axios.post(
-    'https://api.elevenlabs.io/v1/sound-generation',
-    {
-      text: def.prompt,
-      duration_seconds: durationSecs,
-      prompt_influence: 0.3,
-    },
-    {
-      headers: {
-        'xi-api-key': apiKey,
-        Accept: 'audio/mpeg',
-        'Content-Type': 'application/json',
+  console.log(`[audio] Generating: "${def.name}" (${def.type}) prompt: "${def.prompt.slice(0, 50)}..."`);
+
+  try {
+    const response = await axios.post(
+      'https://api.elevenlabs.io/v1/sound-generation',
+      {
+        text: def.prompt,
+        duration_seconds: Math.max(0.5, durationSecs),
+        prompt_influence: 0.3,
       },
-      responseType: 'arraybuffer',
-      timeout: 90_000,
-    }
-  );
+      {
+        headers: {
+          'xi-api-key': apiKey,
+          Accept: 'audio/mpeg',
+          'Content-Type': 'application/json',
+        },
+        responseType: 'arraybuffer',
+        timeout: 90_000,
+      }
+    );
 
-  const audioBuffer = Buffer.from(response.data as ArrayBuffer);
-  fs.writeFileSync(filePath, audioBuffer);
+    const audioBuffer = Buffer.from(response.data as ArrayBuffer);
+    fs.writeFileSync(filePath, audioBuffer);
 
-  trackEnd(audioCtx, 'audio', 'audio.generate.end', {
-    name: def.name, audioType: def.type, fileSizeBytes: audioBuffer.length, estimatedCredits: credits,
-  });
+    trackEnd(audioCtx, 'audio', 'audio.generate.end', {
+      name: def.name, audioType: def.type, fileSizeBytes: audioBuffer.length, estimatedCredits: credits,
+    });
 
-  // ── Update manifest ────────────────────────────────────────────────────────
-  const manifest = loadManifest();
-  manifest.totalApiCalls += 1;
-  manifest.totalEstimatedCredits += credits;
-  manifest.sounds[def.name] = {
-    name: def.name,
-    prompt: def.prompt,
-    promptHash: md5(def.prompt),
-    type: def.type,
-    generatedAt: new Date().toISOString(),
-    durationSecs,
-    estimatedCredits: credits,
-  };
-  saveManifest(manifest);
+    // ── Update manifest ────────────────────────────────────────────────────────
+    const manifest = loadManifest();
+    manifest.totalApiCalls += 1;
+    manifest.totalEstimatedCredits += credits;
+    manifest.sounds[def.name] = {
+      name: def.name,
+      prompt: def.prompt,
+      promptHash: md5(def.prompt),
+      type: def.type,
+      generatedAt: new Date().toISOString(),
+      durationSecs,
+      estimatedCredits: credits,
+    };
+    saveManifest(manifest);
 
-  return { url, fromCache: false };
+    return { url, fromCache: false };
+  } catch (err: any) {
+    const status = err.response?.status;
+    const errorData = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.error(`[audio] Failed to generate ${def.name} (Status: ${status}):`, errorData);
+    trackError(audioCtx, 'audio', 'audio.generate.error', {
+      name: def.name, error: errorData, status
+    });
+    throw err;
+  }
 }
 
 // ─── Stats ──────────────────────────────────────────────────────────────────────

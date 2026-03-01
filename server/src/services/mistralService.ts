@@ -260,7 +260,9 @@ Live combat telemetry:
 - Recent hits taken: ${t.recentHitsTaken}
 - Boss HP: ${t.bossHpPercent.toFixed(1)}%
 - Player HP: ${t.playerHpPercent.toFixed(1)}%
- - Long-term (${longWindow}) accuracy: ${(long.avgAccuracy * 100).toFixed(1)}%
+${t.movementSummary ? `- Movement: ${t.movementSummary}` : ''}
+${t.recentPath ? `- Recent Path: ${t.recentPath}` : ''}
+- Long-term (${longWindow}) accuracy: ${(long.avgAccuracy * 100).toFixed(1)}%
  - Long-term corner time: ${long.cornerPercentage.toFixed(1)}%
  - Long-term dash rate: ${long.dashPerMin.toFixed(1)}/min
  - Long-term dominant zone: ${long.dominantZone}

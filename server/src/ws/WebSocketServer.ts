@@ -37,9 +37,11 @@ export function attachWebSocketServer(httpServer: http.Server): void {
         }
 
         if (!msg) return;
-        emit(makeEvent(session.id, 'ws', 'ws.message.in', {
-          messageType: msg.type, isBinary: false,
-        }));
+        if (msg.type !== 'telemetry' && msg.type !== 'game_telemetry') {
+          emit(makeEvent(session.id, 'ws', 'ws.message.in', {
+            messageType: msg.type, isBinary: false,
+          }));
+        }
         switch (msg.type) {
           case 'telemetry':
             telemetryProcessor.ingest(session, msg.payload);
@@ -62,6 +64,7 @@ export function attachWebSocketServer(httpServer: http.Server): void {
             // Client-side game events — batch them into the server telemetry system
             if (msg.payload && Array.isArray(msg.payload.events)) {
               for (const evt of msg.payload.events) {
+                telemetryProcessor.trackGameEvent(session, evt);
                 emit({
                   id: '',
                   timestamp: Date.now(),

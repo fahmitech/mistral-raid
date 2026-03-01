@@ -36,7 +36,6 @@ class MicCapture {
         workletURL: vadWorkletUrl,
         modelFetcher: (path: string) => fetch(path).then((res) => res.arrayBuffer()),
         onSpeechStart: () => {
-          if (this.streamingMode) return;
           this.isSpeaking = true;
           this.allowCurrentUtterance = this.transmitEnabled;
           if (this.allowCurrentUtterance) {
@@ -45,26 +44,34 @@ class MicCapture {
           }
         },
         onSpeechEnd: (audio: Float32Array) => {
-          if (this.streamingMode) return;
           this.isSpeaking = false;
           if (!this.allowCurrentUtterance) return;
-          const targetSampleRate = 16000;
-          const maxSeconds = 8;
-          const resampled = this.resampleToTargetRate(audio, this.inputSampleRate, targetSampleRate);
-          const maxSamples = targetSampleRate * maxSeconds;
-          const endIndex = Math.min(resampled.length, maxSamples);
-          const pcm = new Int16Array(endIndex);
-          for (let i = 0; i < endIndex; i += 1) {
-            pcm[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
+
+          if (this.streamingMode) {
+            // In streaming mode, chunks are already sent. Just signal end of speech.
+            this.flushChunks(); // Final flush to catch any tail audio
+            wsClient.send({ type: 'vad_state', payload: { speaking: false } });
+            this.speechEndHandler?.();
+          } else {
+            // Single utterance mode: resample and send the whole buffer
+            const targetSampleRate = 16000;
+            const maxSeconds = 8;
+            const resampled = this.resampleToTargetRate(audio, this.inputSampleRate, targetSampleRate);
+            const maxSamples = targetSampleRate * maxSeconds;
+            const endIndex = Math.min(resampled.length, maxSamples);
+            const pcm = new Int16Array(endIndex);
+            for (let i = 0; i < endIndex; i += 1) {
+              pcm[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
+            }
+            if (this.isSpeaking) {
+              wsClient.sendBinary(pcm.buffer);
+            }
+            wsClient.send({ type: 'vad_state', payload: { speaking: false } });
+            this.speechEndHandler?.();
           }
-          console.log('[vad] utterance samples:', pcm.length, 'inputRate:', this.inputSampleRate);
-          wsClient.sendBinary(pcm.buffer);
-          wsClient.send({ type: 'vad_state', payload: { speaking: false } });
-          this.speechEndHandler?.();
           this.allowCurrentUtterance = false;
         },
         onVADMisfire: () => {
-          if (this.streamingMode) return;
           this.isSpeaking = false;
           if (!this.allowCurrentUtterance) return;
           wsClient.send({ type: 'vad_state', payload: { speaking: false } });
@@ -170,7 +177,7 @@ class MicCapture {
     const available = buffer.length - this.resampleOffset;
     const outputLength = Math.floor(available / this.resampleRatio);
     if (outputLength <= 0) {
-      this.resampleTail = buffer;
+      this.resampleTail = buffer as any;
       return new Float32Array(0);
     }
 
@@ -212,7 +219,9 @@ class MicCapture {
       for (let i = 0; i < this.chunkSamples; i += 1) {
         pcm[i] = Math.max(-32768, Math.min(32767, Math.round(chunk[i] * 32767)));
       }
-      wsClient.sendBinary(pcm.buffer);
+      if (this.isSpeaking || this.allowCurrentUtterance) {
+        wsClient.sendBinary(pcm.buffer);
+      }
       this.pending.copyWithin(0, this.chunkSamples, this.pendingLength);
       this.pendingLength -= this.chunkSamples;
     }

@@ -60,6 +60,7 @@ export function startDirector(session: Session): void {
       });
       const latencyMs = Date.now() - ctx.startTime;
       trackEnd(ctx, 'director', 'director.tick.end', { difficultyDelta, enemyBias, reason });
+      console.log(`[director] Δ=${difficultyDelta > 0 ? '+' : ''}${difficultyDelta} Bias=${enemyBias} "${reason}"`);
       logLLMCall({
         model: 'mistral-small-latest',
         purpose: 'director',

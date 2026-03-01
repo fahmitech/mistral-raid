@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { OptionsData } from '../config/types';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 interface OptionRow {
   key: keyof OptionsData;
@@ -25,6 +26,7 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'OptionsScene');
     AudioManager.get().init(this);
 
     if (this.fromPause) {

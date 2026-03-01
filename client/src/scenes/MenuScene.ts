@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 interface MenuItem {
   label: string;
@@ -10,16 +11,17 @@ interface MenuItem {
 }
 
 export class MenuScene extends Phaser.Scene {
-  private items: MenuItem[] =[];
+  private items: MenuItem[] = [];
   private selectedIndex = 0;
-  private fogBlobs: Phaser.GameObjects.Ellipse[] =[];
-  private dustParticles: { sprite: Phaser.GameObjects.Ellipse; vx: number; vy: number }[] =[];
+  private fogBlobs: Phaser.GameObjects.Ellipse[] = [];
+  private dustParticles: { sprite: Phaser.GameObjects.Ellipse; vx: number; vy: number }[] = [];
 
   constructor() {
     super('MenuScene');
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'MenuScene');
     this.createBackground();
     this.createTitle();
     this.createMenu();
@@ -103,7 +105,7 @@ export class MenuScene extends Phaser.Scene {
       this.fogBlobs.push(blob);
     }
 
-    const colors =[0x334499, 0x2255bb, 0x5522aa, 0x1199bb];
+    const colors = [0x334499, 0x2255bb, 0x5522aa, 0x1199bb];
     for (let i = 0; i < 55; i += 1) {
       const size = Phaser.Math.FloatBetween(0.5, 2.0);
       const sprite = this.add.ellipse(
@@ -194,7 +196,7 @@ export class MenuScene extends Phaser.Scene {
     panel.strokeRoundedRect(88, 62, 144, 96, 6);
 
     const hasSave = SaveSystem.hasSave();
-    this.items =[
+    this.items = [
       {
         label: 'New Game',
         enabled: true,
@@ -237,7 +239,7 @@ export class MenuScene extends Phaser.Scene {
           resolution: 2,
         })
         .setOrigin(0.5);
-      
+
       item.text = text;
     });
 
@@ -293,6 +295,7 @@ export class MenuScene extends Phaser.Scene {
   private startScene(key: string, data?: object): void {
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
+      gameTelemetry.trackSceneTransition('MenuScene', key);
       this.scene.start(key, data);
     });
   }

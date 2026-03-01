@@ -20,6 +20,7 @@ import { AnalyzingOverlay } from '../ui/AnalyzingOverlay';
 import { DevConsole } from '../ui/DevConsole';
 import { DirectorPanel } from '../ui/DirectorPanel';
 import type { AIState, ArenaPhase, BossResponse, ServerMessage } from '../types/arena';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 interface SimpleProjectile {
   obj: Phaser.GameObjects.Arc;
@@ -87,6 +88,7 @@ export class ArenaScene extends Phaser.Scene {
     this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x101018, 1);
     this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();
+    gameTelemetry.trackSceneTransition('', 'ArenaScene');
 
     const gs = GameState.get();
     const state = gs.getData();
@@ -152,7 +154,17 @@ export class ArenaScene extends Phaser.Scene {
       boss: this.boss,
       onDamage: (amount, source) => this.damagePlayer(amount, source),
       onOrbDestroyed: () => this.telemetry.recordOrbDestroyed(),
-      onMinionKilled: () => {},
+      onMinionKilled: () => { },
+    });
+
+    this.time.addEvent({
+      delay: 2000,
+      loop: true,
+      callback: () => {
+        if (this.player) {
+          gameTelemetry.trackPlayerAction('move', undefined, { x: Math.round(this.player.x), y: Math.round(this.player.y) });
+        }
+      },
     });
 
     this.setupNetworking();
@@ -319,17 +331,19 @@ export class ArenaScene extends Phaser.Scene {
     }
     if (GameState.get().isDead() && this.arenaPhase !== 'DEFEAT') {
       this.arenaPhase = 'DEFEAT';
+      gameTelemetry.trackSceneTransition('ArenaScene', 'GameOverScene');
       this.scene.start('GameOverScene');
     }
 
     if (this.bossHp <= 0 && this.arenaPhase !== 'VICTORY') {
       this.arenaPhase = 'VICTORY';
+      gameTelemetry.trackSceneTransition('ArenaScene', 'VictoryScene');
       this.scene.start('VictoryScene');
     }
   }
 
   private setupNetworking(): void {
-    const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:8787';
+    const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:3001';
     wsClient.connect(url);
 
     this.wsUnsub = wsClient.onMessage((msg) => this.handleServerMessage(msg));
@@ -532,6 +546,7 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaPhase = 'PHASE_2';
     }
     this.mechanicInterpreter.applyMechanics(response.mechanics);
+    gameTelemetry.trackBossPhase(this.arenaPhase, this.bossHp);
   }
 
   private sendTelemetry(): void {
@@ -602,6 +617,7 @@ export class ArenaScene extends Phaser.Scene {
     this.playerProjectiles.push({ obj: proj, vx, vy, damage, createdAt: this.time.now });
 
     this.telemetry.recordShotFired();
+    gameTelemetry.trackPlayerAction('shoot');
     AudioManager.playSFX(this, 'sword_attack');
   }
 
@@ -613,8 +629,8 @@ export class ArenaScene extends Phaser.Scene {
         const speed = 140;
         this.bossProjectiles.push({ obj: proj, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, damage: damage ?? 2, createdAt: this.time.now });
       },
-      spawnEnemy: () => {},
-      shake: () => {},
+      spawnEnemy: () => { },
+      shake: () => { },
     };
     this.boss.updateAI(this.player, time, actions);
   }
@@ -666,6 +682,7 @@ export class ArenaScene extends Phaser.Scene {
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
     AudioManager.playSFX(this, 'dash');
     this.telemetry.recordDash(dir);
+    gameTelemetry.trackPlayerAction('dash');
   }
 
   private spawnDashTrail(x1: number, y1: number, x2: number, y2: number): void {
@@ -690,6 +707,7 @@ export class ArenaScene extends Phaser.Scene {
     GameState.get().takeDamage(amount);
     this.player.setInvincible(INVINCIBLE_MS, now);
     this.telemetry.recordDamage(source, amount);
+    gameTelemetry.trackDamage(source, 'player', amount);
     AudioManager.playSFX(this, 'enemy_hit');
   }
 

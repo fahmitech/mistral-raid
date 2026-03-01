@@ -3,6 +3,7 @@ import { FRAME_LIST } from '../utils/assetManifest';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { ENEMY_CONFIGS } from '../config/enemies';
 import { BOSS_CONFIGS } from '../config/bosses';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -45,31 +46,32 @@ export class BootScene extends Phaser.Scene {
     });
 
     // ── Music ────────────────────────────────────────────────────────────────────
-    this.load.audio('menu_theme',      '/audio/music/menu_theme.mp3');
+    this.load.audio('menu_theme', '/audio/music/menu_theme.mp3');
     this.load.audio('dungeon_ambient', '/audio/ambient/dungeon_ambient.mp3');
-    this.load.audio('combat_music',    '/audio/combat/combat_music.mp3');
-    this.load.audio('boss_music',      '/audio/boss/boss_music.mp3');
-    this.load.audio('victory_music',   '/audio/music/victory_music.mp3');
+    this.load.audio('combat_music', '/audio/combat/combat_music.mp3');
+    this.load.audio('boss_music', '/audio/boss/boss_music.mp3');
+    this.load.audio('victory_music', '/audio/music/victory_music.mp3');
     this.load.audio('game_over_music', '/audio/music/game_over.mp3');
-    this.load.audio('credits_theme',   '/audio/credits/credits_theme.mp3');
+    this.load.audio('credits_theme', '/audio/credits/credits_theme.mp3');
     // ── SFX ──────────────────────────────────────────────────────────────────────
-    this.load.audio('sword_attack',    '/audio/combat/sword_attack.mp3');
-    this.load.audio('enemy_hit',       '/audio/enemies/enemy_hit.mp3');
-    this.load.audio('enemy_die',       '/audio/enemies/enemy_die.mp3');
-    this.load.audio('dash',            '/audio/movement/dash.mp3');
-    this.load.audio('shield',          '/audio/movement/shield_activate.mp3');
-    this.load.audio('footstep',        '/audio/movement/footstep.mp3');
-    this.load.audio('ui_click',        '/audio/ui/menu_click.mp3');
-    this.load.audio('menu_hover',      '/audio/ui/menu_hover.mp3');
-    this.load.audio('chest_open',      '/audio/interaction/chest_open.mp3');
-    this.load.audio('potion_drink',    '/audio/interaction/potion_drink.mp3');
-    this.load.audio('boss_roar',       '/audio/boss/boss_roar.mp3');
+    this.load.audio('sword_attack', '/audio/combat/sword_attack.mp3');
+    this.load.audio('enemy_hit', '/audio/enemies/enemy_hit.mp3');
+    this.load.audio('enemy_die', '/audio/enemies/enemy_die.mp3');
+    this.load.audio('dash', '/audio/movement/dash.mp3');
+    this.load.audio('shield', '/audio/movement/shield_activate.mp3');
+    this.load.audio('footstep', '/audio/movement/footstep.mp3');
+    this.load.audio('ui_click', '/audio/ui/menu_click.mp3');
+    this.load.audio('menu_hover', '/audio/ui/menu_hover.mp3');
+    this.load.audio('chest_open', '/audio/interaction/chest_open.mp3');
+    this.load.audio('potion_drink', '/audio/interaction/potion_drink.mp3');
+    this.load.audio('boss_roar', '/audio/boss/boss_roar.mp3');
   }
 
   create(): void {
     this.aliasMissingFrames();
     this.createAnimations();
     this.createWeaponAssets();
+    gameTelemetry.trackSceneTransition('BootScene', 'MenuScene');
     this.scene.start('MenuScene');
   }
 

@@ -1,6 +1,6 @@
 {
-  "totalApiCalls": 3,
-  "totalEstimatedCredits": 21,
+  "totalApiCalls": 6,
+  "totalEstimatedCredits": 25,
   "sounds": {
     "low_rumble": {
       "name": "low_rumble",
@@ -28,6 +28,33 @@
       "generatedAt": "2026-03-01T14:48:41.086Z",
       "durationSecs": 20,
       "estimatedCredits": 16
+    },
+    "elemental_magic": {
+      "name": "elemental_magic",
+      "prompt": "Magical elemental spell cast, arcane crackle and energy release, dungeon fantasy, 0.35 seconds",
+      "promptHash": "cbf5dbce3937",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T15:31:21.728Z",
+      "durationSecs": 0.5,
+      "estimatedCredits": 1
+    },
+    "heartbeat_low_hp": {
+      "name": "heartbeat_low_hp",
+      "prompt": "Ominous slow single heartbeat thump, low health warning pulse, dungeon horror tension, 0.8 seconds",
+      "promptHash": "32109103ead5",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T15:31:38.621Z",
+      "durationSecs": 1,
+      "estimatedCredits": 1
+    },
+    "boss_intro": {
+      "name": "boss_intro",
+      "prompt": "Cinematic boss encounter intro dramatic orchestral impact hit, dungeon fantasy, powerful swell, 2 seconds",
+      "promptHash": "8e725da96bbc",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T16:22:33.521Z",
+      "durationSecs": 2.5,
+      "estimatedCredits": 2
     }
   }
 }

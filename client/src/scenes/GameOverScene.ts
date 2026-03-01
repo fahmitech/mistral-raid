@@ -3,6 +3,7 @@ import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 const TAUNTS = [
   'The dungeon remembers your name. It always does.',
@@ -26,6 +27,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'GameOverScene');
     this.cameras.main.fadeIn(300, 0, 0, 0);
 
     AudioManager.playMusic(this, 'game_over_music');
@@ -433,6 +435,7 @@ export class GameOverScene extends Phaser.Scene {
     if (!this.inputEnabled) return;
     AudioManager.stopAll(this);
     GameState.get().reset();
+    gameTelemetry.trackSceneTransition('GameOverScene', 'LevelScene');
     this.scene.start('LevelScene', { level: 1 });
   }
 
@@ -440,6 +443,7 @@ export class GameOverScene extends Phaser.Scene {
     if (!this.inputEnabled) return;
     AudioManager.stopAll(this);
     GameState.get().reset();
+    gameTelemetry.trackSceneTransition('GameOverScene', 'MenuScene');
     this.scene.start('MenuScene');
   }
 }

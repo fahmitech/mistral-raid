@@ -3,6 +3,7 @@ import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -33,6 +34,7 @@ export class PlayerSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackSceneTransition('', 'PlayerSelectScene');
     AudioManager.get().init(this);
     this.createBackground();
 

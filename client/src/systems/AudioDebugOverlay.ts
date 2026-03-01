@@ -8,29 +8,29 @@ const PANEL_W = 312;
 const PANEL_H = 200; // expanded to fit credit stats section
 const FONT = '"Press Start 2P"';
 
-const SERVER_URL = 'http://localhost:8787';
+const SERVER_URL = 'http://localhost:3001';
 
 interface AudioStats {
-  totalApiCalls:         number;
+  totalApiCalls: number;
   totalEstimatedCredits: number;
-  cachedCount:           number;
+  cachedCount: number;
 }
 
 const MOOD_COLOR: Record<MusicMood, string> = {
-  calm:     '#44cc88',
-  tense:    '#ffcc00',
-  intense:  '#ff8800',
+  calm: '#44cc88',
+  tense: '#ffcc00',
+  intense: '#ff8800',
   critical: '#ff3333',
 };
 
 const LAYER_COLOR: Record<string, string> = {
-  menu:        '#8899ff',
+  menu: '#8899ff',
   hero_select: '#cc88ff',
-  ambient:     '#44ccaa',
-  combat:      '#ff8833',
-  boss:        '#ff4444',
-  credits:     '#aaddff',
-  none:        '#666666',
+  ambient: '#44ccaa',
+  combat: '#ff8833',
+  boss: '#ff4444',
+  credits: '#aaddff',
+  none: '#666666',
 };
 
 export class AudioDebugOverlay extends Phaser.Scene {

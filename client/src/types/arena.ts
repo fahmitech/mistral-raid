@@ -5,22 +5,30 @@ export type TurnState =
 export type AIState = 'listening' | 'thinking' | 'speaking';
 
 export type ServerMessage =
-  | { type: 'ai_state';         payload: { state: AIState } }
+  | { type: 'ai_state'; payload: { state: AIState } }
   | { type: 'captions_partial'; payload: { text: string } }
-  | { type: 'captions_final';   payload: { text: string } }
-  | { type: 'BOSS_RESPONSE';    payload: BossResponse }
-  | { type: 'AUDIO_CHUNK';      payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_DONE';       payload: { format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_READY';      payload: { audioBase64: string; format: 'mp3' } }
+  | { type: 'captions_final'; payload: { text: string } }
+  | { type: 'BOSS_RESPONSE'; payload: BossResponse }
+  | { type: 'AUDIO_CHUNK'; payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_DONE'; payload: { format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_READY'; payload: { audioBase64: string; format: 'mp3' } }
   | { type: 'mechanics_update'; payload: MechanicConfig }
-  | { type: 'director_update';  payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
-  | { type: 'error';            payload: { message: string; fallback: BossResponse } };
+  | { type: 'director_update'; payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'error'; payload: { message: string; fallback: BossResponse } };
+
+export interface GameTelemetryEvent {
+  category: string;
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: number;
+}
 
 export type ClientMessage =
-  | { type: 'telemetry';  payload: RawTelemetry }
-  | { type: 'barge_in';   payload: Record<string, never> }
-  | { type: 'vad_state';  payload: { speaking: boolean } }
-  | { type: 'ANALYZE';    payload: AnalyzePayload };
+  | { type: 'telemetry'; payload: RawTelemetry }
+  | { type: 'game_telemetry'; payload: { events: GameTelemetryEvent[] } }
+  | { type: 'barge_in'; payload: Record<string, never> }
+  | { type: 'vad_state'; payload: { speaking: boolean } }
+  | { type: 'ANALYZE'; payload: AnalyzePayload };
 
 export interface RawTelemetry {
   hp: number;
@@ -67,7 +75,7 @@ export interface BossResponse {
 
 export interface MechanicConfig {
   type: 'projectile_spawner' | 'hazard_zone' | 'laser_beam'
-      | 'homing_orb' | 'wall_of_death' | 'minion_spawn';
+  | 'homing_orb' | 'wall_of_death' | 'minion_spawn';
   duration_seconds?: number;
   [key: string]: unknown;
 }

@@ -8,13 +8,24 @@ const __dirname = path.dirname(__filename);
 const LOG_DIR = path.join(__dirname, '../../logs');
 const LOG_FILE = path.join(LOG_DIR, 'llm_calls.log');
 
+let logStream: fs.WriteStream | null = null;
+
 /**
- * Ensures the log directory exists.
+ * Ensures the log directory exists and returns the write stream.
  */
-function ensureLogDir(): void {
+function getLogStream(): fs.WriteStream {
+    if (logStream) return logStream;
+
     if (!fs.existsSync(LOG_DIR)) {
         fs.mkdirSync(LOG_DIR, { recursive: true });
     }
+
+    logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+    logStream.on('error', (err) => {
+        console.error('[llm-logger] Log write error:', err);
+        logStream = null;
+    });
+    return logStream;
 }
 
 /**
@@ -29,8 +40,6 @@ export function logLLMCall(params: {
     error?: string;
     latencyMs?: number;
 }): void {
-    ensureLogDir();
-
     const timestamp = new Date().toISOString();
     const sessionId = params.sessionId || 'N/A';
     const separator = '='.repeat(80);
@@ -56,7 +65,8 @@ export function logLLMCall(params: {
     logEntry += `${separator}\n`;
 
     try {
-        fs.appendFileSync(LOG_FILE, logEntry, 'utf8');
+        const stream = getLogStream();
+        stream.write(logEntry);
     } catch (err) {
         console.error('[llm-logger] Failed to write to llm_calls.log:', err);
     }

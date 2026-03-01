@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
+import { gameTelemetry } from '../systems/GameTelemetry';
 
 interface PauseItem {
   label: string;
@@ -16,6 +17,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create(): void {
+    gameTelemetry.trackPlayerAction('pause');
     this.scene.pause('LevelScene');
     AudioManager.get().playSFX('pause_whoosh', 0.7);
 
