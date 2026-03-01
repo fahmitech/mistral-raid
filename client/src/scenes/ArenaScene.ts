@@ -53,6 +53,7 @@ export class ArenaScene extends Phaser.Scene {
   private devConsole!: DevConsole;
   private directorPanel!: DirectorPanel;
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private f5Handler: ((event: KeyboardEvent) => void) | null = null;
 
   private wsUnsub: (() => void) | null = null;
   private wsStatusUnsub: (() => void) | null = null;
@@ -120,6 +121,12 @@ export class ArenaScene extends Phaser.Scene {
 
     this.startPhase1();
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+
+    this.f5Handler = (event: KeyboardEvent) => {
+      event.preventDefault();
+      this.directorPanel.toggle();
+    };
+    this.input.keyboard?.on('keydown-F5', this.f5Handler);
   }
 
   update(time: number, delta: number): void {
@@ -153,10 +160,6 @@ export class ArenaScene extends Phaser.Scene {
     if (this.keys.F2 && Phaser.Input.Keyboard.JustDown(this.keys.F2)) {
       this.devConsole.toggle();
     }
-    if (this.keys.F5 && Phaser.Input.Keyboard.JustDown(this.keys.F5)) {
-      this.directorPanel.toggle();
-    }
-
     if (GameState.get().isDead() && this.arenaPhase !== 'DEFEAT') {
       this.arenaPhase = 'DEFEAT';
       this.scene.start('GameOverScene');
@@ -427,5 +430,9 @@ export class ArenaScene extends Phaser.Scene {
     this.mechanicInterpreter.clear();
     this.devConsole.destroy();
     this.directorPanel.destroy();
+    if (this.f5Handler) {
+      this.input.keyboard?.off('keydown-F5', this.f5Handler);
+      this.f5Handler = null;
+    }
   }
 }
