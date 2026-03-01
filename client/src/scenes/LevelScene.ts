@@ -47,6 +47,8 @@ import { MiniMap } from '../systems/MiniMap';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { TelemetryTracker } from '../systems/TelemetryTracker';
+import { AssistantChat } from '../systems/AssistantChat';
+import { buildContext } from '../systems/DirectionHelper';
 import { wsClient } from '../network/WebSocketClient';
 
 import { MusicLayer } from '../types/AudioTypes';
@@ -120,6 +122,10 @@ export class LevelScene extends Phaser.Scene {
   private debugMarker?: Phaser.GameObjects.Graphics;
   private debugToggleKey?: Phaser.Input.Keyboard.Key;
   private playerRenderGlitchFrames = 0;
+
+  // ─── AI Companion ─────────────────────────────────────────────────────────────
+  private assistantChat?: AssistantChat;
+  private lastProximityCheck = 0;
 
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
@@ -286,11 +292,28 @@ export class LevelScene extends Phaser.Scene {
       F2: this.input.keyboard!.addKey('F2'),
       F3: this.input.keyboard!.addKey('F3'),
       F4: this.input.keyboard!.addKey('F4'),
+      H: this.input.keyboard!.addKey('H'),
     };
     this.debugToggleKey = this.keys.F2;
 
     this.input.off('pointerdown', this.handlePointerDown, this);
     this.input.on('pointerdown', this.handlePointerDown, this);
+
+    // AI Companion chat panel
+    this.assistantChat?.destroy();
+    this.assistantChat = new AssistantChat(() => {
+      const enemies = (this.enemies.getChildren() as Enemy[])
+        .filter((e) => e.active)
+        .map((e) => ({ x: e.x, y: e.y }));
+      const boss = this.boss?.active ? { x: this.boss.x, y: this.boss.y } : null;
+      const treasures = (this.items.getChildren() as Item[])
+        .filter((i) => i.active)
+        .map((i) => ({ x: i.x, y: i.y }));
+      return buildContext(
+        { x: this.player.x, y: this.player.y },
+        enemies, boss, treasures, GameState.get()
+      );
+    });
   }
 
   update(time: number, delta: number): void {
@@ -343,6 +366,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.checkBossTrigger();
+    this.updateProximityAlert(time);
     this.updateHUD(time);
     this.lighting.update(this.player.x, this.player.y);
     this.updateDebug(time);
@@ -515,6 +539,8 @@ export class LevelScene extends Phaser.Scene {
     safeClearGroup(this.enemyProjectiles);
     safeClearGroup(this.bossGroup);
     safeClearGroup(this.walls);
+    this.assistantChat?.destroy();
+    this.assistantChat = undefined;
     wsClient.disconnect();
     this.telemetryActive = false;
   }
@@ -1059,6 +1085,10 @@ export class LevelScene extends Phaser.Scene {
       if (!this.scene.isActive('PauseScene') && !this.scene.isActive('InventoryScene')) {
         this.scene.launch('PauseScene');
       }
+    }
+
+    if (this.keys.H && Phaser.Input.Keyboard.JustDown(this.keys.H)) {
+      this.assistantChat?.toggle();
     }
 
     if (this.debugToggleKey && Phaser.Input.Keyboard.JustDown(this.debugToggleKey)) {
@@ -1852,6 +1882,25 @@ export class LevelScene extends Phaser.Scene {
   private checkBossTrigger(): void {
     // ArenaScene is launched exclusively via handleLevelComplete after the kill threshold is met.
     // Boss room entry is disabled — do nothing here.
+  }
+
+  private updateProximityAlert(time: number): void {
+    if (!this.assistantChat) return;
+    if (time - this.lastProximityCheck < 3000) return;
+    this.lastProximityCheck = time;
+
+    let closestDist = Infinity;
+    this.enemies.children.iterate((child) => {
+      const e = child as Enemy;
+      if (!e.active) return true;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y);
+      if (d < closestDist) closestDist = d;
+      return true;
+    });
+
+    if (closestDist < 80) {
+      this.assistantChat.addAutoAlert('⚠ Enemy very close — watch out!');
+    }
   }
 
   private spawnBoss(): void {

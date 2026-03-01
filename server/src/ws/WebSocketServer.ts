@@ -6,6 +6,7 @@ import * as sessionManager from '../services/sessionManager.js';
 import * as telemetryProcessor from '../services/telemetryProcessor.js';
 import * as voxtralSTT from '../services/voxtralSTT.js';
 import * as mistralService from '../services/mistralService.js';
+import { queryCompanion } from '../agents/gameCompanionAgent.js';
 
 export function attachWebSocketServer(httpServer: http.Server): void {
   const wss = new WebSocketServer({ server: httpServer });
@@ -49,6 +50,16 @@ export function attachWebSocketServer(httpServer: http.Server): void {
             break;
           case 'ANALYZE':
             void mistralService.handleAnalyze(session, msg.payload);
+            break;
+          case 'AI_ASSISTANT_QUERY':
+            void (async () => {
+              try {
+                const reply = await queryCompanion(msg.payload.message, msg.payload.context);
+                sendToClient(session, { type: 'AI_ASSISTANT_REPLY', payload: reply });
+              } catch (err) {
+                console.error('[ws] companion query error:', err);
+              }
+            })();
             break;
           default:
             break;

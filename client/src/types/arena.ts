@@ -5,22 +5,42 @@ export type TurnState =
 export type AIState = 'listening' | 'thinking' | 'speaking';
 
 export type ServerMessage =
-  | { type: 'ai_state';         payload: { state: AIState } }
-  | { type: 'captions_partial'; payload: { text: string } }
-  | { type: 'captions_final';   payload: { text: string } }
-  | { type: 'BOSS_RESPONSE';    payload: BossResponse }
-  | { type: 'AUDIO_CHUNK';      payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_DONE';       payload: { format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_READY';      payload: { audioBase64: string; format: 'mp3' } }
-  | { type: 'mechanics_update'; payload: MechanicConfig }
-  | { type: 'director_update';  payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
-  | { type: 'error';            payload: { message: string; fallback: BossResponse } };
+  | { type: 'ai_state';           payload: { state: AIState } }
+  | { type: 'captions_partial';   payload: { text: string } }
+  | { type: 'captions_final';     payload: { text: string } }
+  | { type: 'BOSS_RESPONSE';      payload: BossResponse }
+  | { type: 'AUDIO_CHUNK';        payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_DONE';         payload: { format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_READY';        payload: { audioBase64: string; format: 'mp3' } }
+  | { type: 'mechanics_update';   payload: MechanicConfig }
+  | { type: 'director_update';    payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'AI_ASSISTANT_REPLY'; payload: CompanionReply }
+  | { type: 'error';              payload: { message: string; fallback: BossResponse } };
 
 export type ClientMessage =
-  | { type: 'telemetry';  payload: RawTelemetry }
-  | { type: 'barge_in';   payload: Record<string, never> }
-  | { type: 'vad_state';  payload: { speaking: boolean } }
-  | { type: 'ANALYZE';    payload: AnalyzePayload };
+  | { type: 'telemetry';          payload: RawTelemetry }
+  | { type: 'barge_in';           payload: Record<string, never> }
+  | { type: 'vad_state';          payload: { speaking: boolean } }
+  | { type: 'ANALYZE';            payload: AnalyzePayload }
+  | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } };
+
+export interface CompanionContext {
+  playerPos: { x: number; y: number };
+  enemies: { x: number; y: number }[];
+  boss: { x: number; y: number } | null;
+  treasures: { x: number; y: number }[];
+  playerHP: number;
+  playerMaxHP: number;
+  level: number;
+  coins: number;
+}
+
+export interface CompanionReply {
+  reply_text: string;
+  warning: boolean;
+  direction_hint: string;
+  proximity_alert: boolean;
+}
 
 export interface RawTelemetry {
   hp: number;

@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { audioRouter } from './routes/audio.js';
 import { bossRouter } from './routes/boss.js';
+import { companionRouter } from './routes/companion.js';
 import { attachWebSocketServer } from './ws/WebSocketServer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,9 +41,10 @@ app.use('/generated-audio/music', express.static(path.join(GENERATED_DIR, 'music
 app.use('/generated-audio/sfx',   express.static(path.join(GENERATED_DIR, 'sfx')));
 app.use('/generated-audio',       express.static(GENERATED_DIR));
 
-// Audio API routes
+// API routes
 app.use('/api/audio', audioRouter);
 app.use('/api/boss', bossRouter);
+app.use('/api/companion', companionRouter);
 
 
 app.get('/health', (_req, res) => {
