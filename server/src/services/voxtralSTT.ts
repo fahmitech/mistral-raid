@@ -9,7 +9,8 @@ const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_CAPTIONS = process.env.ENABLE_CAPTIONS !== 'false';
 const STT_MODEL = 'voxtral-mini-transcribe-realtime-2602';
 const STT_AUDIO_FORMAT = { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 };
-const STT_WARM_CONN_TTL_MS = 8000;
+const STT_WARM_CONN_TTL_MS = 25000;
+const STT_TASK_TIMEOUT_MS = 12000; // Max time to wait for transcription.done
 const MIN_UTTERANCE_BYTES = 3200; // 200ms @ 16kHz S16LE — shorter is untranscribable
 
 let client: RealtimeTranscription | null = null;
@@ -209,6 +210,10 @@ export function startStreaming(session: Session): void {
   session.stableTranscript = '';
 
   stt.task = (async () => {
+    const timeout = setTimeout(() => {
+      console.warn('[stt] Transcription task timed out, closing queue');
+      queue.close();
+    }, STT_TASK_TIMEOUT_MS);
     try {
       const connection = await acquireConnection(session);
       for await (const event of transcribeWithConnection(connection, queue)) {
@@ -238,6 +243,13 @@ export function startStreaming(session: Session): void {
       }
     } catch (err) {
       console.warn('[stt] Voxtral stream error:', err);
+    } finally {
+      clearTimeout(timeout);
+      // Salvage partial transcript if transcription.done was never received
+      if (!stt.finalTranscript && session.partialTranscript.trim()) {
+        stt.finalTranscript = session.partialTranscript.trim();
+        console.log('[stt] Salvaged partial transcript:', stt.finalTranscript.length, 'chars');
+      }
     }
   })();
 }
@@ -261,14 +273,21 @@ export async function stopStreaming(session: Session): Promise<void> {
   const finalTranscript = stt.finalTranscript.trim();
 
   if (!finalTranscript) {
-    setTurnState(session, 'LISTENING');
+    if (!session.sttStream) setTurnState(session, 'LISTENING');
     prewarmConnection(session);
+    return;
+  }
+
+  // If a new stream started while we were awaiting the task, the user
+  // is already in a new voice interaction — don't clobber its state.
+  if (session.sttStream) {
+    console.log('[stt] New stream active, skipping old response');
     return;
   }
 
   const wordCount = finalTranscript.split(/\s+/).filter(Boolean).length;
   if (wordCount < 2 || !canStartBossReply(session)) {
-    setTurnState(session, 'LISTENING');
+    if (!session.sttStream) setTurnState(session, 'LISTENING');
     prewarmConnection(session);
     return;
   }
@@ -276,6 +295,13 @@ export async function stopStreaming(session: Session): Promise<void> {
   setTurnState(session, 'THINKING');
   warmupBossVoice();
   const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
+
+  // Check again after LLM — user may have started speaking during generation.
+  if (session.sttStream) {
+    console.log('[stt] New stream active after LLM, skipping TTS');
+    return;
+  }
+
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
   void synthesizeBossVoice(session, bossResponse.taunt);
