@@ -1,25 +1,44 @@
-# Game Behavior Specification — ArenaScene (Stub) + Unused AI Stack
+# Game Behavior — ArenaScene Stub & Deleted AI Stack
 
-> Captures the **current code reality** for the standalone arena file and the unused AI boss-fight stack.
->
-> **IMPORTANT:** ArenaScene exists in the codebase but is **not registered** in `main.ts`. The shipped game flow uses LevelScene (dungeon crawler). ArenaScene is a **static mock** without combat, AI, or telemetry.
+> **Status:** ✅ = exists | 🗑️ = was built, then deleted | ⬜ = not yet built
 
 ---
 
-## Current Status (Reality Check)
+## Current Code Reality
 
-- `client/src/scenes/ArenaScene.ts` is a **static arena mock**: tile layout, simple player movement, idle boss sprite, and static UI.
-- The AI boss fight stack **exists but is unused**.
-- Unused: `client/src/entities/Player.ts`, `client/src/entities/Boss.ts`
-- Unused: `client/src/systems/TelemetryTracker.ts`, `client/src/network/WebSocketClient.ts`
-- Unused: `client/src/systems/MechanicInterpreter.ts` + `client/src/mechanics/*`
-- Unused: `client/src/ui/HUD.ts`, `client/src/ui/DevConsole.ts`, `client/src/ui/AnalyzingOverlay.ts`, `client/src/ui/TauntText.ts`
+The shipped game runs the **dungeon crawler** (LevelScene). The arena boss fight system was built and then removed. `ArenaScene.ts` still exists as a static layout stub but is not registered.
 
-For the dungeon crawler behavior, see `dungeon-crawler.md` and `scenes.md`.
+### What Exists
+
+| File | Status | Notes |
+|------|--------|-------|
+| `client/src/scenes/ArenaScene.ts` | ✅ exists, unregistered | Static layout mock — tile map, idle boss sprite, no combat |
+| `client/src/entities/Player.ts` | ✅ active (dungeon crawler) | WASD + dash + shoot, used in LevelScene |
+| `client/src/entities/BossEntity.ts` | ✅ active (dungeon crawler) | Multi-phase dungeon boss, used in LevelScene |
+| `client/src/entities/Enemy.ts` | ✅ active | |
+| `client/src/entities/Item.ts` | ✅ active | |
+
+### What Was Deleted (needs rebuilding for demo)
+
+| File | Status | Purpose |
+|------|--------|---------|
+| `client/src/entities/Boss.ts` | 🗑️ deleted | Arena combat boss (phase 1 attacks: SPRAY/SLAM/SWEEP/CHASE_SHOT) |
+| `client/src/systems/TelemetryTracker.ts` | 🗑️ deleted | Heatmap, dodge bias, accuracy, corner time tracking |
+| `client/src/network/WebSocketClient.ts` | 🗑️ deleted | Client WebSocket with 3-retry reconnection |
+| `client/src/systems/MechanicInterpreter.ts` | 🗑️ deleted | Factory: maps BossResponse.mechanics → mechanic class instances |
+| `client/src/mechanics/*` (6 files) | 🗑️ deleted | ProjectileSpawner, HazardZoneSpawner, LaserBeam, HomingOrb, WallOfDeath, MinionSpawner |
+| `client/src/ui/HUD.ts` | 🗑️ deleted | Arena HUD: boss HP bar, player HP bar, phase indicator |
+| `client/src/ui/DevConsole.ts` | 🗑️ deleted | Debug overlay showing telemetry + AI response |
+| `client/src/ui/AnalyzingOverlay.ts` | 🗑️ deleted | "ANALYZING PLAYER HABITS..." overlay during Mistral call |
+| `client/src/ui/TauntText.ts` | 🗑️ deleted | Typewriter taunt display with auto-fade |
+| `client/src/config/fallbackAttacks.ts` | 🗑️ deleted | 5 hardcoded BossResponse fallback configs |
+| `client/src/config/gameConfig.ts` | 🗑️ deleted | Arena-specific constants (1280×720 resolution, arena player/boss stats) |
 
 ---
 
 ## ArenaScene (Stub) — `client/src/scenes/ArenaScene.ts`
+
+**Not registered in `main.ts`.** Static layout only — no combat, no AI, no telemetry.
 
 ### Arena Layout
 - **Internal resolution:** 320×180
@@ -33,56 +52,61 @@ For the dungeon crawler behavior, see `dungeon-crawler.md` and `scenes.md`.
 - **Decorations:** crates at (2,3) and (17,9)
 
 ### Player (Stub)
-- **Sprite:** `knight_idle_0` (idle/run animations at 8 FPS)
-- **Controls:** Arrow keys only
-- **Speed:** 100 px/s (local constant)
-- **Behavior:** Flip horizontally on left/right movement
-- **Physics bounds:** constrained to playable area
+- Sprite: `knight_idle_0`, arrow keys only, 100 px/s, no combat
 
 ### Boss (Stub)
-- **Sprite:** `boss_idle_0..3` (idle animation @ 8 FPS)
-- **Position:** (160, 52)
-- **Scale:** 2×
-- **Behavior:** Idle only (no attacks, no HP)
+- Sprite: `boss_idle_0..3`, idle animation @ 8 FPS, position (160, 52), 2× scale, no attacks
 
 ### UI (Stub)
-- **Boss name:** "THE WATCHER" at (160, 6)
-- **Boss HP bar:** static red bar (no updates)
-- **Player HP bar:** static red bar (no updates)
+- Boss name "THE WATCHER" and static HP bars — no live updates
 
 ---
 
-## Unused Arena Combat Stack (Not Wired)
+## Deleted Combat Stack — Reference Specs
 
-### Player Class — `client/src/entities/Player.ts`
-- **Uses** `CONFIG` from `client/src/config/gameConfig.ts`
-- **Controls:** WASD movement, Space dash, LMB shooting (hold to fire)
-- **Dash:** Distance = `CONFIG.PLAYER_DASH_SPEED` (500 px), duration 150ms, cooldown 1500ms, emits `player-dash` and `player-dash-trail`
-- **Shooting:** Cooldown 200ms, projectile speed 600 px/s, damage 10, lifetime 2000ms, emits `player-shot`
-- **I-frames:** 500ms after damage
-- **Events:** `player-hit`, `player-dead`
+These classes need to be rebuilt for the demo. See each relevant doc for full specs.
 
-### Boss Class — `client/src/entities/Boss.ts`
-- **Uses** `CONFIG` from `gameConfig.ts`
-- **States:** `IDLE → TELEGRAPH → ATTACK → COOLDOWN`
-- **Telegraph durations:** 800ms (default), 1000ms for SLAM
-- **Attack order:** `SPRAY → SLAM → SWEEP` (CHASE_SHOT added after 90s)
-- **Phase 1 time escalation:** ≥60s → attack interval 2000ms; ≥90s → 1600ms + CHASE_SHOT enabled
-- **SPRAY:** 8 bullets, 80° cone toward player, speed 420, damage 10
-- **SLAM:** radius 90 circle at player position; damage 20 if inside at hit
-- **SWEEP:** 12 bullets across a random y (220–560), speed 520, damage 8
-- **CHASE_SHOT:** tracking projectile, speed 320, damage 12, lifetime 3000ms
-- **Events:** `boss-hit`, `boss-telegraph`, `boss-phase-transition`, `boss-dead`
-- **Phase transition trigger:** emits when HP ≤ `CONFIG.BOSS_PHASE_TRANSITION_HP` (100)
+### Boss Phase 1 (Deleted `Boss.ts`)
 
-### Telemetry + Networking (Unused)
-- **TelemetryTracker:** collects heatmap, dodge bias (from dashes), shots fired/hit, distance, reaction time (see `telemetry.md`)
-- **WebSocketClient:** retries connection up to 3 times with 1s delay; emits status callbacks
+**States:** `IDLE → TELEGRAPH → ATTACK → COOLDOWN`
+**Telegraph durations:** 800ms (default), 1000ms for SLAM
 
-### Mechanics (Unused)
-- `MechanicInterpreter` + 6 mechanic classes are implemented but not instantiated.
-- See `mechanics.md` for exact behavior.
+**Attack sequence:** `SPRAY → SLAM → SWEEP` (CHASE_SHOT unlocked after 90s)
+**Time escalation:**
+- ≥60s → attack interval 2000ms
+- ≥90s → attack interval 1600ms + CHASE_SHOT enabled
 
-### UI Overlays (Unused)
-- `HUD`, `DevConsole`, `AnalyzingOverlay`, `TauntText` exist but are not referenced.
-- See `ui-layout.md`.
+| Attack | Behavior |
+|--------|----------|
+| SPRAY | 8 bullets, 80° cone toward player, speed 420, damage 10 |
+| SLAM | Radius 90 circle at player position, damage 20 on hit |
+| SWEEP | 12 bullets across random y (220–560), speed 520, damage 8 |
+| CHASE_SHOT | Tracking projectile, speed 320, damage 12, lifetime 3000ms |
+
+**Phase transition:** Fires `boss-phase-transition` when HP ≤ 100 (50% of 200)
+
+### Telemetry Tracker (Deleted)
+
+Sampled every 500ms during Phase 1. See [types.md](types.md) for `TelemetryPayload` fields.
+
+Key fields: 9-zone movement heatmap, dodge direction bias, shots_fired/hit, average_distance_from_boss, corner_time_pct, reaction_time_avg_ms, damage_taken_from (melee/projectile/hazard).
+
+### Mechanic Interpreter + 6 Mechanic Classes (Deleted)
+
+See [mechanics.md](mechanics.md) for full behavior specifications. Factory maps `BossResponse.mechanics[].type` → class instance via switch statement. No eval(), only 6 valid types.
+
+### Arena HUD (Deleted)
+
+Boss HP bar top-center, player HP bar bottom-left, phase indicator bottom-center, dash cooldown indicator. All at 1280×720 display resolution.
+
+### DevConsole (Deleted)
+
+Toggled with `D` key. Shows: collected telemetry, AI model used, raw `BossResponse` JSON.
+
+### AnalyzingOverlay (Deleted)
+
+Shown during Mistral API call. Dark overlay, "ANALYZING PLAYER HABITS..." title, sweeping scan line, random noise text updating every 300ms.
+
+### TauntText (Deleted)
+
+Typewriter effect (35ms/char), magenta `#ff2266`, center-screen, auto-fades after 4000ms.

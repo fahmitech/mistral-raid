@@ -1,6 +1,6 @@
 # Scene Specification
 
-> All 10 scenes in the game, their flow, and behavior.
+> All 11 registered scenes in the game, their flow, and behavior.
 
 ---
 
@@ -21,10 +21,12 @@ BootScene → MenuScene → PlayerSelectScene → LevelScene
 ```
 BootScene, MenuScene, PlayerSelectScene, LevelScene,
 PauseScene, InventoryScene, OptionsScene, CreditsScene,
-GameOverScene, VictoryScene
+GameOverScene, VictoryScene, AudioDebugOverlay
 ```
 
-> **Note:** `ArenaScene` exists in the codebase (`client/src/scenes/ArenaScene.ts`) but is **NOT registered** in `main.ts`. The file is a **static arena mock** (tile layout + simple player movement + idle boss + static UI). It does **not** use the AI boss fight systems (`Boss`, `Player`, `MechanicInterpreter`, `WebSocketClient`, etc.). See [game-behavior.md](game-behavior.md) for the unused AI stack and the stub arena layout.
+> **Note:** `ArenaScene` exists in the codebase (`client/src/scenes/ArenaScene.ts`) but is **NOT registered** in `main.ts`. It is a static layout stub with no combat or AI. See [game-behavior.md](game-behavior.md) for details.
+
+> **Note:** `AudioDebugOverlay` is a debug utility scene (not a game scene). It displays AudioManager state: buffers loaded/loading, active music track, recent SFX list, current mood, and volume levels. Not visible to end users — accessed programmatically for audio debugging.
 
 ---
 

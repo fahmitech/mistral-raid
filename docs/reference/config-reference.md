@@ -41,9 +41,9 @@
 
 ---
 
-## Arena Config (Unused Stack)
+## Arena Config (🗑️ Deleted — Rebuild Target)
 
-These values live in `client/src/config/gameConfig.ts` and are used by the **unused** arena combat classes (`Player`, `Boss`, `HUD`, `TelemetryTracker`).
+`client/src/config/gameConfig.ts` was deleted along with the arena AI stack. These values need to be recreated when rebuilding the arena boss fight.
 
 | Constant | Value | Notes |
 |----------|-------|-------|
@@ -62,14 +62,11 @@ These values live in `client/src/config/gameConfig.ts` and are used by the **unu
 | Boss HP | 200 | |
 | Boss Radius | 40 px | |
 | Phase Transition HP | 100 | Emits `boss-phase-transition` |
-| Boss Phase 3 HP | 50 | (unused) |
 | Boss Attack Interval | 2500 ms | Phase 1 base |
 | Boss Attack Interval P1 @60s | 2000 ms | |
 | Boss Attack Interval P1 @90s | 1600 ms | |
-| Boss Attack Interval P2 | 4000 ms | (unused) |
-| Boss Attack Interval P3 | 2000 ms | (unused) |
 | Telemetry Interval | 500 ms | |
-| WS_URL | `ws://localhost:3001` | Client default |
+| WS_URL | `ws://localhost:8787` | Match server default |
 
 ### Character Stat Variations
 
@@ -137,7 +134,9 @@ Boss death coin explosion: 12 coins in ±40px radius
 
 ---
 
-## Telemetry
+## Telemetry (🗑️ Deleted — Rebuild Target)
+
+These constants were used by the deleted `TelemetryTracker`. Needed when rebuilding the arena.
 
 | Constant | Value | Notes |
 |----------|-------|-------|
@@ -162,17 +161,18 @@ Boss death coin explosion: 12 coins in ±40px radius
 
 | Constant | Value | Notes |
 |----------|-------|-------|
-| WebSocket URL (dev) | `ws://localhost:3001` | Client default in gameConfig.ts (override via VITE_WS_URL) |
-| Server Port | 8787 | Server default in index.ts (override via PORT env) |
-
-> **Port mismatch in this snapshot:** Client defaults to `3001`, server defaults to `8787`. Set `VITE_WS_URL=ws://localhost:8787` or `PORT=3001` to connect.
+| HTTP Server Port | 8787 | `server/src/index.ts` (override via PORT env) |
+| Audio API URL | `http://localhost:8787` | Hardcoded in AudioManager |
+| WebSocket URL | `ws://localhost:8787` | For rebuild — use same port as HTTP server |
 | API Timeout | 8000 ms | Max wait for AI response |
 | WS Max Retries | 3 | Auto-reconnection attempts |
 | WS Retry Delay | 1000 ms | Between reconnection attempts |
 
 ---
 
-## AI API Configuration
+## AI API Configuration (🗑️ Deleted — Rebuild Target)
+
+Needed when rebuilding the Mistral + ElevenLabs TTS server routes.
 
 ### Mistral
 
@@ -184,12 +184,15 @@ Boss death coin explosion: 12 coins in ±40px radius
 | Max Tokens | 500 | 400 | 600 |
 | Response Format | `json_object` | `json_object` | `json_object` |
 
-### ElevenLabs
+### ElevenLabs TTS (Boss Voice)
+
+Different from the SFX/music generation that already exists. This is for the boss taunt voice.
 
 | Setting | Value |
 |---------|-------|
+| API | Text-to-Speech v1 |
 | Model | `eleven_flash_v2_5` |
-| Voice ID | `pNInz6obpgDQGcFmaJgB` |
+| Voice ID | `pNInz6obpgDQGcFmaJgB` ("Adam") |
 | Output Format | `mp3_44100_128` |
 | Timeout | 5000 ms |
 | Stability | 0.3 |
@@ -199,9 +202,9 @@ Boss death coin explosion: 12 coins in ±40px radius
 
 ---
 
-## Value Clamping Ranges
+## Value Clamping Ranges (🗑️ Deleted — Rebuild Target)
 
-All AI-generated numeric values are clamped server-side before transmission.
+Server-side clamping applied to all AI-generated mechanic values before sending to client.
 
 ### ProjectileSpawner
 
@@ -265,21 +268,28 @@ All AI-generated numeric values are clamped server-side before transmission.
 
 ## Timing Constants
 
+### Active (Dungeon Crawler)
+
+| Constant | Value | Notes |
+|----------|-------|-------|
+| Player Projectile Lifetime | 3000 ms | Auto-despawn after 3s |
+| Dash Afterimage Duration | 300 ms | Cyan trail fade time |
+| Screen Shake Duration | 200 ms | Camera shake length |
+| Screen Shake Intensity | 2–4 px | Camera displacement |
+
+### To Rebuild (Arena Boss Fight)
+
 | Constant | Value | Notes |
 |----------|-------|-------|
 | Mechanic Stagger | 400 ms | Delay between mechanic activations |
 | Hazard Tick Rate | 500 ms | Damage tick while in hazard zone |
-| Player Projectile Lifetime | 3000 ms | Auto-despawn after 3s |
 | Taunt Typewriter Delay | 35 ms | Per-character reveal delay |
-| Taunt Display Duration | 4000 ms | Time before fade-out |
+| Taunt Display Duration | 4000 ms | Time before TauntText fade-out |
 | AnalyzingOverlay Noise Update | 300 ms | Random text update interval |
-| Offline Overlay Duration | 2000 ms | Shortened overlay for offline fallback |
+| Offline Overlay Duration | 2000 ms | Shortened overlay for fallback |
 | Minion Orbit Radius | 160 px | Distance from boss for orbit behavior |
 | Homing Lerp Factor | 0.02 | Projectile homing steering per frame |
 | Orb Lerp Factor | 0.1–0.5 | Homing orb steering per frame |
-| Dash Afterimage Duration | 300 ms | Cyan trail fade time |
-| Screen Shake Duration | 200 ms | Camera shake length |
-| Screen Shake Intensity | 2–4 px | Camera displacement |
 
 ---
 
@@ -297,6 +307,22 @@ All AI-generated numeric values are clamped server-side before transmission.
 | Skelet | 6 | 62 | 2 | 11 | SplitOnDeath | 1.0 | 0xffffff |
 | Necromancer | 20 | 42 | 3 | 28 | Summoner | 1.0 | 0xaa00ff |
 | OrcArmored | 28 | 44 | 5 | 38 | Shielded | 1.1 | 0xff8800 |
+
+---
+
+## Weapon Stats ✅
+
+5 weapons, cycled with Q key. Starting weapon is always Sword.
+
+| Weapon | Damage Mult | Fire Rate Mult | Proj Speed | Knockback | Special |
+|--------|-------------|----------------|------------|-----------|---------|
+| Sword | 1.0× | 1.0× | 260 px/s | 85 | — |
+| Dagger | 0.7× | 1.4× | 380 px/s | 70 | 10% crit chance |
+| Katana | 1.6× | 0.9× | 300 px/s | 95 | Pierce 1 enemy |
+| Hammer | 2.2× | 0.6× | 210 px/s | 140 | — |
+| Bomb | 2.8× | 0.5× | 180 px/s | 60 | Explosion radius 64px, fuse 900ms |
+
+Full config in `client/src/config/weapons.ts`.
 
 ---
 
@@ -320,17 +346,59 @@ Golden chest chance: 25%.
 
 ---
 
-## Audio (Web Audio API — No Files)
+## Audio ✅
 
-| SFX | Waveform | Frequency | Notes |
-|-----|----------|-----------|-------|
-| player_shoot | square | 880 Hz | |
-| player_dash | sawtooth | 420 Hz | |
-| player_hit | triangle | 220 Hz | |
-| boss_hit | sawtooth | 180 Hz | |
-| explosion | square | 120 Hz | |
-| ambient | sine | 70 Hz | 0.05 gain, continuous |
+### AudioManager
 
-Master gain: 0.6
-AudioContext unlock: on first `pointerdown` event
-Base64 audio playback: for ElevenLabs TTS
+Singleton at `client/src/systems/AudioManager.ts`. Web Audio API + Phaser static audio.
+
+| Setting | Value |
+|---------|-------|
+| AudioContext unlock | On first user interaction (click/tap) |
+| LRU buffer cache limit | 60 buffers |
+| Server URL | `http://localhost:8787` |
+
+### Volume Defaults (persisted to localStorage key `mistralraid_audio_volumes`)
+
+| Channel | Default |
+|---------|---------|
+| master | 0.8 |
+| music | 0.6 |
+| sfx | 0.9 |
+
+### Static Music Volumes (Phaser-native MP3 playback)
+
+| Key | Volume |
+|-----|--------|
+| menu_theme | 0.5 |
+| dungeon_ambient | 0.4 |
+| combat_music | 0.6 |
+| boss_music | 0.8 |
+| game_over_music | 0.7 |
+| victory_music | 0.7 |
+| credits_theme | 0.5 |
+
+### Music Layers
+
+| Layer | Phaser Key | Used In |
+|-------|-----------|---------|
+| `menu` | `menu_theme` | MenuScene |
+| `hero_select` | `menu_theme` | PlayerSelectScene |
+| `ambient` | `dungeon_ambient` | LevelScene (exploring) |
+| `combat` | `combat_music` | LevelScene (enemies nearby) |
+| `boss` | `boss_music` | LevelScene (boss fight) |
+| `credits` | `credits_theme` | CreditsScene |
+
+### SFX Cooldowns (selected)
+
+| SFX | Cooldown |
+|-----|---------|
+| footstep_stone | 200 ms |
+| sword_slash / dagger / katana / hammer | 100–120 ms |
+| bomb_explosion | 300 ms |
+| player_hit | 150 ms |
+| dash | 100 ms |
+| chest_open | 400 ms |
+| boss_intro / boss_death | 15 000 ms |
+
+Full list in `AudioManager.ts` `SOUND_COOLDOWNS` constant.

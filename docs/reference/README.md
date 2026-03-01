@@ -1,77 +1,76 @@
-# Mistral Raid — Documentation
+# Mistral Raid — Documentation Index
 
-> **Purpose:** Implementation-agnostic specifications for building Mistral Raid's functionality.
-> These docs describe **what** the system does, not **how** it's coded.
-> Use any framework, language, or architecture — the e2e tests are the acceptance criteria.
+> **Status key used across all docs:** ✅ Built | ⬜ Not yet built | 🗑️ Was built, removed
 
-**Snapshot date:** Feb 28, 2026
+See [`docs/progress/tracker.md`](../progress/tracker.md) for the definitive **what's done vs what needs building**.
 
 ---
 
 ## Document Index
 
-### Core Game
+### Core Game (✅ All Implemented)
 | Doc | Description |
 |-----|-------------|
-| [scenes.md](scenes.md) | All 10 scenes: flow, transitions, layout, behavior |
+| [scenes.md](scenes.md) | All 11 registered scenes: flow, transitions, layout, behavior |
 | [dungeon-crawler.md](dungeon-crawler.md) | LevelScene: procedural dungeons, combat, enemies, items, bosses |
-| [characters.md](characters.md) | 4 character classes, stats, inventory, save/load system |
-| [game-behavior.md](game-behavior.md) | Arena stub + unused AI stack (current code reality) |
+| [characters.md](characters.md) | 4 characters, stats, inventory, save/load system |
+| [game-behavior.md](game-behavior.md) | ArenaScene stub + deleted AI stack (files to rebuild) |
 
-### AI & Network
+### AI & Network (⬜ Needs Building)
 | Doc | Description |
 |-----|-------------|
-| [protocol.md](protocol.md) | WebSocket & HTTP API protocol — exact message formats and sequences |
-| [ai-integration.md](ai-integration.md) | Mistral exact prompts, ElevenLabs TTS, validation, fallback |
-| [telemetry.md](telemetry.md) | Telemetry collection system — what's tracked, how, and when |
+| [ai-integration.md](ai-integration.md) | **Start here for the demo.** What's built (ElevenLabs audio) + what to build (Mistral/Voxstral loop) |
+| [protocol.md](protocol.md) | Current HTTP routes (audio) + WebSocket protocol to rebuild |
+| [telemetry.md](telemetry.md) | TelemetryTracker spec (deleted — rebuild target) |
 
-### Mechanics & UI
+### Mechanics & UI (⬜ Needs Building)
 | Doc | Description |
 |-----|-------------|
-| [mechanics.md](mechanics.md) | All 6 AI mechanic types — behavior, parameters, visuals, damage |
-| [ui-layout.md](ui-layout.md) | HUD, DevConsole, overlays, taunt text — layout and visual spec |
+| [mechanics.md](mechanics.md) | 6 AI mechanic types spec (deleted — rebuild target) |
+| [ui-layout.md](ui-layout.md) | Arena HUD, DevConsole, overlays, TauntText (deleted — rebuild target) |
 
-### Reference
+### Reference (✅ Accurate)
 | Doc | Description |
 |-----|-------------|
-| [config-reference.md](config-reference.md) | All constants: stats, levels, enemies, items, clamping, audio |
-| [types.md](types.md) | All data contracts (TypeScript interfaces as reference) |
+| [config-reference.md](config-reference.md) | All constants — active (dungeon) and rebuild targets (arena/AI) clearly labeled |
+| [types.md](types.md) | All TypeScript interfaces — active dungeon types + deleted AI types labeled |
 
-## Acceptance Criteria
+---
 
-The [E2E Test Plan](../plans/plan-tests-e2e.md) serves as the primary acceptance criteria.
-An implementation is correct when all e2e tests pass.
+## Quick Start for Agents
 
-## Quick Start for Implementation
+**To understand what exists:** Read [tracker.md](../progress/tracker.md) first.
 
-1. Read [scenes.md](scenes.md) for the full scene graph and game flow
-2. Read [dungeon-crawler.md](dungeon-crawler.md) for core gameplay mechanics
-3. Read [characters.md](characters.md) for character/state/save system
-4. Read [types.md](types.md) for all data contracts
-5. Read [protocol.md](protocol.md) + [ai-integration.md](ai-integration.md) for server
-6. Read [config-reference.md](config-reference.md) for all tunable values
-7. Implement server (Mistral + ElevenLabs + WebSocket)
-8. Implement client (game engine + dungeon + mechanics + UI)
-9. Run the e2e test suite to verify correctness
+**To build the Mistral/Voxstral boss fight:**
+1. [ai-integration.md](ai-integration.md) — full spec for Mistral + Voxstral + ElevenLabs TTS
+2. [protocol.md](protocol.md) — WebSocket protocol + server routes
+3. [game-behavior.md](game-behavior.md) — arena Boss class spec (Phase 1 attacks)
+4. [mechanics.md](mechanics.md) — 6 mechanic classes to rebuild
+5. [ui-layout.md](ui-layout.md) — HUD, DevConsole, AnalyzingOverlay, TauntText
+6. [telemetry.md](telemetry.md) — TelemetryTracker fields
+7. [types.md](types.md) — TelemetryPayload, BossResponse, WebSocket message types
 
-## Tech Stack (Original)
+**To understand the dungeon crawler (already built):**
+1. [dungeon-crawler.md](dungeon-crawler.md) — LevelScene mechanics
+2. [characters.md](characters.md) — GameState, inventory, save system
+3. [scenes.md](scenes.md) — scene graph and transitions
 
-A typical implementation uses these technologies, but you may choose differently:
+---
+
+## Tech Stack
 
 ```
-Frontend:  Phaser 3.80+ | TypeScript | Vite | port 5173
-Backend:   Node.js 20+ | Express | ws | port 8787
-AI:        Mistral API (mistral-small-latest)
-Voice:     ElevenLabs API (eleven_flash_v2_5)
-Deploy:    Single service (backend serves static frontend)
+Frontend:  Phaser 3.86 | TypeScript | Vite | port 5173
+Backend:   Node.js 20+ | Express | port 8787
+Audio:     ElevenLabs API (SFX + music generation) ✅ built
+AI:        Mistral API (mistral-small-latest) ⬜ to build
+Voice:     Voxstral STT + TTS ⬜ to build
 ```
 
 ## Non-Negotiable Constraints
 
-If you implement the AI arena prototype (or wire the AI stack into gameplay), these constraints must be preserved:
-
-1. **No eval()** — AI JSON maps to pre-built mechanic classes, never executed as code
-2. **Value clamping** — All AI-generated numeric values are clamped to safe ranges
+1. **No eval()** — AI JSON maps to pre-built mechanic classes only
+2. **Value clamping** — All AI-generated numerics are clamped server-side
 3. **Fallback always works** — Game must function without any API connectivity
-4. **DevConsole is critical** — Debug overlay must show the full AI pipeline
-5. **WebSocket protocol** — Client-server messages must match the [protocol spec](protocol.md)
+4. **DevConsole** — Must show the full AI pipeline (telemetry → model → response)
+5. **WebSocket protocol** — Client/server messages must match [protocol.md](protocol.md)

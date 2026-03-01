@@ -1,11 +1,17 @@
 # Type Contracts
 
-> All shared data interfaces. These define the contract between client and server.
-> Presented as TypeScript interfaces for reference — any language can implement these.
+> All shared data interfaces.
+>
+> **Status key:**
+> - Types under "Game-Level Types" are ✅ **active** (used in dungeon crawler)
+> - Types under "Telemetry", "Boss Response", and "WebSocket Messages" are 🗑️ **from the deleted AI boss fight system** — they define the rebuild target for the demo
 
 ---
 
-## Enums
+## Arena AI Types — 🗑️ Deleted (Rebuild Target)
+
+> These types were used by the deleted arena boss fight system (Mistral + WebSocket + mechanics).
+> They are preserved here as the **spec for rebuilding**. None are currently in the codebase.
 
 ### GamePhase
 
@@ -38,11 +44,11 @@ enum MechanicType {
 
 ---
 
-## Telemetry
+## Telemetry — 🗑️ Deleted (Rebuild Target)
 
 ### TelemetryPayload
 
-Collected during Phase 1, sent to server on phase transition.
+Collected during Phase 1 by `TelemetryTracker` (deleted), sent to server on phase transition.
 
 ```typescript
 interface TelemetryPayload {
@@ -91,7 +97,7 @@ interface TelemetryPayload {
 
 ---
 
-## Boss Response (AI Output)
+## Boss Response (AI Output) — 🗑️ Deleted (Rebuild Target)
 
 ### BossResponse
 
@@ -199,7 +205,7 @@ interface MinionSpawnConfig {
 
 ---
 
-## WebSocket Messages
+## WebSocket Messages — 🗑️ Deleted (Rebuild Target)
 
 ### ClientMessage
 
@@ -221,7 +227,7 @@ type ServerMessage =
 
 ---
 
-## E2E Test Bridge (Dev Only)
+## E2E Test Bridge — 🗑️ Deleted (Rebuild Target)
 
 Exposed on `window.__MISTRAL_RAID__` in development builds:
 
@@ -243,9 +249,9 @@ interface MistralRaidBridge {
 
 ---
 
-## Game-Level Types
+## Game-Level Types — ✅ Active
 
-These types are used within the game client for dungeon generation, enemies, items, characters, and state management.
+These types are used by the current dungeon crawler codebase.
 
 ### Constants
 

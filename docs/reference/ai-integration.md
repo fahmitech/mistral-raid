@@ -1,304 +1,254 @@
-# AI Integration Specification
+# AI Integration — Current State & Demo Target
 
-> Describes Mistral API prompt engineering, ElevenLabs TTS integration, response validation, and fallback strategy.
+> **Status key:** ✅ Built | ⬜ Not yet built | 🗑️ Was built, removed
+
+See [demo-scripts.md](../demo-scripts.md) for the demo this is building toward.
+See [tracker.md](../progress/tracker.md) for full feature status.
 
 ---
 
-## Mistral API Integration
+## What Is Built ✅
 
-### Model Cascade
+### ElevenLabs Audio Generation (Server)
 
-The server uses a cascading model strategy:
-
-| Priority | Model | Timeout | Temperature | Max Tokens | When Used |
-|----------|-------|---------|-------------|------------|-----------|
-| 1 (primary) | `mistral-small-latest` | 4 sec | 0.8 | 500 | Default |
-| 2 (fallback) | `ministral-8b-latest` | 2 sec | 0.7 | 400 | Primary fails/timeout |
-| 3 (demo) | `mistral-large-latest` | 6 sec | 0.9 | 600 | `DEMO_MODE=true` |
-
-**Cascade logic:**
-1. If `MISTRAL_API_KEY` is missing → return server fallback immediately (no API call)
-2. Try primary model → if valid response, use it
-3. If primary fails/times out → try fallback model with same prompt
-4. If fallback fails → try salvaging partial response from either attempt
-5. If all fail → use cached fallback config (no API call)
-
-### API Configuration
+The server at `server/src/` is a pure audio generation server. **No Mistral. No WebSocket.**
 
 ```
-API: Mistral Chat Completions
-Response format: { type: "json_object" }  (NOT function calling)
+POST /api/audio/generate   { category: string } → { url, fromCache }
+POST /api/audio/telemetry  { hp, maxHp, bossHp, bossMaxHp, enemyCount, recentDamageTaken }
+                           → { musicMood, addLayer, volumeMultiplier }
+GET  /api/audio/categories → list of all 40+ sound categories
+GET  /api/audio/stats      → cache stats
+GET  /health               → { status: 'ok' }
 ```
 
-### Exact System Prompt
+**Sound library:** 40+ categories including:
+- SFX: menu sounds, footsteps, dash, shield, weapon hits (per weapon type), player hit/death, enemy sounds, boss intro/death, chest/potion/item interactions, UI sounds, heartbeat
+- Music: menu_ambient, dungeon_ambient_loop, combat_music, boss_music_loop, game_over_theme, victory_theme, credits_music, hero_select_music
+- Voice taunts: 4 preset taunt lines (voice generation endpoint disabled — different ElevenLabs API)
 
-The system prompt is sent verbatim to Mistral. Here is the exact text:
+Audio is generated via ElevenLabs from text prompts, cached to `server/generated-audio/`, served as MP3 files.
+
+### Adaptive Music Telemetry (Client → Server)
+
+`AudioManager.updateTelemetry(data)` sends combat state to `/api/audio/telemetry`. Server returns a `musicMood` and `volumeMultiplier`. AudioManager applies the multiplier over 1.5s ramp.
+
+**Mood logic (server-side):**
+
+| Condition | Mood | Volume Mult |
+|-----------|------|-------------|
+| HP ≤ 20% | `critical` | 1.2× |
+| HP ≤ 40% OR boss HP ≤ 30% | `intense` | 1.1× |
+| enemy count > 5 OR recent damage > 3 OR boss present | `tense` | 1.05× |
+| default | `calm` | 1.0× |
+
+### AudioManager (Client)
+
+Singleton at `client/src/systems/AudioManager.ts`.
+
+- **Two-tier playback:** Phaser static MP3s (from `client/public/audio/`) for music; Web Audio API for dynamic SFX + fallback
+- **LRU buffer cache:** Max 60 buffers; evicts least-recently-used
+- **Cooldown system:** Per-SFX cooldowns prevent spam (e.g., footstep 200ms, sword_slash 100ms)
+- **Fallback tones:** Oscillator-based tones per SFX key when server unavailable
+- **Spatialized SFX:** `playSFXAt()` attenuates by distance (max 220px) + stereo pan
+- **Heartbeat:** Triggers at player HP < 30%, auto-stops on recovery
+- **Volume graph:** master → (sfx branch, music branch); each persisted to localStorage
+- **Per-weapon SFX:** `playWeaponSFX(ItemType)` maps each weapon to its sound
+- **Crossfade:** `crossFade(key)` for smooth music transitions
+
+---
+
+## What Needs To Be Built ⬜ (Demo Target)
+
+### 1. Voxstral STT — Mic → Text
+
+The demo shows the player speaking into a mic with the boss responding to their words.
 
 ```
-You are THE ARCHITECT, a sadistic AI Game Master in a boss fight video game. You analyze player telemetry data and design personalized attack mechanics to exploit their weaknesses.
+[Browser Mic] → Voxstral STT API → transcript string → Express server
+```
+
+**What to build:**
+- Browser `getUserMedia()` mic capture
+- Voxstral STT streaming (continuous transcription)
+- Send transcript to server alongside telemetry
+
+### 2. Mistral API — Boss Brain
+
+The core of the demo. Mistral receives player speech + combat telemetry and returns a taunt + attack mechanics.
+
+**Server route to add:** `POST /api/boss/analyze`
+
+**Input:**
+```typescript
+{
+  player_said: string;           // from Voxstral STT
+  telemetry: TelemetryPayload;   // from TelemetryTracker
+}
+```
+
+**Output (`BossResponse`):**
+```typescript
+{
+  analysis: string;       // 1-2 sentences for DevConsole
+  taunt: string;          // <30 words, spoken via Voxstral TTS
+  mechanics: MechanicConfig[];  // 2-3 attack mechanics
+}
+```
+
+**Model cascade:**
+| Priority | Model | Timeout | Use When |
+|----------|-------|---------|----------|
+| 1 | `mistral-small-latest` | 4s | Default |
+| 2 | `ministral-8b-latest` | 2s | Primary fails |
+| 3 | `mistral-large-latest` | 6s | DEMO_MODE=true |
+| fallback | cached config | instant | All fail |
+
+**System prompt:** THE ARCHITECT persona — see original [ai-integration.md](#the-architect-system-prompt) for the full prompt text. Instructs Mistral to generate taunts referencing specific telemetry data and output attack mechanics.
+
+**Response validation pipeline:**
+1. Parse JSON
+2. Schema validate (analysis, taunt, mechanics array of 2-3)
+3. Enum validate (mechanic type, pattern, direction, etc.)
+4. Value clamping (all numeric fields per range in [mechanics.md](mechanics.md))
+5. Partial salvage: if some mechanics invalid, keep valid ones + pad with fallback
+6. Full fallback: cached `BossResponse` if everything fails
+
+### 3. Voxstral TTS — Text → Boss Voice
+
+After Mistral generates the taunt, it must be spoken aloud.
+
+```
+taunt string → Voxstral TTS → audio bytes → base64 → client → <audio> element
+```
+
+**Voice config (from original spec):**
+```
+Model:  eleven_flash_v2_5
+Voice:  pNInz6obpgDQGcFmaJgB ("Adam")
+Format: mp3_44100_128
+Settings: stability 0.3, similarity_boost 0.8, style 0.5, speed 0.9
+```
+
+**Client playback:**
+1. Receive base64 audio from server
+2. Decode → Blob → Object URL
+3. Create `<audio>` element, play
+4. Call `AudioManager.get().duckMusic(0.3, 3.0)` during playback (`duckMusic` already implemented ✅)
+
+### 4. WebSocket (Client ↔ Server Realtime)
+
+The debate loop is realtime — polling won't work.
+
+**Message protocol:**
+
+```typescript
+// Client → Server
+{ type: "ANALYZE"; payload: TelemetryPayload }
+
+// Server → Client
+{ type: "BOSS_RESPONSE"; payload: BossResponse }
+{ type: "AUDIO_READY"; payload: { audioBase64: string; format: string } }
+{ type: "ERROR"; payload: { message: string; fallback: BossResponse } }
+```
+
+**Client:** `WebSocketClient` with 3-retry reconnection (previously existed, needs rebuild)
+**Server:** `ws` library alongside Express on same port or separate
+
+### 5. Telemetry Tracker
+
+Records player behavior during a fight phase. Previously existed as `TelemetryTracker.ts`, needs rebuild.
+
+**Collects:**
+- Movement heatmap (9 zones, sampled every 500ms)
+- Dodge direction bias (from dash events)
+- Shots fired / shots hit
+- Orbs destroyed
+- Average distance from boss
+- Corner time percentage
+- Reaction time (time between telegraph and dodge)
+- Damage taken by type (melee/projectile/hazard)
+
+### 6. Arena Boss Fight Scene
+
+The dungeon currently has `BossEntity` per level but no arena-style phase fight. The demo's boss fight is a dedicated arena scene with:
+
+- Phase 1: hardcoded boss attacks (SPRAY, SLAM, SWEEP, CHASE_SHOT escalating over 60–90s)
+- Phase transition: telemetry sent to Mistral, AnalyzingOverlay shown
+- Phase 2: AI-generated mechanics spawned from `BossResponse.mechanics`
+- TauntText shown with typewriter effect while boss voice plays
+- Phase 3: repeat pattern escalation
+
+### 7. Mechanic "Lego Bricks" (6 Types)
+
+All previously existed, need rebuilding. See [mechanics.md](mechanics.md) for full specs.
+
+| Type | Behavior |
+|------|----------|
+| `projectile_spawner` | Fires bullets (spiral/fan/random/aimed/ring patterns), optional homing |
+| `hazard_zone` | Damage zone with warning phase (circle or rectangle) |
+| `laser_beam` | Sweeping beam (horizontal/vertical/diagonal/tracking) |
+| `homing_orb` | Velocity-lerp tracking projectiles |
+| `wall_of_death` | Sweeping walls with configurable gap |
+| `minion_spawn` | Summoned enemies (chase/orbit/kamikaze behaviors) |
+
+### 8. AI Dungeon Director
+
+Outside boss fights, Mistral adjusts dungeon difficulty. Every 20 seconds:
+
+```
+Dungeon telemetry → Mistral → { difficultyDelta, enemyBias, lootBias, reason }
+```
+
+**difficultyDelta:** Adjust enemy HP/speed multipliers for the next room
+**enemyBias:** Bias next room spawn toward "ranged", "melee", "tank", etc.
+**F5 panel:** Debug overlay showing last Director decision
+
+---
+
+## The ARCHITECT System Prompt
+
+For reference when rebuilding the Mistral integration:
+
+```
+You are THE ARCHITECT, a sadistic AI Game Master in a boss fight video game. You analyze
+player telemetry data and design personalized attack mechanics to exploit their weaknesses.
 
 You MUST respond with a valid JSON object containing exactly these fields:
 {
   "analysis": "A 1-2 sentence analysis of the player's weaknesses",
-  "taunt": "A short, menacing taunt (1-2 sentences, under 30 words) that references the player's specific habits. Be creative, dark, and intimidating. Speak directly to the player.",
+  "taunt": "A short, menacing taunt (1-2 sentences, under 30 words) that references the
+            player's specific habits. Be creative, dark, and intimidating.",
   "mechanics": [2-3 mechanic objects that counter the player's playstyle]
 }
 
-AVAILABLE MECHANIC TYPES:
-
-1. "projectile_spawner" - Spawns bullet patterns
-   Required fields: type, pattern ("spiral"|"fan"|"random"|"aimed"|"ring"), speed (3-12), projectile_count (1-12), fire_rate (0.5-4), projectile_size (4-16), homing (boolean), duration_seconds (3-15)
-
-2. "hazard_zone" - Area denial damage zones
-   Required fields: type, location ("top_left"|"top_right"|"bot_left"|"bot_right"|"center"|"player_position"), shape ("circle"|"rectangle"), radius (50-300), damage_per_tick (5-20), duration_seconds (3-15), warning_time (0.5-2)
-
-3. "laser_beam" - Sweeping beam attacks
-   Required fields: type, direction ("horizontal"|"vertical"|"diagonal"|"tracking"), speed (1-5), width (10-60), damage_on_hit (15-40), duration_seconds (3-10), telegraph_time (0.5-2)
-
-4. "homing_orb" - Tracking projectiles
-   Required fields: type, count (1-4), speed (2-6), damage_on_hit (20-40), lifetime_seconds (5-15), size (12-30)
-
-5. "wall_of_death" - Sweeping walls with gaps
-   Required fields: type, direction ("top"|"bottom"|"left"|"right"|"closing"), speed (1-4), gap_position (0-1, or -1 for no gap), gap_width (50-150), damage_on_hit (25-50)
-
-6. "minion_spawn" - Summon small enemies
-   Required fields: type, count (1-5), minion_speed (1-4), minion_hp (10-30), behavior ("chase"|"orbit"|"kamikaze"), spawn_location ("edges"|"corners"|"near_player")
+[6 mechanic type definitions with required fields and ranges — see mechanics.md]
 
 DESIGN RULES:
-- Your analysis MUST be grounded in the telemetry. Reference at least TWO specific telemetry fields with numbers (e.g., "Corner Camping 62%, Dash 0.4/min").
-- Do NOT claim the player is "standing still" or "never moving" unless ALL are true: Mid-center (MC) heatmap >= 60%, Dash Frequency <= 0.5/min, Average Distance From Boss <= 140px
-- Do NOT claim the player "never attacks" if Shots Fired > 0.
-- Do NOT claim the player is "standing still" if Movement Distance >= 120px or Average Speed >= 20px/s.
-- If corner_time_pct < 20%, do NOT accuse corner camping.
-- If accuracy >= 30%, do NOT claim they "never attack".
-- Always generate exactly 2-3 mechanics that COUNTER the player's habits
-- If they camp in a corner → place hazard_zone there + wall_of_death to flush them out
-- If they dodge left always → use aimed projectiles from the right + tracking laser
-- If they stay far from boss → use homing_orbs + minions to close distance
-- If they have low accuracy → use fast, small projectiles they need to dodge
-- If they take lots of projectile damage → add more projectiles with trickier patterns
-- If they rarely dash → use slow homing attacks that require dashing to escape
-- Keep it challenging but FAIR — always leave a way to survive
-- Be creative! Combine mechanics in unexpected ways
-
-TAUNT RULES:
-- Reference the player's SPECIFIC behavior (e.g., "Still hiding in that corner?")
-- Keep it under 30 words — this will be spoken aloud
-- Be menacing, not silly. Think dark fantasy villain, not cartoon.
-- Examples: "Your left dodge is predictable. This time, there is no escape."
-- Examples: "Distance won't save you from what I've planned."
+- Analysis MUST reference at least TWO specific telemetry fields with numbers
+- Do NOT claim player is "standing still" unless MC heatmap ≥ 60%, dash ≤ 0.5/min, avg dist ≤ 140px
+- Do NOT claim player "never attacks" if shots_fired > 0
+- If corner_time_pct < 20%, do NOT accuse corner camping
+- Always generate 2-3 mechanics that COUNTER the player's habits
+- Keep it fair — always leave a way to survive
 ```
-
-### User Prompt Construction
-
-The user prompt formats telemetry data with heatmap values converted to percentages. Here is the exact template:
-
-```
-PLAYER TELEMETRY DATA:
-
-Phase 1 Duration: {phase_duration_seconds}s
-Player HP at Transition: {player_hp_at_transition}
-Phase Forced By Timeout: {yes|no}
-Movement Heatmap (% time in each zone):
-  TL:{top_left}% TC:{top_center}% TR:{top_right}%
-  ML:{mid_left}% MC:{mid_center}% MR:{mid_right}%
-  BL:{bot_left}% BC:{bot_center}% BR:{bot_right}%
-Dodge Direction Bias: Left:{left} Right:{right} Up:{up} Down:{down}
-Damage Taken From: Melee:{melee} Projectile:{projectile} Hazard:{hazard}
-Shots Fired: {shots_fired} | Shots Hit: {shots_hit}
-Orbs Destroyed: {orbs_destroyed}
-Average Distance From Boss: {average_distance_from_boss}px
-Movement Distance: {movement_distance}px
-Average Speed: {average_speed}px/s
-Shot Accuracy: {accuracy * 100}%
-Dash Frequency: {dash_frequency}/min
-Corner Camping: {corner_time_pct}%
-Average Reaction Time: {reaction_time_avg_ms}ms
-
-Design 2-3 attack mechanics to exploit this player's weaknesses. Respond with the JSON object only.
-```
-
-**Heatmap conversion**: Raw counts are converted to percentages (value / total × 100, 1 decimal)
-
-**No rage mode addendum** in current implementation — the prompt is static regardless of timeout status.
 
 ---
 
-## Response Validation
+## Server Fallback Config
 
-### Validation Pipeline
-
-```
-Raw JSON from Mistral
-    ↓
-1. Parse JSON (reject non-JSON)
-    ↓
-2. Schema validation
-   - analysis: string
-   - taunt: string
-   - mechanics: array of 2-3 items
-   - each mechanic: valid type + required fields
-    ↓
-3. Enum validation
-   - type: one of 6 valid types
-   - pattern (projectile): one of spiral/fan/random/aimed/ring
-   - direction (laser): one of horizontal/vertical/diagonal/tracking
-   - location (hazard): one of top_left/top_right/bot_left/bot_right/center/player_position
-   - shape (hazard): one of circle/rectangle
-   - direction (wall): one of top/bottom/left/right/closing
-   - behavior (minion): one of chase/orbit/kamikaze
-   - spawn_location (minion): one of edges/corners/near_player
-    ↓
-4. Value clamping (see config-reference.md for all ranges)
-   - NaN → replace with minimum value
-   - Below min → clamp to min
-   - Above max → clamp to max
-   - `wall_of_death.gap_position`: `<= -1` preserved as `-1` sentinel; otherwise clamped 0–1
-    ↓
-5. Output: validated BossResponse
-```
-
-### Salvage Partial Response
-
-When full `validate()` fails (e.g., only 1 mechanic instead of 2, or one mechanic has invalid fields):
-
-1. `salvagePartial(parsed)` tries to extract **individually valid** mechanics from the array
-2. It skips invalid mechanics but keeps valid ones (even if only 1)
-3. `analysis` and `taunt` are kept if they're valid strings; otherwise `undefined`
-4. If 0 valid mechanics found → returns `null` (triggers full fallback)
-
-### Merge Logic (Partial + Fallback)
-
-When salvage succeeds (≥1 valid mechanic), the response is **merged** with the server fallback:
-
-```
-mergeMechanics(salvaged.mechanics, fallback.mechanics):
-  1. Take up to 3 mechanics from salvaged (AI-generated)
-  2. If total mechanics < 2, append fallback mechanics until total reaches 2 (salvage already has ≥1)
-  3. Final result: max 3 mechanics total
-```
-
-The merged response uses:
-- `analysis`: salvaged if present, else fallback
-- `taunt`: salvaged if present, else fallback
-- `mechanics`: merged array (AI-first, fallback-padded)
-- All values are then clamped via `clampValues()`
-
-### Fallback on Complete Failure
-
-When both models fail and salvage returns nothing:
-- Server returns its single cached fallback config (see [Server Fallback Config](#server-fallback-config) below)
-- This is instant (no API call needed)
-
----
-
-## ElevenLabs TTS Integration
-
-### Voice Configuration
-
-```
-API:            ElevenLabs Text-to-Speech v1
-Model:          eleven_flash_v2_5
-Voice ID:       pNInz6obpgDQGcFmaJgB ("Adam" — deep, authoritative)
-Output Format:  mp3_44100_128 (44.1 kHz, 128 kbps MP3)
-Timeout:        5 seconds
-```
-
-### Voice Settings
-
-```json
-{
-  "stability": 0.3,
-  "similarity_boost": 0.8,
-  "style": 0.5,
-  "speed": 0.9
-}
-```
-
-- **Stability 0.3:** More variation, less robotic (menacing boss feel)
-- **Similarity 0.8:** Close to base voice model
-- **Style 0.5:** Neutral expression
-- **Speed 0.9:** Slightly faster than natural speech
-
-### Request Flow
-
-1. Extract `taunt` from BossResponse (max 30 words)
-2. POST to `https://api.elevenlabs.io/v1/text-to-speech/{voiceId}`
-3. Body: `{ text, model_id, voice_settings, output_format }`
-4. Response: raw audio bytes
-5. Convert to base64 string
-6. Send via WebSocket as `AUDIO_READY` message
-
-### Graceful Fallback
-
-ElevenLabs is **optional**:
-- If `ELEVENLABS_API_KEY` is missing: skip entirely
-- If API times out (5s): skip audio, proceed with text-only taunt
-- If API returns error: skip audio
-- Game remains fully playable without voice — taunt displays as text only
-
-### Client Audio Playback
-
-1. Receive `AUDIO_READY` message with base64 MP3
-2. Decode base64 → create Blob → create object URL
-3. Create `<audio>` element, set src to object URL
-4. Play audio
-5. Audio plays during/after phase transition as boss "speaks"
-
----
-
-## Fallback Systems
-
-There are **two independent fallback systems** — one server-side, one client-side. They serve different failure scenarios.
-
-### Server Fallback Config
-
-**Location:** `server/src/fallbackCache.ts`
-**Trigger:** Both Mistral models fail (timeout, error, invalid response) AND salvage fails
-**Selection:** Single config, always the same (`getFallbackResponse()` returns index 0)
-**Also used for:** Merge padding when salvage finds partial AI response (see Merge Logic above)
+When all Mistral calls fail, return this cached response:
 
 ```json
 {
   "analysis": "The player relies on simple movement patterns and needs pressure from multiple angles.",
   "taunt": "I have seen your rhythm. Now dance to mine.",
   "mechanics": [
-    {
-      "type": "projectile_spawner",
-      "pattern": "fan",
-      "speed": 6,
-      "projectile_count": 6,
-      "fire_rate": 1.5,
-      "projectile_size": 8,
-      "homing": false,
-      "duration_seconds": 6
-    },
-    {
-      "type": "hazard_zone",
-      "location": "center",
-      "shape": "circle",
-      "radius": 140,
-      "damage_per_tick": 10,
-      "duration_seconds": 6,
-      "warning_time": 1
-    }
+    { "type": "projectile_spawner", "pattern": "fan", "speed": 6,
+      "projectile_count": 6, "fire_rate": 1.5, "projectile_size": 8,
+      "homing": false, "duration_seconds": 6 },
+    { "type": "hazard_zone", "location": "center", "shape": "circle",
+      "radius": 140, "damage_per_tick": 10, "duration_seconds": 6, "warning_time": 1 }
   ]
 }
 ```
-
-### Client Fallback Configs (Offline Mode)
-
-**Location:** `client/src/config/fallbackAttacks.ts`
-**Trigger:** No runtime references found in current client; this list is **unused** today
-**Count:** 5 configs, each with 2–6 mechanics covering different scenarios
-**Current status:** Exported as `FALLBACK_ATTACKS: BossResponse[]` but **NOT imported anywhere** in the client code — this is prepared/dead code not yet wired into any scene.
-
-| # | Strategy | Mechanics |
-|---|----------|-----------|
-| 1 | Central pressure + spiral fire | `hazard_zone` (center, r=140) + `projectile_spawner` (spiral, 6 projectiles) |
-| 2 | Tracking beam + ring bullets | `laser_beam` (tracking, w=30) + `projectile_spawner` (ring, 10 projectiles) |
-| 3 | Closing walls + homing orbs | `wall_of_death` (closing, gap=120) + `homing_orb` (2 orbs, spd=3) |
-| 4 | Chase minions + targeted hazard | `minion_spawn` (3 chasers) + `hazard_zone` (player_position, r=120) |
-| 5 | 4-corner denial + laser + aimed | 4× `hazard_zone` (all corners, r=110) + `laser_beam` (horizontal) + `projectile_spawner` (aimed, 4 projectiles) |
-
-> **Implementation note:** The current code does **not** wire these into any scene. If you choose to support offline mode, you can use this list (e.g., rotate or random index); this is not implemented in the shipped build.

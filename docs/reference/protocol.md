@@ -2,23 +2,48 @@
 
 > Defines the exact message formats, sequences, and error handling for client-server communication.
 
-**Current wiring status:** `client/src/network/WebSocketClient.ts` exists but is **not referenced by any scene**. The protocol below reflects implemented message shapes, but the shipped client never opens a socket.
+**Current status:** `WebSocketClient.ts` and all WebSocket server code were **deleted** when the AI boss fight system was removed. The server currently runs as a pure HTTP audio server (no WebSocket). This document defines the protocol to **rebuild** for the demo.
+
+**What exists today:**
+- HTTP server on `:8787` with audio routes (`/api/audio/*`) — see [ai-integration.md](ai-integration.md)
+- No WebSocket, no Mistral routes, no ANALYZE/BOSS_RESPONSE messages
+
+**What needs to be built:** The full WebSocket + Mistral pipeline described below.
 
 ---
 
-## HTTP Endpoints
-
-### GET /
-**Response:** `{ "ok": true }`
-**Purpose:** Basic liveness check
+## HTTP Endpoints (Current — ✅ Implemented)
 
 ### GET /health
-**Response:** `{ "ok": true }`
-**Purpose:** Health check for deployment platforms
+**Response:** `{ "status": "ok", "generatedDir": "..." }`
+
+### POST /api/audio/generate
+**Body:** `{ "category": string }`
+**Response:** `{ "url": string, "fromCache": boolean }`
+**Purpose:** Generate or retrieve cached ElevenLabs SFX/music
+
+### POST /api/audio/telemetry
+**Body:** `{ hp, maxHp, bossHp, bossMaxHp, enemyCount, recentDamageTaken }`
+**Response:** `{ "musicMood": string, "addLayer": boolean, "volumeMultiplier": number }`
+**Purpose:** Adaptive music mood from combat state
+
+### GET /api/audio/categories
+**Response:** `{ "categories": [{ name, type, cached }] }`
+
+### GET /api/audio/stats
+**Response:** cache statistics
 
 ---
 
-## WebSocket Protocol
+## HTTP Endpoints (To Build — ⬜ Rebuild Target)
+
+### POST /api/boss/analyze
+**Body:** `{ player_said: string, telemetry: TelemetryPayload }`
+**Response:** `BossResponse` (or sends via WebSocket if WS connected)
+
+---
+
+## WebSocket Protocol (⬜ Rebuild Target)
 
 ### Connection
 
@@ -257,6 +282,4 @@ When ANALYZE is received:
 ### Client
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `VITE_WS_URL` | No | `ws://localhost:3001` | WebSocket server URL |
-
-> **WARNING — Port mismatch in this snapshot:** The client defaults to port `3001` but the server defaults to port `8787`. For local development, you must either set `VITE_WS_URL=ws://localhost:8787` or set `PORT=3001` on the server. A clean build should use a single consistent port.
+| `VITE_WS_URL` | No | `ws://localhost:8787` | WebSocket server URL — use same port as HTTP server |

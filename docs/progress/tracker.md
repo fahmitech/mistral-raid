@@ -1,58 +1,9 @@
 # Mistral Raid — Task Progress Tracker
 
-Last updated: 2026-02-28
+Last updated: 2026-03-01
 
----
-
-## Phase A: Foundation (Tasks 1–5)
-
-| Task | Description | Status | Plan | Notes |
-|------|-------------|--------|------|-------|
-| 1 | Project Scaffolding (monorepo, Vite, Express) | ✅ | — | |
-| 2 | Shared Type Definitions (`shared/types.ts`) | ✅ | — | |
-| 3 | Player Controller | ✅ | — | |
-| 4 | Arena Scene Setup | ✅ | — | Depends on 1, 3 |
-| 5 | Boss Entity Phase 1 (hard-coded attacks) | ✅ | — | Depends on 1, 4 |
-
-## Phase B: Core Systems (Tasks 6–10)
-
-| Task | Description | Status | Plan | Notes |
-|------|-------------|--------|------|-------|
-| 6 | Telemetry Tracker | ✅ | — | Depends on 3, 4 |
-| 7 | WebSocket Client + Server | ✅ | — | Depends on 1, 2 |
-| 8 | Mistral API Integration | ✅ | — | Depends on 2, 7 |
-| 9 | ElevenLabs TTS Integration | ✅ | — | Depends on 7 |
-| 10 | Mechanic Interpreter Engine | ✅ | — | Depends on 4, 2 |
-
-## Phase C: Mechanic Lego Bricks (Tasks 11–16)
-
-| Task | Description | Status | Plan | Notes |
-|------|-------------|--------|------|-------|
-| 11 | ProjectileSpawner | ✅ | — | Depends on 5, 10 |
-| 12 | HazardZoneSpawner | ✅ | — | Depends on 4, 10 |
-| 13 | LaserBeam | ✅ | — | Depends on 4, 10 |
-| 14 | HomingOrb | ✅ | — | Depends on 4, 10 |
-| 15 | WallOfDeath | ✅ | — | Depends on 4, 10 |
-| 16 | MinionSpawner | ✅ | — | Depends on 4, 10 |
-
-## Phase D: Integration (Tasks 17–20)
-
-| Task | Description | Status | Plan | Notes |
-|------|-------------|--------|------|-------|
-| 17 | Phase Transition System | ✅ | — | Depends on 5, 6, 7, 10 — bugfix: guard updates during scene shutdown to avoid hit crash |
-| 18 | Audio Manager | ✅ | — | Depends on 1 — bugfix: guard AudioContext failures and defer creation until user gesture |
-| 19 | HUD and UI | ✅ | — | Depends on 4, 5 |
-| 20 | Fallback Attack Configs | ✅ | — | Depends on 2 |
-
-## Phase E: Polish & Demo (Tasks 21–25)
-
-| Task | Description | Status | Plan | Notes |
-|------|-------------|--------|------|-------|
-| 21 | Particle Effects & Screen Shake | ✅ | — | Depends on 4 |
-| 22 | Victory & Game Over Scenes | ✅ | — | Depends on 4 |
-| 23 | Game Config & Constants | ✅ | — | Standalone |
-| 24 | Boot Scene & Main Entry | ✅ | — | Depends on 4, 22 |
-| 25 | Deployment | ✅ | — | Depends on all |
+> **Goal:** See [demo-scripts.md](../demo-scripts.md) for the target demo.
+> This tracker reflects **current codebase reality**, not the original plan.
 
 ---
 
@@ -60,43 +11,163 @@ Last updated: 2026-02-28
 
 | Symbol | Meaning |
 |--------|---------|
-| ⬜ | Not started |
-| 🔄 | In progress |
-| ✅ | Complete |
-| ❌ | Blocked |
-| ⏭️ | Skipped (see notes) |
+| ✅ | Implemented and working |
+| ⚠️ | Partially implemented |
+| ⬜ | Not yet built |
+| 🗑️ | Was built, then removed |
 
 ---
 
-## Blockers
+## Dungeon Crawler — DONE ✅
 
-_(none yet)_
+The full dungeon crawler is implemented and playable.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Project scaffolding (Vite + Express monorepo) | ✅ | |
+| Procedural dungeon generation (MazeGenerator) | ✅ | BSP/random room placement |
+| 5 dungeon levels (config-driven) | ✅ | THE DUNGEON ENTRANCE → THE ABYSS |
+| 4 playable characters | ✅ | Knight, Rogue, Mage, Paladin |
+| 5 weapons with distinct behavior | ✅ | Sword, Dagger, Katana, Hammer, Bomb |
+| 10 enemy types with AI | ✅ | MeleeChase, Ranged, Shielded, Exploder, etc. |
+| 5 bosses (one per level) | ✅ | BossEntity with phase tint + multi-phase |
+| Player entity (dungeon crawler) | ✅ | WASD, dash, shoot, weapon cycle |
+| Inventory system | ✅ | Weapons + items, rarity, equip |
+| Save / load system | ✅ | localStorage, auto-save on boss kill / stairs |
+| Loot system (chests, drops, coins) | ✅ | Weighted drop table |
+| Lighting / fog-of-war system | ✅ | LightingSystem, darkness tiles |
+| Minimap | ✅ | MiniMap system |
+| Score system | ✅ | ScoreSystem |
+| All 10 scenes + AudioDebugOverlay | ✅ | Boot, Menu, PlayerSelect, Level, Pause, Inventory, Options, Credits, GameOver, Victory |
 
 ---
 
-## Completed Plan Files
+## Audio — DONE ✅
 
-| Plan | Covers | Status |
-|------|--------|--------|
-| _(none yet)_ | | |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ElevenLabs audio server | ✅ | Express server on :8787, generates SFX + music from text prompts |
+| 40+ SFX categories (server-side library) | ✅ | menu, movement, combat, boss, interactions, UI, global presence |
+| 7 music tracks (server-side) | ✅ | menu, dungeon ambient, combat, boss, game-over, victory, credits |
+| Static MP3s preloaded in BootScene | ✅ | client/public/audio/ — fallback for when server is down |
+| AudioManager singleton (Web Audio API) | ✅ | Master/music/sfx gain graph, LRU buffer cache |
+| Fallback oscillator tones | ✅ | Per-SFX synthetic tones when server not available |
+| Adaptive music telemetry loop | ✅ | Client → POST /api/audio/telemetry → mood/volumeMultiplier → AudioManager |
+| Per-weapon SFX | ✅ | Sword, Dagger, Katana, Hammer, Bomb each have distinct sounds |
+| Spatialized SFX (distance + pan) | ✅ | playSFXAt() with distance attenuation |
+| Heartbeat at low HP | ✅ | startHeartbeat() triggers at <30% HP |
+| Persistent volume settings (localStorage) | ✅ | master, music, sfx volumes saved |
+| AudioDebugOverlay scene | ✅ | Debug view of audio state |
+| Options: Sound on/off, Music on/off | ✅ | Hooked into AudioManager via setOptions() |
 
 ---
 
-## Demo Checklist (Pre-Pitch — from specs.md §14)
+## Demo Target — NOT YET BUILT ⬜
 
-- [ ] Game loads at public URL without errors
-- [ ] Audio plays (AudioContext unlocks on first click)
-- [ ] Phase 1 boss attacks work correctly
-- [ ] Telemetry is being collected (check DevConsole with `D`)
+These are the features required by [demo-scripts.md](../demo-scripts.md) that **do not exist in the codebase**.
+
+### Voxstral STT (Speech-to-Text)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Microphone input capture (browser) | ⬜ | |
+| Voxstral STT streaming transcription | ⬜ | Continuous mic → text |
+| Speech transcript → server pipeline | ⬜ | |
+
+### Mistral AI Boss Brain
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| WebSocket server (client ↔ server realtime) | ⬜ | Was built, then removed |
+| Mistral API integration (server) | ⬜ | Was built, then removed |
+| User prompt construction (speech + telemetry) | ⬜ | |
+| THE ARCHITECT system prompt | ⬜ | See ai-integration.md for full spec |
+| Response validation + value clamping | ⬜ | |
+| Cascade fallback (small → 8b → cached) | ⬜ | |
+| Partial salvage + merge logic | ⬜ | |
+
+### Voxstral TTS (Boss Voice)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ElevenLabs TTS for boss taunt text | ⬜ | Different from SFX/music generation |
+| Boss voice audio playback in-game | ⬜ | |
+| Audio ducking during boss voice | ⬜ | duckMusic() method exists in AudioManager |
+
+### Arena Boss Fight
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Arena scene (registered + active) | ⬜ | ArenaScene.ts exists but is a static stub, not registered |
+| Phase 1 boss fight (hardcoded attacks) | ⬜ | Was built, then removed |
+| Telemetry tracker (heatmap, dodge bias, accuracy, etc.) | ⬜ | Was built, then removed |
+| Phase transition system | ⬜ | Was built, then removed |
+| Mechanic interpreter engine | ⬜ | Was built, then removed |
+| ProjectileSpawner mechanic | ⬜ | Was built, then removed |
+| HazardZoneSpawner mechanic | ⬜ | Was built, then removed |
+| LaserBeam mechanic | ⬜ | Was built, then removed |
+| HomingOrb mechanic | ⬜ | Was built, then removed |
+| WallOfDeath mechanic | ⬜ | Was built, then removed |
+| MinionSpawner mechanic | ⬜ | Was built, then removed |
+| TauntText overlay | ⬜ | Was built, then removed |
+| AnalyzingOverlay | ⬜ | Was built, then removed |
+| DevConsole debug overlay | ⬜ | Was built, then removed |
+| Arena HUD (boss HP bar + player HP bar + phase) | ⬜ | Was built, then removed |
+| Fallback attack configs | ⬜ | Was built, then removed |
+| Win/loss state for arena | ⬜ | |
+
+### AI Dungeon Director
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Dungeon telemetry (HP, kills, damage/min) | ⬜ | |
+| Mistral difficulty adjustment (difficultyDelta, enemyBias, lootBias) | ⬜ | |
+| F5 Director debug panel | ⬜ | |
+| Enemy type bias applied to next room | ⬜ | |
+
+---
+
+## Previously Removed (Reference)
+
+These features were implemented but removed in the "Remove AI Dungeon Director" commit. They need to be rebuilt for the demo.
+
+| System | Files deleted |
+|--------|--------------|
+| Mistral API client | `server/src/routes/mistral.ts` (or similar) |
+| WebSocket server | `server/src/ws.ts` (or similar) |
+| WebSocket client | `client/src/network/WebSocketClient.ts` |
+| Telemetry tracker | `client/src/systems/TelemetryTracker.ts` |
+| Mechanic interpreter | `client/src/systems/MechanicInterpreter.ts` |
+| 6 mechanic classes | `client/src/mechanics/*` |
+| Arena combat player | `client/src/entities/Player.ts` (old version — replaced by dungeon Player) |
+| Arena boss entity | `client/src/entities/Boss.ts` (replaced by BossEntity.ts) |
+| Arena HUD | `client/src/ui/HUD.ts` |
+| DevConsole | `client/src/ui/DevConsole.ts` |
+| AnalyzingOverlay | `client/src/ui/AnalyzingOverlay.ts` |
+| TauntText | `client/src/ui/TauntText.ts` |
+| Fallback attack configs | `client/src/config/fallbackAttacks.ts` |
+| Arena game config | `client/src/config/gameConfig.ts` |
+
+---
+
+## Demo Checklist (Rebuild Target)
+
+From [demo-scripts.md](../demo-scripts.md):
+
+- [ ] Mic input captured in browser
+- [ ] Voxstral STT transcribes player speech in real time
+- [ ] Mistral receives speech + telemetry → returns taunt + mechanics
+- [ ] Voxstral TTS speaks boss taunt out loud
+- [ ] ElevenLabs SFX + music play correctly (already works ✅)
+- [ ] Arena boss fight active with Phase 1 hardcoded attacks
 - [ ] Phase transition animation plays
-- [ ] Mistral API returns valid JSON (check server logs)
-- [ ] ElevenLabs audio plays boss taunt
-- [ ] Phase 2 mechanics spawn correctly
+- [ ] Phase 2 mechanics spawn from Mistral response
 - [ ] All 6 mechanic types work
-- [ ] Win state triggers correctly
-- [ ] Game Over state triggers correctly
-- [ ] Retry works (full reset, new telemetry, new generation)
-- [ ] DevConsole shows complete pipeline
+- [ ] TauntText displayed during boss reply
+- [ ] AnalyzingOverlay shown during Mistral call
+- [ ] DevConsole shows pipeline (telemetry → model → response)
+- [ ] AI Dungeon Director adjusts enemies between rooms
+- [ ] F5 Director debug panel visible
+- [ ] Server logs show full pipeline
 - [ ] Fallback works when API is slow/down
-- [ ] Record 60-second backup demo video
-- [ ] Set `DEMO_MODE=true` for pitch (uses mistral-large)
+- [ ] Win/loss state works for arena fight

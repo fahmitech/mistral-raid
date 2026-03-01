@@ -2,7 +2,9 @@
 
 > Describes all HUD elements, overlays, debug console, and visual effects.
 
-**Current wiring status:** The arena UI utilities (`HUD`, `DevConsole`, `AnalyzingOverlay`, `TauntText`, `ParticleManager`) exist in `client/src/ui` and `client/src/systems`, but **no scene instantiates them** in the shipped build. LevelScene uses its own HUD (see `dungeon-crawler.md`).
+**Current status:** The arena UI classes (`HUD`, `DevConsole`, `AnalyzingOverlay`, `TauntText`, `ParticleManager`) were **deleted** when the AI boss fight system was removed. They need to be rebuilt for the demo. This document serves as their spec.
+
+LevelScene uses its own inline HUD (see [dungeon-crawler.md](dungeon-crawler.md)).
 
 ---
 
@@ -44,9 +46,9 @@ Background color:     #0a0a1a (dark purple-black)
 
 ---
 
-## HUD (Head-Up Display — Unused)
+## HUD (Head-Up Display — ⬜ Needs Rebuild)
 
-`HUD` is defined for the arena boss fight but is **not instantiated** by any scene. If wired, all positions are relative to 1280×720 display.
+**Status:** 🗑️ Deleted — needs to be rebuilt for the arena boss fight scene. All positions are relative to 1280×720 display.
 
 ### Boss HP Bar (Top)
 
@@ -96,9 +98,10 @@ Background color:     #0a0a1a (dark purple-black)
 
 ---
 
-## DevConsole (Debug Overlay — Unused)
+## DevConsole (Debug Overlay — ⬜ Needs Rebuild)
 
-**Toggle:** `D` key (if instantiated)
+**Status:** 🗑️ Deleted — needs to be rebuilt.
+**Toggle:** `D` key
 **Purpose:** Minimal telemetry + response logger (not full pipeline)
 
 ### Layout
@@ -139,9 +142,10 @@ Background color:     #0a0a1a (dark purple-black)
 
 ---
 
-## AnalyzingOverlay (Unused)
+## AnalyzingOverlay (⬜ Needs Rebuild)
 
-**When:** Only shown if a scene calls `show()`
+**Status:** 🗑️ Deleted — needs to be rebuilt.
+**When:** Shown during Mistral API call (between phase transition and receiving BossResponse)
 
 ### Layout
 
@@ -172,9 +176,10 @@ Background color:     #0a0a1a (dark purple-black)
 
 ---
 
-## TauntText (Unused)
+## TauntText (⬜ Needs Rebuild)
 
-**When:** Only shown if a scene calls `show(message)`
+**Status:** 🗑️ Deleted — needs to be rebuilt.
+**When:** Shown when boss taunt text arrives (from BossResponse or fallback)
 
 ### Layout
 - **Position:** Center of screen
@@ -193,9 +198,10 @@ Background color:     #0a0a1a (dark purple-black)
 
 ---
 
-## Visual Effects (ParticleManager — Unused)
+## Visual Effects (ParticleManager — ⬜ Needs Rebuild)
 
-`ParticleManager` is defined but not instantiated by any scene. It uses a code-drawn `particle-dot` texture (8×8 white circle) and provides:
+**Status:** 🗑️ Deleted — needs to be rebuilt for arena scene.
+Uses a code-drawn `particle-dot` texture (8×8 white circle) and provides:
 
 - `burst(x, y, color, count=8, scale=1)` — generic particle burst
 - `dash(x, y)` — cyan burst (0x00ffff)
