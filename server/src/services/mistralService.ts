@@ -180,6 +180,9 @@ export async function generateBossReply(
 
   const cascade = fastMode ? VOICE_CASCADE : MODEL_CASCADE;
   for (const { model, timeout } of cascade) {
+    if (fastMode) {
+      console.log(`[mistral] voice-fast model=${model}`);
+    }
     const controller = new AbortController();
     if (session) session.activeLLMAbort = controller;
     const timer = setTimeout(() => controller.abort(), overrideTimeout ?? timeout);

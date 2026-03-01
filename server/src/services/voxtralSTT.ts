@@ -3,14 +3,14 @@ import type { Session } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { canStartBossReply, setTurnState } from './sessionManager.js';
 import { generateBossReply } from './mistralService.js';
-import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
+import { synthesize as synthesizeBossVoice, warmup as warmupBossVoice } from './bossVoiceService.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_CAPTIONS = process.env.ENABLE_CAPTIONS !== 'false';
-const STT_TARGET_DELAY_MS = Number(process.env.STT_TARGET_DELAY_MS ?? 160);
 const STT_MODEL = 'voxtral-mini-transcribe-realtime-2602';
 const STT_AUDIO_FORMAT = { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 };
 const STT_WARM_CONN_TTL_MS = 8000;
+const MIN_UTTERANCE_BYTES = 3200; // 200ms @ 16kHz S16LE — shorter is untranscribable
 
 let client: RealtimeTranscription | null = null;
 const warmConnections = new Map<string, { connection: RealtimeConnection; createdAt: number }>();
@@ -73,26 +73,6 @@ async function openConnection(): Promise<RealtimeConnection> {
   return getClient().connect(STT_MODEL, { audioFormat: STT_AUDIO_FORMAT });
 }
 
-async function applyTargetStreamingDelay(connection: RealtimeConnection): Promise<void> {
-  if (!Number.isFinite(STT_TARGET_DELAY_MS)) return;
-  try {
-    const sendJson = (connection as unknown as { sendJson?: (payload: unknown) => Promise<void> }).sendJson;
-    if (!sendJson) return;
-    await sendJson({
-      type: 'session.update',
-      session: {
-        audio_format: {
-          encoding: STT_AUDIO_FORMAT.encoding,
-          sample_rate: STT_AUDIO_FORMAT.sampleRate,
-        },
-        target_streaming_delay_ms: STT_TARGET_DELAY_MS,
-      },
-    });
-  } catch (err) {
-    console.warn('[stt] Failed to apply targetStreamingDelayMs:', err);
-  }
-}
-
 function discardWarmConnection(sessionId: string): void {
   const entry = warmConnections.get(sessionId);
   if (!entry) return;
@@ -140,7 +120,6 @@ async function acquireConnection(session: Session): Promise<RealtimeConnection> 
   if (entry && isWarmConnectionFresh(entry)) {
     warmConnections.delete(session.id);
     console.log('[stt] Using warm Voxtral connection');
-    await applyTargetStreamingDelay(entry.connection);
     return entry.connection;
   }
   if (entry) {
@@ -154,14 +133,12 @@ async function acquireConnection(session: Session): Promise<RealtimeConnection> 
     if (warmed && refreshed && isWarmConnectionFresh(refreshed)) {
       warmConnections.delete(session.id);
       console.log('[stt] Using warm Voxtral connection (awaited)');
-      await applyTargetStreamingDelay(refreshed.connection);
       return refreshed.connection;
     }
   }
 
   console.log('[stt] Using cold Voxtral connection');
   const connection = await openConnection();
-  await applyTargetStreamingDelay(connection);
   return connection;
 }
 
@@ -172,17 +149,24 @@ async function* transcribeWithConnection(
   const iterator = audioStream[Symbol.asyncIterator]();
   const iterable = { [Symbol.asyncIterator]: () => iterator };
   let stopRequested = false;
+  let sentAnyAudio = false;
   const sendAudioTask = (async () => {
     try {
       for await (const chunk of iterable) {
         if (stopRequested || connection.isClosed) break;
         await connection.sendAudio(chunk);
+        sentAnyAudio = true;
       }
     } finally {
-      if (!connection.isClosed) {
+      if (!connection.isClosed && sentAnyAudio) {
         await connection.flushAudio();
+        await connection.endAudio();
+      } else if (!connection.isClosed) {
+        // No audio was ever sent — close connection to unblock the event loop.
+        // Without this, `for await (event of connection)` hangs forever
+        // because Voxtral has nothing to transcribe and never sends events.
+        await connection.close();
       }
-      await connection.endAudio();
     }
   })();
 
@@ -262,12 +246,14 @@ export function pushStreamingAudio(session: Session, chunk: Buffer): boolean {
 export async function stopStreaming(session: Session): Promise<void> {
   const stt = session.sttStream;
   if (!stt) return;
+  // Null immediately so startStreaming can create a new stream
+  // while we await the task / LLM / TTS below.
+  session.sttStream = null;
   stt.queue.close();
   if (stt.task) {
     await stt.task;
   }
   const finalTranscript = stt.finalTranscript.trim();
-  session.sttStream = null;
 
   if (!finalTranscript) {
     setTurnState(session, 'LISTENING');
@@ -283,6 +269,7 @@ export async function stopStreaming(session: Session): Promise<void> {
   }
 
   setTurnState(session, 'THINKING');
+  warmupBossVoice();
   const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
@@ -294,6 +281,10 @@ export async function stopStreaming(session: Session): Promise<void> {
 export async function transcribeAndRespond(session: Session, utteranceBuffer: Buffer): Promise<void> {
   if (!ENABLE_AI_SPEECH) {
     console.warn('[stt] ENABLE_AI_SPEECH=false; skipping transcription');
+    return;
+  }
+
+  if (utteranceBuffer.length < MIN_UTTERANCE_BYTES) {
     return;
   }
 
@@ -361,6 +352,7 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   }
 
   setTurnState(session, 'THINKING');
+  warmupBossVoice();
   const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');

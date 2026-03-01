@@ -17,9 +17,10 @@ export function attachWebSocketServer(httpServer: http.Server): void {
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (isBinary) {
         // Streaming chunks if active; otherwise treat as full utterance
-        const handled = voxtralSTT.pushStreamingAudio(session, data as Buffer);
-        if (!handled) {
-          void voxtralSTT.transcribeAndRespond(session, data as Buffer);
+        const buf = data as Buffer;
+        const handled = voxtralSTT.pushStreamingAudio(session, buf);
+        if (!handled && buf.length >= 3200) {
+          void voxtralSTT.transcribeAndRespond(session, buf);
         }
       } else {
         let msg: ClientToServerMessage | null = null;

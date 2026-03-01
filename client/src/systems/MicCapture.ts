@@ -6,7 +6,7 @@ import { wsClient } from '../network/WebSocketClient';
 class MicCapture {
   private vad: any | null = null;
   private active = false;
-  private transmitEnabled = true;
+  private transmitEnabled = false;
   private allowCurrentUtterance = false;
   private isSpeaking = false;
   private inputSampleRate = 48000;
