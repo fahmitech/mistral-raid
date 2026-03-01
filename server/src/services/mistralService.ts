@@ -121,6 +121,11 @@ const MODEL_CASCADE: Array<{ model: string; timeout: number }> = DEMO_MODE
       { model: 'ministral-8b-latest', timeout: 2000 },
     ];
 
+const VOICE_CASCADE: Array<{ model: string; timeout: number }> = [
+  { model: 'ministral-8b-latest', timeout: 2500 },
+  { model: 'mistral-small-latest', timeout: 3000 },
+];
+
 export async function handleAnalyze(session: Session, rawPayload: Record<string, unknown>): Promise<void> {
   if (session.turnState === 'THINKING' || session.turnState === 'AI_SPEAKING') return;
   setTurnState(session, 'THINKING');
@@ -146,7 +151,8 @@ export async function handleAnalyze(session: Session, rawPayload: Record<string,
 export async function generateBossReply(
   playerSaid: string,
   telemetry: TelemetrySummary | null,
-  session?: Session
+  session?: Session,
+  fastMode = false
 ): Promise<BossResponse> {
   const safeTelemetry = telemetry ?? {
     avgAccuracy: 0,
@@ -172,7 +178,8 @@ export async function generateBossReply(
   const userPrompt = buildUserPrompt(playerSaid, safeTelemetry);
   const overrideTimeout = process.env.LLM_TIMEOUT_MS ? Number(process.env.LLM_TIMEOUT_MS) : null;
 
-  for (const { model, timeout } of MODEL_CASCADE) {
+  const cascade = fastMode ? VOICE_CASCADE : MODEL_CASCADE;
+  for (const { model, timeout } of cascade) {
     const controller = new AbortController();
     if (session) session.activeLLMAbort = controller;
     const timer = setTimeout(() => controller.abort(), overrideTimeout ?? timeout);

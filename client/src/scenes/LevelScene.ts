@@ -1137,6 +1137,10 @@ export class LevelScene extends Phaser.Scene {
     const pInView = cam.worldView.contains(p.x, p.y);
     const pRenderFlags = (p as unknown as { renderFlags?: number }).renderFlags ?? -1;
     const wRenderFlags = (w as unknown as { renderFlags?: number }).renderFlags ?? -1;
+    const pCameraFilter = (p as unknown as { cameraFilter?: number }).cameraFilter ?? -1;
+    const wCameraFilter = (w as unknown as { cameraFilter?: number }).cameraFilter ?? -1;
+    const pOnDisplayList = this.children.exists(p);
+    const wOnDisplayList = this.children.exists(w);
 
     const warnings: string[] = [];
     if (overlayDepth >= 0 && (p.depth ?? 0) <= overlayDepth) warnings.push('PLAYER_BELOW_FOG');
@@ -1144,12 +1148,14 @@ export class LevelScene extends Phaser.Scene {
     if (!p.visible) warnings.push('PLAYER_VISIBLE_FALSE');
     if (p.alpha <= 0.02) warnings.push('PLAYER_ALPHA_LOW');
     if (pRenderFlags === 0) warnings.push('PLAYER_RENDERFLAGS_0');
+    if (pCameraFilter !== 0) warnings.push('PLAYER_CAMERA_FILTER');
+    if (!pOnDisplayList) warnings.push('PLAYER_NOT_IN_DISPLAYLIST');
 
     this.debugText.setText(
       [
         `t=${Math.floor(time)} camScroll=(${cam.scrollX.toFixed(1)},${cam.scrollY.toFixed(1)}) zoom=${cam.zoom.toFixed(2)}`,
-        `player pos=(${p.x.toFixed(1)},${p.y.toFixed(1)}) inView=${pInView} vis=${p.visible} a=${p.alpha.toFixed(2)} d=${p.depth} rf=${pRenderFlags}`,
-        `weapon pos=(${w.x.toFixed(1)},${w.y.toFixed(1)}) vis=${w.visible} a=${w.alpha.toFixed(2)} d=${w.depth} rf=${wRenderFlags}`,
+        `player pos=(${p.x.toFixed(1)},${p.y.toFixed(1)}) inView=${pInView} vis=${p.visible} a=${p.alpha.toFixed(2)} d=${p.depth} rf=${pRenderFlags} cf=${pCameraFilter} dl=${pOnDisplayList}`,
+        `weapon pos=(${w.x.toFixed(1)},${w.y.toFixed(1)}) vis=${w.visible} a=${w.alpha.toFixed(2)} d=${w.depth} rf=${wRenderFlags} cf=${wCameraFilter} dl=${wOnDisplayList}`,
         `fog depth=${overlayDepth}`,
         warnings.length ? `WARN: ${warnings.join(' ')}` : 'WARN: (none)',
       ].join('\n')

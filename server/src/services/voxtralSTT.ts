@@ -79,7 +79,10 @@ export function startStreaming(session: Session): void {
       for await (const event of getClient().transcribeStream(
         queue,
         'voxtral-mini-transcribe-realtime-2602',
-        { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
+        {
+          audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 },
+          targetStreamingDelayMs: STT_TARGET_DELAY_MS,
+        }
       )) {
         if (event.type === 'transcription.text.delta') {
           const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
@@ -141,7 +144,7 @@ export async function stopStreaming(session: Session): Promise<void> {
   }
 
   setTurnState(session, 'THINKING');
-  const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session);
+  const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
   void synthesizeBossVoice(session, bossResponse.taunt);
@@ -167,7 +170,10 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
     for await (const event of getClient().transcribeStream(
       singleUtteranceStream(utteranceBuffer),
       'voxtral-mini-transcribe-realtime-2602',
-      { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
+      {
+        audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 },
+        targetStreamingDelayMs: STT_TARGET_DELAY_MS,
+      }
     )) {
       if (event.type === 'transcription.text.delta') {
         const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
@@ -217,7 +223,7 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   }
 
   setTurnState(session, 'THINKING');
-  const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session);
+  const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
   void synthesizeBossVoice(session, bossResponse.taunt);
