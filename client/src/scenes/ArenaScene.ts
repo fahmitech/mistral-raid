@@ -53,7 +53,7 @@ export class ArenaScene extends Phaser.Scene {
   private devConsole!: DevConsole;
   private directorPanel!: DirectorPanel;
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
-  private f5Handler: ((event: KeyboardEvent) => void) | null = null;
+  private toggleHandler: ((event: KeyboardEvent) => void) | null = null;
 
   private wsUnsub: (() => void) | null = null;
   private wsStatusUnsub: (() => void) | null = null;
@@ -122,11 +122,11 @@ export class ArenaScene extends Phaser.Scene {
     this.startPhase1();
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
 
-    this.f5Handler = (event: KeyboardEvent) => {
+    this.toggleHandler = (event: KeyboardEvent) => {
       event.preventDefault();
       this.directorPanel.toggle();
     };
-    this.input.keyboard?.on('keydown-F5', this.f5Handler);
+    this.input.keyboard?.on('keydown-P', this.toggleHandler);
   }
 
   update(time: number, delta: number): void {
@@ -430,9 +430,9 @@ export class ArenaScene extends Phaser.Scene {
     this.mechanicInterpreter.clear();
     this.devConsole.destroy();
     this.directorPanel.destroy();
-    if (this.f5Handler) {
-      this.input.keyboard?.off('keydown-F5', this.f5Handler);
-      this.f5Handler = null;
+    if (this.toggleHandler) {
+      this.input.keyboard?.off('keydown-P', this.toggleHandler);
+      this.toggleHandler = null;
     }
   }
 }
