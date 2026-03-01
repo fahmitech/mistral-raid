@@ -12,6 +12,7 @@ export function attachWebSocketServer(httpServer: http.Server): void {
 
   wss.on('connection', (ws: WebSocket) => {
     const session = sessionManager.createSession(ws);
+    voxtralSTT.prewarmConnection(session);
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (isBinary) {
@@ -54,7 +55,10 @@ export function attachWebSocketServer(httpServer: http.Server): void {
       }
     });
 
-    ws.on('close', () => sessionManager.destroySession(session.id));
+    ws.on('close', () => {
+      voxtralSTT.clearWarmConnection(session.id);
+      sessionManager.destroySession(session.id);
+    });
     ws.on('error', (err: Error) => console.error(`[ws] session ${session.id} error:`, err));
   });
 }

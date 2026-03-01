@@ -1,4 +1,4 @@
-import { RealtimeTranscription, AudioEncoding } from '@mistralai/mistralai/extra/realtime/index.js';
+import { RealtimeTranscription, AudioEncoding, RealtimeConnection, type RealtimeEvent } from '@mistralai/mistralai/extra/realtime/index.js';
 import type { Session } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { canStartBossReply, setTurnState } from './sessionManager.js';
@@ -8,8 +8,13 @@ import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_CAPTIONS = process.env.ENABLE_CAPTIONS !== 'false';
 const STT_TARGET_DELAY_MS = Number(process.env.STT_TARGET_DELAY_MS ?? 160);
+const STT_MODEL = 'voxtral-mini-transcribe-realtime-2602';
+const STT_AUDIO_FORMAT = { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 };
+const STT_WARM_CONN_TTL_MS = 8000;
 
 let client: RealtimeTranscription | null = null;
+const warmConnections = new Map<string, { connection: RealtimeConnection; createdAt: number }>();
+const warmConnectionPending = new Map<string, Promise<RealtimeConnection | null>>();
 
 class AudioChunkQueue implements AsyncIterable<Uint8Array> {
   private queue: Uint8Array[] = [];
@@ -60,6 +65,144 @@ function getClient(): RealtimeTranscription {
   return client;
 }
 
+function isWarmConnectionFresh(entry: { connection: RealtimeConnection; createdAt: number }): boolean {
+  return !entry.connection.isClosed && Date.now() - entry.createdAt < STT_WARM_CONN_TTL_MS;
+}
+
+async function openConnection(): Promise<RealtimeConnection> {
+  return getClient().connect(STT_MODEL, { audioFormat: STT_AUDIO_FORMAT });
+}
+
+async function applyTargetStreamingDelay(connection: RealtimeConnection): Promise<void> {
+  if (!Number.isFinite(STT_TARGET_DELAY_MS)) return;
+  try {
+    const sendJson = (connection as unknown as { sendJson?: (payload: unknown) => Promise<void> }).sendJson;
+    if (!sendJson) return;
+    await sendJson({
+      type: 'session.update',
+      session: {
+        audio_format: {
+          encoding: STT_AUDIO_FORMAT.encoding,
+          sample_rate: STT_AUDIO_FORMAT.sampleRate,
+        },
+        target_streaming_delay_ms: STT_TARGET_DELAY_MS,
+      },
+    });
+  } catch (err) {
+    console.warn('[stt] Failed to apply targetStreamingDelayMs:', err);
+  }
+}
+
+function discardWarmConnection(sessionId: string): void {
+  const entry = warmConnections.get(sessionId);
+  if (!entry) return;
+  warmConnections.delete(sessionId);
+  try {
+    void entry.connection.close();
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
+export function clearWarmConnection(sessionId: string): void {
+  discardWarmConnection(sessionId);
+  warmConnectionPending.delete(sessionId);
+}
+
+export function prewarmConnection(session: Session): void {
+  if (!ENABLE_AI_SPEECH) return;
+  const existing = warmConnections.get(session.id);
+  if (existing && isWarmConnectionFresh(existing)) return;
+  if (warmConnectionPending.has(session.id)) return;
+  if (existing) {
+    discardWarmConnection(session.id);
+  }
+
+  const pending = openConnection()
+    .then((connection) => {
+      warmConnections.set(session.id, { connection, createdAt: Date.now() });
+      console.log('[stt] Voxtral connection pre-warmed');
+      return connection;
+    })
+    .catch((err) => {
+      console.warn('[stt] Voxtral prewarm failed (non-fatal):', err);
+      return null;
+    })
+    .finally(() => {
+      warmConnectionPending.delete(session.id);
+    });
+
+  warmConnectionPending.set(session.id, pending);
+}
+
+async function acquireConnection(session: Session): Promise<RealtimeConnection> {
+  const entry = warmConnections.get(session.id);
+  if (entry && isWarmConnectionFresh(entry)) {
+    warmConnections.delete(session.id);
+    console.log('[stt] Using warm Voxtral connection');
+    await applyTargetStreamingDelay(entry.connection);
+    return entry.connection;
+  }
+  if (entry) {
+    discardWarmConnection(session.id);
+  }
+
+  const pending = warmConnectionPending.get(session.id);
+  if (pending) {
+    const warmed = await pending;
+    const refreshed = warmConnections.get(session.id);
+    if (warmed && refreshed && isWarmConnectionFresh(refreshed)) {
+      warmConnections.delete(session.id);
+      console.log('[stt] Using warm Voxtral connection (awaited)');
+      await applyTargetStreamingDelay(refreshed.connection);
+      return refreshed.connection;
+    }
+  }
+
+  console.log('[stt] Using cold Voxtral connection');
+  const connection = await openConnection();
+  await applyTargetStreamingDelay(connection);
+  return connection;
+}
+
+async function* transcribeWithConnection(
+  connection: RealtimeConnection,
+  audioStream: AsyncIterable<Uint8Array>
+): AsyncGenerator<RealtimeEvent> {
+  const iterator = audioStream[Symbol.asyncIterator]();
+  const iterable = { [Symbol.asyncIterator]: () => iterator };
+  let stopRequested = false;
+  const sendAudioTask = (async () => {
+    try {
+      for await (const chunk of iterable) {
+        if (stopRequested || connection.isClosed) break;
+        await connection.sendAudio(chunk);
+      }
+    } finally {
+      if (!connection.isClosed) {
+        await connection.flushAudio();
+      }
+      await connection.endAudio();
+    }
+  })();
+
+  try {
+    for await (const event of connection) {
+      yield event;
+      if (event.type === 'transcription.done') break;
+      if (event.type === 'error') break;
+    }
+  } finally {
+    stopRequested = true;
+    await connection.close();
+    await sendAudioTask;
+    const maybeReturn = iterator.return;
+    if (typeof maybeReturn === 'function') {
+      await maybeReturn.call(iterator);
+    }
+  }
+}
+
 async function* singleUtteranceStream(buffer: Buffer): AsyncGenerator<Uint8Array> {
   yield new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
@@ -76,14 +219,8 @@ export function startStreaming(session: Session): void {
 
   session.sttStream.task = (async () => {
     try {
-      for await (const event of getClient().transcribeStream(
-        queue,
-        'voxtral-mini-transcribe-realtime-2602',
-        {
-          audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 },
-          targetStreamingDelayMs: STT_TARGET_DELAY_MS,
-        }
-      )) {
+      const connection = await acquireConnection(session);
+      for await (const event of transcribeWithConnection(connection, queue)) {
         if (event.type === 'transcription.text.delta') {
           const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
           if (delta) {
@@ -134,12 +271,14 @@ export async function stopStreaming(session: Session): Promise<void> {
 
   if (!finalTranscript) {
     setTurnState(session, 'LISTENING');
+    prewarmConnection(session);
     return;
   }
 
   const wordCount = finalTranscript.split(/\s+/).filter(Boolean).length;
   if (wordCount < 2 || !canStartBossReply(session)) {
     setTurnState(session, 'LISTENING');
+    prewarmConnection(session);
     return;
   }
 
@@ -149,6 +288,7 @@ export async function stopStreaming(session: Session): Promise<void> {
   setTurnState(session, 'AI_SPEAKING');
   void synthesizeBossVoice(session, bossResponse.taunt);
   session.partialTranscript = '';
+  prewarmConnection(session);
 }
 
 export async function transcribeAndRespond(session: Session, utteranceBuffer: Buffer): Promise<void> {
@@ -167,14 +307,8 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   let sawDelta = false;
 
   try {
-    for await (const event of getClient().transcribeStream(
-      singleUtteranceStream(utteranceBuffer),
-      'voxtral-mini-transcribe-realtime-2602',
-      {
-        audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 },
-        targetStreamingDelayMs: STT_TARGET_DELAY_MS,
-      }
-    )) {
+    const connection = await acquireConnection(session);
+    for await (const event of transcribeWithConnection(connection, singleUtteranceStream(utteranceBuffer))) {
       if (event.type === 'transcription.text.delta') {
         const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
         if (delta) {
@@ -201,24 +335,28 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
       if (event.type === 'error') {
         console.warn('[stt] Voxtral error event:', event);
         setTurnState(session, 'LISTENING');
+        prewarmConnection(session);
         return;
       }
     }
   } catch (err) {
     console.warn('[stt] Voxtral stream error:', err);
     setTurnState(session, 'LISTENING');
+    prewarmConnection(session);
     return;
   }
 
   if (!finalTranscript) {
     console.warn('[stt] empty transcript');
     setTurnState(session, 'LISTENING');
+    prewarmConnection(session);
     return;
   }
 
   const wordCount = finalTranscript.split(/\s+/).filter(Boolean).length;
   if (wordCount < 2 || !canStartBossReply(session)) {
     setTurnState(session, 'LISTENING');
+    prewarmConnection(session);
     return;
   }
 
@@ -228,4 +366,5 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   setTurnState(session, 'AI_SPEAKING');
   void synthesizeBossVoice(session, bossResponse.taunt);
   session.partialTranscript = '';
+  prewarmConnection(session);
 }
