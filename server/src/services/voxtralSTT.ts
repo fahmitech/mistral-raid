@@ -196,12 +196,13 @@ export function startStreaming(session: Session): void {
   if (session.sttStream) return;
 
   const queue = new AudioChunkQueue();
-  session.sttStream = { queue, task: null, finalTranscript: '' };
+  const stt = { queue, task: null as Promise<void> | null, finalTranscript: '' };
+  session.sttStream = stt;
   setTurnState(session, 'USER_SPEAKING');
   session.partialTranscript = '';
   session.stableTranscript = '';
 
-  session.sttStream.task = (async () => {
+  stt.task = (async () => {
     try {
       const connection = await acquireConnection(session);
       for await (const event of transcribeWithConnection(connection, queue)) {
@@ -218,9 +219,7 @@ export function startStreaming(session: Session): void {
           const finalTranscript = session.partialTranscript.trim();
           session.stableTranscript = finalTranscript;
           session.lastSpeechEndTime = Date.now();
-          if (session.sttStream) {
-            session.sttStream.finalTranscript = finalTranscript;
-          }
+          stt.finalTranscript = finalTranscript;
           if (ENABLE_CAPTIONS) {
             sendToClient(session, { type: 'captions_final', payload: { text: finalTranscript } });
           }
