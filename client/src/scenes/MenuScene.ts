@@ -206,6 +206,11 @@ export class MenuScene extends Phaser.Scene {
         action: () => this.startScene('LevelScene', { continue: true }),
       },
       {
+        label: 'Arena Demo',
+        enabled: true,
+        action: () => this.startScene('ArenaScene'),
+      },
+      {
         label: 'Options',
         enabled: true,
         action: () => this.startScene('OptionsScene'),

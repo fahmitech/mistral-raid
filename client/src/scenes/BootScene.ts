@@ -70,7 +70,7 @@ export class BootScene extends Phaser.Scene {
     this.aliasMissingFrames();
     this.createAnimations();
     this.createWeaponAssets();
-    this.scene.start('ArenaScene');
+    this.scene.start('MenuScene');
   }
 
   private createAnimations(): void {

@@ -31,6 +31,7 @@ interface SimpleProjectile {
 export class ArenaScene extends Phaser.Scene {
   private player!: Player;
   private boss!: BossEntity;
+  private playerSpriteKey = 'knight_m';
   private bossHp = 100;
   private bossMaxHp = 100;
   private arenaPhase: ArenaPhase = 'INTRO';
@@ -70,20 +71,33 @@ export class ArenaScene extends Phaser.Scene {
     const state = gs.getData();
     gs.setHP(state.playerMaxHP);
     const charConfig = CHARACTER_CONFIGS[state.character];
+    this.playerSpriteKey = charConfig.spriteKey;
     const weaponType = state.equippedWeapon;
     const weaponItem = ITEM_CONFIGS[weaponType];
     const weaponConfig = gs.getWeaponConfig(weaponType);
 
-    this.player = new Player(this, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 40, charConfig.spriteKey, weaponItem, weaponConfig);
+    const playerIdleKey = `${this.playerSpriteKey}_idle_anim_f0`;
+    const playerTexture = this.textures.exists(playerIdleKey) ? playerIdleKey : this.playerSpriteKey;
+    this.player = new Player(this, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 40, playerTexture, weaponItem, weaponConfig);
     this.add.existing(this.player);
     this.physics.add.existing(this.player);
     this.player.initPhysics();
+    if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
+      this.player.play(`${this.playerSpriteKey}_idle`);
+    }
 
     const bossConfig = BOSS_CONFIGS[BossType.BigDemon];
     this.boss = new BossEntity(this, INTERNAL_WIDTH / 2, 40, bossConfig);
     this.add.existing(this.boss);
     this.physics.add.existing(this.boss);
     this.boss.setCollideWorldBounds(true);
+    const bossIdleKey = `${bossConfig.spriteKey}_idle_anim_f0`;
+    if (this.textures.exists(bossIdleKey)) {
+      this.boss.setTexture(bossIdleKey);
+    }
+    if (this.anims.exists(`${bossConfig.spriteKey}_idle`)) {
+      this.boss.play(`${bossConfig.spriteKey}_idle`);
+    }
     this.bossHp = bossConfig.hp;
     this.bossMaxHp = bossConfig.hp;
 
@@ -290,12 +304,18 @@ export class ArenaScene extends Phaser.Scene {
       this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
       this.player.updateFacing(move);
       if (move.x !== 0) this.player.setFlipX(move.x < 0);
+      if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
+        this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
+      }
       if (time - this.lastFootstepAt > 200) {
         this.lastFootstepAt = time;
         AudioManager.playSFX(this, 'footstep');
       }
     } else {
       this.player.setVelocity(0, 0);
+      if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
+        this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
+      }
     }
 
     const pointer = this.input.activePointer;
