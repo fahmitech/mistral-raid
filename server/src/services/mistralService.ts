@@ -7,7 +7,17 @@ import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+let client: Mistral | null = null;
+
+function getClient(): Mistral {
+  if (client) return client;
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error('MISTRAL_API_KEY is not set');
+  }
+  client = new Mistral({ apiKey });
+  return client;
+}
 
 const ARCHITECT_SYSTEM_PROMPT = `You are THE ARCHITECT, a sadistic AI Game Master in a boss fight video game. You analyze
 player telemetry data and design personalized attack mechanics to exploit their weaknesses.
@@ -158,7 +168,7 @@ export async function generateBossReply(
     if (session) session.activeLLMAbort = controller;
     const timer = setTimeout(() => controller.abort(), overrideTimeout ?? timeout);
     try {
-      const response = await client.chat.complete(
+      const response = await getClient().chat.complete(
         {
           model,
           messages: [

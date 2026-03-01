@@ -12,7 +12,17 @@ const DIRECTOR_SYSTEM_PROMPT = `You are the AI Dungeon Director for a boss fight
 
 Respond with JSON only. Be decisive — always pick a bias and a delta.`;
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+let client: Mistral | null = null;
+
+function getClient(): Mistral {
+  if (client) return client;
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error('MISTRAL_API_KEY is not set');
+  }
+  client = new Mistral({ apiKey });
+  return client;
+}
 
 export function startDirector(session: Session): void {
   if (!ENABLE_DIRECTOR) return;
@@ -22,7 +32,7 @@ export function startDirector(session: Session): void {
     const t = session.latestTelemetrySummary;
     if (!t) return;
     try {
-      const response = await client.chat.complete({
+      const response = await getClient().chat.complete({
         model: 'mistral-small-latest',
         messages: [
           { role: 'system', content: DIRECTOR_SYSTEM_PROMPT },

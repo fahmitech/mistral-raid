@@ -9,7 +9,17 @@ const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_CAPTIONS = process.env.ENABLE_CAPTIONS !== 'false';
 const STT_TARGET_DELAY_MS = Number(process.env.STT_TARGET_DELAY_MS ?? 160);
 
-const client = new RealtimeTranscription({ apiKey: process.env.MISTRAL_API_KEY });
+let client: RealtimeTranscription | null = null;
+
+function getClient(): RealtimeTranscription {
+  if (client) return client;
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) {
+    throw new Error('MISTRAL_API_KEY is not set');
+  }
+  client = new RealtimeTranscription({ apiKey });
+  return client;
+}
 
 async function* singleUtteranceStream(buffer: Buffer): AsyncGenerator<Uint8Array> {
   yield new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -27,7 +37,7 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   let finalTranscript = '';
 
   try {
-    for await (const event of client.transcribeStream(
+    for await (const event of getClient().transcribeStream(
       singleUtteranceStream(utteranceBuffer),
       'voxtral-mini-transcribe-realtime-2602',
       { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
