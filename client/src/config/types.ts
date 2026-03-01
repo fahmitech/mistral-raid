@@ -88,6 +88,7 @@ export enum ItemType {
   FlaskYellow = 'f_yellow',
   FlaskBigRed = 'f_big_red',
   FlaskBigBlue = 'f_big_blue',
+  PoisonVial = 'f_poison',
   Coin = 'coin',
   Chest = 'chest',
   GoldenChest = 'golden_chest',
@@ -100,6 +101,7 @@ export enum ItemEffect {
   Shield = 'shield',
   MultiShot = 'multishot',
   AddCoins = 'coins',
+  RestoreDash = 'restore_dash',
 }
 
 export enum ItemRarity {
@@ -168,6 +170,7 @@ export interface GameStateData {
   inventory: InventorySlot[];
   hasShield: boolean;
   isMultiShot: boolean;
+  dashCharges: number;
 }
 
 export interface SaveData {

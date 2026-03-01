@@ -1,6 +1,7 @@
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { ITEM_CONFIGS } from '../config/items';
 import { WEAPON_CONFIGS } from '../config/weapons';
+import { DASH_MAX_CHARGES } from '../config/constants';
 import {
   CharacterType,
   GameStateData,
@@ -65,6 +66,7 @@ export class GameState {
     this.data.playerDamage = stats.damage;
     this.data.playerFireRate = stats.fireRate;
     this.data.equippedWeapon = ItemType.WeaponSword;
+    this.data.dashCharges = DASH_MAX_CHARGES;
   }
 
   loadSave(save: { character: CharacterType; state: GameStateData }): void {
@@ -74,6 +76,10 @@ export class GameState {
       inventory: save.state.inventory.map((slot) => ({ ...slot })),
     };
     this.data.character = save.character;
+    if (typeof this.data.dashCharges !== 'number') {
+      this.data.dashCharges = DASH_MAX_CHARGES;
+    }
+    this.data.dashCharges = Math.max(0, Math.min(DASH_MAX_CHARGES, this.data.dashCharges));
   }
 
   setHP(hp: number): void {
@@ -166,6 +172,31 @@ export class GameState {
     this.data.equippedWeapon = type;
   }
 
+  getDashCharges(): number {
+    if (typeof this.data.dashCharges !== 'number') {
+      this.data.dashCharges = DASH_MAX_CHARGES;
+    }
+    return this.data.dashCharges;
+  }
+
+  canDash(): boolean {
+    return this.getDashCharges() > 0;
+  }
+
+  spendDashCharge(): boolean {
+    if (!this.canDash()) {
+      return false;
+    }
+    this.data.dashCharges -= 1;
+    return true;
+  }
+
+  restoreDashCharges(amount: number): number {
+    const next = Math.max(0, Math.min(DASH_MAX_CHARGES, this.getDashCharges() + Math.max(0, amount)));
+    this.data.dashCharges = next;
+    return next;
+  }
+
   getEquippedWeaponType(): ItemType {
     return this.data.equippedWeapon;
   }
@@ -209,6 +240,7 @@ export class GameState {
       inventory: [],
       hasShield: false,
       isMultiShot: false,
+      dashCharges: DASH_MAX_CHARGES,
     };
   }
 

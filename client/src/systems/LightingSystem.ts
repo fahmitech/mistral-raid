@@ -6,8 +6,8 @@ export class LightingSystem {
   private overlay: Phaser.GameObjects.RenderTexture;
   private lightTextureKey = 'light-gradient';
   private lightSprite: Phaser.GameObjects.Image;
-  private fogAlpha = 0.65;
-  private fogColor = 0x060810;
+  private fogAlpha = 0.60;
+  private fogColor = 0x0f0a08;
   private torchPositions: { x: number; y: number }[] = [];
   private softEdgePx = 14;
 

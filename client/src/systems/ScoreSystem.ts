@@ -5,7 +5,7 @@ export class ScoreSystem {
     const label = scene.add
       .text(x, y, text, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '8px',
         color,
       })
       .setOrigin(0.5, 1);

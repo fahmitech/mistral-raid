@@ -18,3 +18,175 @@
 .preview-animation-hammer { animation: hammer-smash 0.8s infinite ease-in; }
 .preview-animation-katana { animation: fireball-fly 1s infinite ease-out; }
 /* Add bomb animation similarly */
+
+.boss-dialogue-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: min(760px, 96vw);
+  pointer-events: none;
+  z-index: 50;
+}
+
+.boss-dialogue-stack {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.boss-dialogue-box {
+  width: 100%;
+  max-width: 540px;
+  position: relative;
+  border-radius: 4px;
+  padding: 6px 12px 10px;
+  border: 2px solid #1a0d16;
+  background: rgba(6, 2, 6, 0.9);
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.55);
+}
+
+.boss-dialogue-box--boss {
+  border-color: #2a0808;
+  background: rgba(12, 4, 6, 0.93);
+}
+
+.boss-dialogue-box--player {
+  border-color: #0a1a30;
+  background: rgba(4, 8, 16, 0.93);
+}
+
+.boss-dialogue-gem {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  opacity: 0.4;
+}
+
+.boss-dialogue-gem--boss { background: #ff4444; }
+.boss-dialogue-gem--player { background: #4488cc; }
+.boss-dialogue-gem--tl { top: -2px; left: -2px; }
+.boss-dialogue-gem--tr { top: -2px; right: -2px; }
+.boss-dialogue-gem--bl { bottom: -2px; left: -2px; }
+.boss-dialogue-gem--br { bottom: -2px; right: -2px; }
+
+.boss-dialogue-name {
+  font-size: 6px;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.boss-dialogue-name--boss { color: #ff6666; }
+.boss-dialogue-name--player { color: #7fb9ff; }
+
+.boss-dialogue-text {
+  font-size: 8px;
+  line-height: 1.9;
+  margin: 0;
+  min-height: 16px;
+}
+
+.boss-dialogue-text--boss { color: #ff8877; }
+.boss-dialogue-text--player { color: #8dc1ee; }
+
+.boss-dialogue-caret {
+  display: inline-block;
+  width: 5px;
+  height: 7px;
+  background: currentColor;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+.boss-dialogue-caret--blink { animation: boss-dialogue-caret-blink 1s step-end infinite; }
+
+@keyframes boss-dialogue-caret-blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.boss-dialogue-waveform {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  width: 16px;
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+}
+
+.boss-dialogue-waveform--boss { right: 8px; }
+
+.boss-dialogue-waveform-bar {
+  width: 2px;
+  background: #ff4444;
+  opacity: 0.8;
+  transition: height 0.08s;
+  height: 2px;
+}
+
+.boss-dialogue-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.boss-dialogue-mic {
+  width: 20px;
+  height: 18px;
+  border-radius: 2px;
+  border: 1px solid #122030;
+  background: #060a14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.boss-dialogue-mic--active {
+  border-color: #4488cc;
+  background: #0b1624;
+}
+
+.boss-dialogue-divider {
+  width: 1px;
+  height: 16px;
+  background: #122030;
+}
+
+.boss-dialogue-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.boss-dialogue-input-prompt {
+  font-size: 7px;
+  color: #0a1a30;
+}
+
+.boss-dialogue-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 7px;
+  color: #7fb9ff;
+  font-family: 'Press Start 2P', monospace;
+  caret-color: #7fb9ff;
+}
+
+.boss-dialogue-input::placeholder {
+  color: #1a3050;
+}
+
+.boss-dialogue-send {
+  font-size: 6px;
+  color: #7fb9ff;
+  cursor: pointer;
+}

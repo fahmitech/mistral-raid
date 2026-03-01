@@ -46,7 +46,7 @@ const config: Phaser.Types.Core.GameConfig = {
     VictoryScene,
     AudioDebugOverlay,
   ],
-  backgroundColor: '#0a0a1a',
+  backgroundColor: '#0f0a08',
   audio: { disableWebAudio: false },
 };
 

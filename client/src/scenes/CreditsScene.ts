@@ -5,6 +5,11 @@ export class CreditsScene extends Phaser.Scene {
   private container!: Phaser.GameObjects.Container;
   private stars: Phaser.GameObjects.Rectangle[] = [];
   private scrollHeight = 0;
+  private readonly lineStyles = {
+    title: { fontSize: '14px', color: '#fff7c2' },
+    section: { fontSize: '10px', color: '#b5c7ff' },
+    body: { fontSize: '8px', color: '#f8fbff' },
+  } as const;
 
   constructor() {
     super('CreditsScene');
@@ -17,10 +22,10 @@ export class CreditsScene extends Phaser.Scene {
     this.createScroll();
 
     const back = this.add
-      .text(160, 168, '[ BACK TO MENU ]', {
+      .text(160, 170, '[ BACK TO MENU ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#cccccc',
+        fontSize: '10px',
+        color: '#dfe5ff',
       })
       .setOrigin(0.5, 1)
       .setInteractive({ useHandCursor: true });
@@ -33,14 +38,14 @@ export class CreditsScene extends Phaser.Scene {
 
   update(): void {
     this.stars.forEach((star) => {
-      star.y += 0.2;
+      star.y += 0.35;
       if (star.y > 180) {
         star.y = 0;
       }
     });
 
     if (this.container) {
-      this.container.y -= 0.2;
+      this.container.y -= 0.35;
       if (this.container.y + this.scrollHeight < -20) {
         this.exit();
       }
@@ -77,36 +82,56 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   private createScroll(): void {
-    const lines = [
-      'MISTRAL RAID',
-      '',
-      'Design & Code',
-      'Mistral Raid Team',
-      '',
-      'Art Assets',
-      '0x72 Dungeon Tileset',
-      '',
-      'Fonts',
-      'Press Start 2P',
-      '',
-      'Special Thanks',
-      'Mistral Hackathon',
-      '',
-      '2026',
+    const credits: Array<{ text: string; variant: 'title' | 'section' | 'body' } | { spacer: boolean }> = [
+      { text: 'MISTRAL RAID', variant: 'title' },
+      { spacer: true },
+      { text: 'DESIGN & CODE', variant: 'section' },
+      { text: 'Mistral Raid Team', variant: 'body' },
+      { spacer: true },
+      { text: 'ART', variant: 'section' },
+      { text: '0x72 Dungeon Tileset', variant: 'body' },
+      { spacer: true },
+      { text: 'FONTS', variant: 'section' },
+      { text: 'Press Start 2P', variant: 'body' },
+      { spacer: true },
+      { text: 'SPECIAL THANKS', variant: 'section' },
+      { text: 'Mistral Hackathon', variant: 'body' },
+      { spacer: true },
+      { text: '2026', variant: 'body' },
     ];
 
-    const texts = lines.map((line, idx) =>
-      this.add
-        .text(160, idx * 12, line, {
-          fontFamily: '"Press Start 2P"',
-          fontSize: idx === 0 ? '8px' : '5px',
-          color: '#ffffff',
-        })
-        .setOrigin(0.5)
-    );
+    const spacing = {
+      title: 28,
+      section: 22,
+      body: 16,
+      spacer: 14,
+    };
 
-    this.scrollHeight = lines.length * 12;
-    this.container = this.add.container(0, 200, texts);
+    let currentY = 0;
+    const texts: Phaser.GameObjects.Text[] = [];
+
+    credits.forEach((entry) => {
+      if ('spacer' in entry) {
+        currentY += spacing.spacer;
+        return;
+      }
+
+      const style = this.lineStyles[entry.variant];
+      const text = this.add
+        .text(160, currentY, entry.text, {
+          fontFamily: '"Press Start 2P"',
+          fontSize: style.fontSize,
+          color: style.color,
+        })
+        .setShadow(0, 0, '#000000', 6, false, true)
+        .setOrigin(0.5);
+
+      texts.push(text);
+      currentY += spacing[entry.variant];
+    });
+
+    this.scrollHeight = currentY;
+    this.container = this.add.container(0, 190, texts);
   }
 
   private exit(): void {

@@ -93,6 +93,14 @@ export const ITEM_CONFIGS: Record<ItemType, ItemConfig> = {
     rarity: ItemRarity.Rare,
     duration: 10000,
   },
+  [ItemType.PoisonVial]: {
+    type: ItemType.PoisonVial,
+    name: 'Poison Vial',
+    sprite: 'flask_big_green',
+    effect: ItemEffect.RestoreDash,
+    value: 1,
+    rarity: ItemRarity.Uncommon,
+  },
   [ItemType.Coin]: {
     type: ItemType.Coin,
     name: 'Gold Coin',
@@ -139,6 +147,7 @@ export const WEAPON_LABELS: Record<ItemType, string> = {
   [ItemType.FlaskYellow]: 'FLASK',
   [ItemType.FlaskBigRed]: 'FLASK',
   [ItemType.FlaskBigBlue]: 'FLASK',
+  [ItemType.PoisonVial]: 'POISON',
   [ItemType.Coin]: 'COIN',
   [ItemType.Chest]: 'CHEST',
   [ItemType.GoldenChest]: 'CHEST',

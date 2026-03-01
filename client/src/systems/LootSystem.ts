@@ -8,6 +8,7 @@ const DROP_TABLE: { type: ItemType; weight: number }[] = [
   { type: ItemType.FlaskBlue, weight: 12 },
   { type: ItemType.FlaskGreen, weight: 8 },
   { type: ItemType.FlaskYellow, weight: 8 },
+  { type: ItemType.PoisonVial, weight: 6 },
   { type: ItemType.WeaponSword, weight: 5 },
   { type: ItemType.WeaponDagger, weight: 4 },
   { type: ItemType.WeaponHammer, weight: 3 },
@@ -22,6 +23,7 @@ const CHEST_POOL: ItemType[] = [
   ItemType.FlaskGreen,
   ItemType.WeaponHammer,
   ItemType.WeaponSword,
+  ItemType.PoisonVial,
 ];
 
 const totalWeight = DROP_TABLE.reduce((sum, entry) => sum + entry.weight, 0);

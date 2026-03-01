@@ -19,12 +19,28 @@ export class PauseScene extends Phaser.Scene {
     this.scene.pause('LevelScene');
     AudioManager.get().playSFX('pause_whoosh', 0.7);
 
-    this.add.rectangle(160, 90, 320, 180, 0x000000, 0.55).setScrollFactor(0);
+    this.add.rectangle(160, 90, 320, 180, 0x000000, 0.65).setScrollFactor(0);
     const panel = this.add.graphics();
-    panel.fillStyle(0x0a0f1e, 0.92);
-    panel.fillRoundedRect(72, 46, 176, 96, 6);
-    panel.lineStyle(1, 0x224466, 0.9);
-    panel.strokeRoundedRect(72, 46, 176, 96, 6);
+    panel.fillStyle(0x0a0f1e, 0.95);
+    panel.fillRoundedRect(60, 36, 200, 112, 8);
+    panel.lineStyle(2, 0x263d6a, 0.95);
+    panel.strokeRoundedRect(60, 36, 200, 112, 8);
+
+    this.add
+      .text(160, 52, 'PAUSED', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '12px',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(160, 70, 'TAKE A BREATH', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        color: '#9fb4ff',
+      })
+      .setOrigin(0.5);
 
     this.items = [
       {
@@ -61,12 +77,17 @@ export class PauseScene extends Phaser.Scene {
       },
     ];
 
+    const startY = 96;
+    const spacing = 24;
+
     this.items.forEach((item, idx) => {
       const text = this.add
-        .text(160, 62 + idx * 18, item.label.toUpperCase(), {
+        .text(160, startY + idx * spacing, `[ ${item.label.toUpperCase()} ]`, {
           fontFamily: '"Press Start 2P"',
-          fontSize: '6px',
-          color: '#aabbcc',
+          fontSize: '10px',
+          color: '#b5c7ff',
+          stroke: '#000000',
+          strokeThickness: 4,
         })
         .setOrigin(0.5);
       item.text = text;
@@ -105,7 +126,11 @@ export class PauseScene extends Phaser.Scene {
   private refresh(): void {
     this.items.forEach((item, idx) => {
       if (!item.text) return;
-      item.text.setColor(idx === this.selectedIndex ? '#ffdd00' : '#aabbcc');
+      const active = idx === this.selectedIndex;
+      item.text
+        .setColor(active ? '#fff799' : '#b5c7ff')
+        .setScale(active ? 1.05 : 1)
+        .setAlpha(active ? 1 : 0.85);
     });
   }
 

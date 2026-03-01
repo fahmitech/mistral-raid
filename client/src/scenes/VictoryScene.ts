@@ -19,9 +19,9 @@ export class VictoryScene extends Phaser.Scene {
     gfx.fillRect(0, 0, 320, 180);
 
     const title = this.add
-      .text(160, 26, 'VICTORY', {
+      .text(160, 28, 'VICTORY', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '12px',
+        fontSize: '16px',
         color: '#ffffff',
       })
       .setOrigin(0.5);
@@ -35,49 +35,52 @@ export class VictoryScene extends Phaser.Scene {
     });
 
     this.add
-      .text(160, 44, 'The Watcher has been destroyed.', {
+      .text(160, 52, 'THE WATCHER HAS BEEN DESTROYED', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#cccccc',
+        fontSize: '9px',
+        color: '#c7d8ff',
       })
       .setOrigin(0.5);
 
     const state = GameState.get().getData();
     const inventoryCount = state.inventory.reduce((sum, slot) => sum + slot.qty, 0);
 
+    const statsStartY = 88;
+    const statSpacing = 18;
+
     this.add
-      .text(160, 70, `FINAL SCORE: ${state.score}`, {
+      .text(160, statsStartY, `FINAL SCORE: ${state.score}`, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '10px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
     this.add
-      .text(160, 82, `COINS: ${state.coins}`, {
+      .text(160, statsStartY + statSpacing, `COINS: ${state.coins}`, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '10px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
     this.add
-      .text(160, 94, `DAMAGE: ${state.playerDamage.toFixed(1)}`, {
+      .text(160, statsStartY + statSpacing * 2, `DAMAGE: ${state.playerDamage.toFixed(1)}`, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '10px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
     this.add
-      .text(160, 106, `INVENTORY: ${inventoryCount}`, {
+      .text(160, statsStartY + statSpacing * 3, `INVENTORY: ${inventoryCount}`, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '10px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
 
     const button = this.add
-      .text(160, 138, '[ PLAY AGAIN ]', {
+      .text(160, 152, '[ PLAY AGAIN ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
+        fontSize: '10px',
         color: '#00ffcc',
       })
       .setOrigin(0.5)

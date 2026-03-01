@@ -81,11 +81,12 @@ export class MenuScene extends Phaser.Scene {
 
   private createBackground(): void {
     const gfx = this.add.graphics();
+    // Warmer gradient from dark brown to slightly reddish-brown.
     for (let y = 0; y < 180; y += 1) {
       const t = y / 180;
-      const r = Math.round(2 + (12 - 2) * t);
-      const g = Math.round(0 + (8 - 0) * t);
-      const b = Math.round(18 + (46 - 18) * t);
+      const r = Math.round(10 + (20 - 10) * t);
+      const g = Math.round(6 + (12 - 6) * t);
+      const b = Math.round(4 + (10 - 4) * t);
       gfx.fillStyle((r << 16) + (g << 8) + b, 1);
       gfx.fillRect(0, y, 320, 1);
     }
@@ -97,13 +98,14 @@ export class MenuScene extends Phaser.Scene {
         Phaser.Math.Between(0, 180),
         radius * 2,
         radius * 2,
-        0x1a3355,
+        0x2a1a10,
         Phaser.Math.FloatBetween(0.03, 0.08)
       );
       this.fogBlobs.push(blob);
     }
 
-    const colors =[0x334499, 0x2255bb, 0x5522aa, 0x1199bb];
+    // Warmer particle colors.
+    const colors =[0x994433, 0xbb5522, 0xaa4422, 0xcc6633];
     for (let i = 0; i < 55; i += 1) {
       const size = Phaser.Math.FloatBetween(0.5, 2.0);
       const sprite = this.add.ellipse(

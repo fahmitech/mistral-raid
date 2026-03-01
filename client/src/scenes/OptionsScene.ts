@@ -43,9 +43,9 @@ export class OptionsScene extends Phaser.Scene {
     }
 
     this.add
-      .text(160, 24, 'OPTIONS', {
+      .text(160, 26, 'OPTIONS', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
+        fontSize: '12px',
         color: '#ffffff',
       })
       .setOrigin(0.5);
@@ -59,18 +59,18 @@ export class OptionsScene extends Phaser.Scene {
 
     this.rows.forEach((row, idx) => {
       row.text = this.add
-        .text(80, 52 + idx * 16, '', {
+        .text(80, 64 + idx * 18, '', {
           fontFamily: '"Press Start 2P"',
-          fontSize: '5px',
+          fontSize: '8px',
           color: '#aabbcc',
         })
         .setOrigin(0, 0.5);
     });
 
     const resetText = this.add
-      .text(160, 130, '[ RESET SAVE DATA ]', {
+      .text(160, 150, '[ RESET SAVE DATA ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '8px',
         color: '#ff6666',
       })
       .setOrigin(0.5, 0.5)
@@ -78,9 +78,9 @@ export class OptionsScene extends Phaser.Scene {
     resetText.on('pointerdown', () => this.resetSave());
 
     const backText = this.add
-      .text(160, 150, '[ BACK ]', {
+      .text(160, 168, '[ BACK ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
+        fontSize: '8px',
         color: '#cccccc',
       })
       .setOrigin(0.5, 0.5)
@@ -88,12 +88,12 @@ export class OptionsScene extends Phaser.Scene {
     backText.on('pointerdown', () => this.back());
 
     this.toast = this.add
-      .text(160, 166, '', {
+      .text(160, 180, '', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
+        fontSize: '9px',
         color: '#ffffff',
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5, 1);
 
     this.refresh();
 

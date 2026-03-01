@@ -163,51 +163,52 @@ export class InventoryUI {
 
     this.container.innerHTML = `
       <div style="
-        width: min(980px, 100%);
-        background: #2a2a35;
-        box-shadow: 0 0 0 4px #000;
-        padding: 6px;
+        width: min(720px, 94%);
+        background:#0b0f1d;
+        border:3px solid #060911;
+        box-shadow:0 0 0 4px #020409, 0 18px 40px rgba(0,0,0,0.6);
+        padding:10px;
+        font-family:'Press Start 2P', monospace;
+        color:#d5e0ff;
       ">
-        <div style="
-          background:#1e1e26;
-          padding: 22px;
-          display:flex;
-          gap:18px;
-          flex-wrap:wrap;
-        ">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;">
           <!-- Left -->
-          <div style="flex: 1 1 360px; min-width: 280px;">
-            <div style="margin-bottom: 18px;">
-              <div style="font-family:'Press Start 2P', cursive; font-size:18px; color:#facc15; text-transform:uppercase; margin-bottom:6px;">
+          <div style="flex:1 1 260px;min-width:240px;">
+            <div style="margin-bottom:12px;">
+              <div style="font-size:14px;color:#facc15;text-transform:uppercase;letter-spacing:1px;">
                 Inventory
               </div>
-              <div style="font-size:13px; color: rgba(148,163,184,0.95); text-transform:uppercase; letter-spacing: 2px;">
+              <div style="font-size:8px;color:rgba(148,163,184,0.95);text-transform:uppercase;letter-spacing:2px;">
                 Select Your Arsenal
               </div>
             </div>
-
-            <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
               ${WEAPONS.map((w) => {
                 const frameUrl = getIconSrc(w.frameKey);
                 const active = w.type === this.selectedId;
                 return `
-                  <button data-weapon="${w.type}" style="
-                    aspect-ratio: 1 / 1;
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    border:2px solid ${active ? "#facc15" : "rgba(255,255,255,0.12)"};
-                    background: ${active ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.20)"};
-                    transform: ${active ? "scale(1.03)" : "scale(1)"};
-                    transition: 150ms ease;
-                    cursor:pointer;
-                  ">
-                    ${
-                      frameUrl
-                        ? `<img src="${frameUrl}" alt="${w.name}" style="width:42px;height:42px;image-rendering:pixelated;" />`
-                        : `<div style="color:${active ? "#fff" : "#94a3b8"};">${w.name}</div>`
-                    }
-                  </button>
+                <button data-weapon="${w.type}" style="
+                  aspect-ratio:1/1;
+                  position:relative;
+                  display:flex;
+                  flex-direction:column;
+                  align-items:center;
+                  justify-content:center;
+                  gap:4px;
+                  border:2px solid ${active ? "#66e7ff" : "#1a2338"};
+                  background:${active ? "#111a30" : "#060b16"};
+                  border-radius:4px;
+                  padding:4px;
+                  cursor:pointer;
+                  box-shadow:${active ? "0 0 0 2px #0b1528 inset" : "none"};
+                ">
+                  ${
+                    frameUrl
+                      ? `<img src="${frameUrl}" alt="${w.name}" style="width:38px;height:38px;image-rendering:pixelated;" />`
+                      : `<div style="font-size:9px;color:${active ? "#ffffff" : "#94a3b8"};">${w.name}</div>`
+                  }
+                  <span style="font-size:7px;color:${active ? "#f5faff" : "#7487b3"};text-transform:uppercase;">${w.name}</span>
+                </button>
                 `;
               }).join("")}
             </div>
@@ -215,59 +216,53 @@ export class InventoryUI {
 
           <!-- Right -->
           <div style="
-            flex: 1 1 360px;
-            min-width: 280px;
-            background: rgba(0,0,0,0.25);
-            border: 1px solid rgba(255,255,255,0.08);
-            padding: 18px;
+            flex:1 1 260px;
+            min-width:240px;
+            background:#060a15;
+            border:2px solid #1b2843;
+            padding:12px;
           ">
             ${(() => {
               const previewSrc = getIconSrc(weapon.frameKey);
               return `
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:14px;">
-              <div>
-                <div style="font-family:'Press Start 2P', cursive; font-size:14px; text-transform:uppercase; margin-bottom:6px;">
-                  ${weapon.name}
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+                <div>
+                  <div style="font-size:11px;text-transform:uppercase;margin-bottom:4px;">
+                    ${weapon.name}
+                  </div>
+                  <div style="font-size:8px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
+                    ${weapon.category}
+                  </div>
                 </div>
-                <div style="font-size:12px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
-                  ${weapon.category}
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;background:#030712;border:2px solid #111a2f;">
+                  ${previewSrc ? `<img src="${previewSrc}" alt="${weapon.name}" style="width:36px;height:36px;image-rendering:pixelated;" />` : ""}
                 </div>
               </div>
-                <div style="
-                  width:64px;height:64px;
-                  display:flex;align-items:center;justify-content:center;
-                  background: linear-gradient(135deg, ${weapon.gradientFrom}, ${weapon.gradientTo});
-                  box-shadow: 0 10px 20px rgba(0,0,0,0.45);
-                ">
-                ${previewSrc ? `<img src="${previewSrc}" alt="${weapon.name}" style="width:48px;height:48px;image-rendering:pixelated;" />` : ""}
-              </div>
-            </div>
               `;
             })()}
 
             ${(() => {
               const largeSrc = getIconSrc(weapon.frameKey);
               return `
-            <div style="
-              height: 120px;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              background: rgba(0,0,0,0.35);
-              border: 1px solid rgba(255,255,255,0.10);
-              margin-bottom: 14px;
-              overflow:hidden;
-            ">
-              ${largeSrc ? `<img src="${largeSrc}" alt="${weapon.name}" style="width:72px;height:72px;image-rendering:pixelated;" />` : ""}
-            </div>
-            `;
+              <div style="
+                height:80px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:#02060f;
+                border:2px solid #111a2f;
+                margin-bottom:12px;
+              ">
+                ${largeSrc ? `<img src="${largeSrc}" alt="${weapon.name}" style="width:58px;height:58px;image-rendering:pixelated;" />` : ""}
+              </div>
+              `;
             })()}
 
-            <div style="font-size:14px; color: rgba(226,232,240,0.9); line-height: 1.4; margin-bottom: 10px;">
+            <div style="font-size:9px;line-height:1.6;margin-bottom:8px;">
               ${weapon.description}
             </div>
 
-            <div style="font-size:12px;color: rgba(251,191,36,0.95); margin-bottom: 10px;">
+            <div style="font-size:8px;color:rgba(251,191,36,0.95);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">
               ${specialKey}
             </div>
 
@@ -275,27 +270,28 @@ export class InventoryUI {
 
             <button data-equip="true" style="
               width:100%;
-              margin-top:16px;
-              padding: 14px 12px;
-              background: #facc15;
-              border: none;
-              font-weight: 800;
-              text-transform: uppercase;
-              letter-spacing: 2px;
+              margin-top:14px;
+              padding:10px;
+              background:#facc15;
+              border:none;
+              text-transform:uppercase;
+              letter-spacing:1px;
               cursor:pointer;
-              box-shadow: 0 4px 0 0 #b45309;
+              box-shadow:0 3px 0 0 #b45309;
+              font-size:10px;
             ">Equip Weapon</button>
 
             <button data-close="true" style="
               width:100%;
-              margin-top:10px;
-              padding: 12px;
-              background: rgba(255,255,255,0.08);
-              border: 1px solid rgba(255,255,255,0.12);
-              color: white;
-              text-transform: uppercase;
-              letter-spacing: 2px;
+              margin-top:8px;
+              padding:8px;
+              background:#050a16;
+              border:2px solid #111a2f;
+              color:#d5e0ff;
+              text-transform:uppercase;
+              letter-spacing:1px;
               cursor:pointer;
+              font-size:9px;
             ">Close</button>
           </div>
         </div>
@@ -326,13 +322,13 @@ export class InventoryUI {
       { label: "Count/Spread", value: `${config.projectileCount} / ${config.spreadDeg}°` },
     ];
     return `
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px;">
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px;">
         ${lines
           .map(
             (line) => `
-              <div style="background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);padding:8px;font-size:12px;">
-                <div style="text-transform:uppercase;color:#94a3b8;font-size:10px;">${line.label}</div>
-                <div style="color:#f8fafc;font-size:14px;font-weight:600;margin-top:4px;">${line.value}</div>
+              <div style="background:#030714;border:2px solid #0f1729;padding:6px;">
+                <div style="text-transform:uppercase;color:#8da2c0;font-size:7px;letter-spacing:1px;">${line.label}</div>
+                <div style="color:#f8fafc;font-size:11px;margin-top:4px;">${line.value}</div>
               </div>
             `
           )

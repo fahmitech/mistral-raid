@@ -129,6 +129,7 @@ LevelScene is the main game scene — a top-down dungeon crawler where the playe
 - Clamped to world bounds
 - Cooldown: 1500ms
 - Grants 180ms invincibility + 50% alpha flash
+- Charges: 7 per run; Poison Vials (auto-picked when stepped on) restore charges up to the cap.
 - **Visual**: 8 cyan ghost circles along dash path, fading over 160–336ms
 - Micro screen shake: 28ms, intensity 0.0025
 - Cannot dash during active invincibility (> 60ms remaining)

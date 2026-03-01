@@ -5,7 +5,7 @@ import { AudioDebugInfo, MusicMood } from '../types/AudioTypes';
 const PANEL_X = 4;
 const PANEL_Y = 4;
 const PANEL_W = 312;
-const PANEL_H = 200; // expanded to fit credit stats section
+const PANEL_H = 214; // expanded to fit credit stats section
 const FONT = '"Press Start 2P"';
 
 const SERVER_URL = 'http://localhost:8787';
@@ -51,10 +51,10 @@ export class AudioDebugOverlay extends Phaser.Scene {
     this.titleText = this.add
       .text(PANEL_X + PANEL_W / 2, PANEL_Y + 8, '🎵 AUDIO DEBUG  [F2]', {
         fontFamily: FONT,
-        fontSize: '5px',
+        fontSize: '10px',
         color: '#ffffff',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 4,
       })
       .setOrigin(0.5, 0)
       .setDepth(100);
@@ -65,7 +65,7 @@ export class AudioDebugOverlay extends Phaser.Scene {
         this.add
           .text(PANEL_X + 6, 0, '', {
             fontFamily: FONT,
-            fontSize: '4px',
+            fontSize: '8px',
             color: '#cccccc',
           })
           .setDepth(100)
@@ -99,7 +99,7 @@ export class AudioDebugOverlay extends Phaser.Scene {
 
     // ── Row layout ──────────────────────────────────────────────────────
     let row = 0;
-    const ROW_H = 9;
+    const ROW_H = 12;
     const startY = PANEL_Y + 20;
 
     const setText = (i: number, text: string, color = '#cccccc'): void => {
@@ -136,8 +136,8 @@ export class AudioDebugOverlay extends Phaser.Scene {
 
       this.lines[rowIdx]?.setText(`${label}`).setColor('#8899aa');
       // Value label on the right
-      const valText = this.add.text(barX + barW + 3, y + 1, valueStr, {
-        fontFamily: FONT, fontSize: '3px', color: '#ffffff',
+      const valText = this.add.text(barX + barW + 3, y - 1, valueStr, {
+        fontFamily: FONT, fontSize: '8px', color: '#ffffff',
       }).setDepth(101);
       // Auto-destroy after 1 frame — we redraw every frame so this is fine
       this.time.delayedCall(32, () => valText.destroy());
