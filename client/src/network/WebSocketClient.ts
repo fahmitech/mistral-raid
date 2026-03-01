@@ -21,23 +21,32 @@ class WebSocketClient {
 
     this.intentionallyClosed = false;
     this.ws = new WebSocket(this.url);
+    this.ws.binaryType = 'arraybuffer';
 
     this.ws.addEventListener('open', () => {
       this.retries = 0;
       this.emitStatus(true);
     });
 
-    this.ws.addEventListener('message', (event) => {
-      if (event.data instanceof Blob) {
-        // Server never sends binary blobs in this protocol.
-        return;
-      }
-
+    const handleTextMessage = (text: string) => {
       try {
-        const msg = JSON.parse(event.data as string) as ServerMessage;
+        const msg = JSON.parse(text) as ServerMessage;
         this.handlers.forEach((handler) => handler(msg));
       } catch (err) {
         console.warn('[ws] Failed to parse message', err);
+      }
+    };
+
+    this.ws.addEventListener('message', (event) => {
+      if (typeof event.data === 'string') {
+        handleTextMessage(event.data);
+        return;
+      }
+
+      if (event.data instanceof Blob) {
+        event.data.text().then((text) => handleTextMessage(text)).catch((err) => {
+          console.warn('[ws] Failed to read Blob message', err);
+        });
       }
     });
 

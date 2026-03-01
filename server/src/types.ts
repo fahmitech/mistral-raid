@@ -23,6 +23,11 @@ export interface Session {
   lastSpeechEndTime: number;        // ms since epoch — for pause detection
   lastBossSpeechTime: number;       // ms since epoch — for cooldown enforcement
   ws: WebSocket;
+  sttStream: {
+    queue: { push: (chunk: Uint8Array) => void; close: () => void };
+    task: Promise<void> | null;
+    finalTranscript: string;
+  } | null;
   // Director state
   directorInterval: ReturnType<typeof setInterval> | null;
   lastDirectorDecision: { difficultyDelta: number; enemyBias: string; reason: string } | null;
@@ -95,6 +100,8 @@ export type ServerToClientMessage =
   | { type: 'captions_partial'; payload: { text: string } }
   | { type: 'captions_final';   payload: { text: string } }
   | { type: 'BOSS_RESPONSE';    payload: BossResponse }
+  | { type: 'AUDIO_CHUNK';      payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_DONE';       payload: { format: 'mp3' | 'wav' | 'ogg' } }
   | { type: 'AUDIO_READY';      payload: { audioBase64: string; format: 'mp3' } }
   | { type: 'mechanics_update'; payload: MechanicConfig }
   | { type: 'director_update';  payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }

@@ -15,8 +15,11 @@ export function attachWebSocketServer(httpServer: http.Server): void {
 
     ws.on('message', (data: RawData, isBinary: boolean) => {
       if (isBinary) {
-        // Complete utterance PCM S16LE 16kHz from VAD onSpeechEnd
-        void voxtralSTT.transcribeAndRespond(session, data as Buffer);
+        // Streaming chunks if active; otherwise treat as full utterance
+        const handled = voxtralSTT.pushStreamingAudio(session, data as Buffer);
+        if (!handled) {
+          void voxtralSTT.transcribeAndRespond(session, data as Buffer);
+        }
       } else {
         let msg: ClientToServerMessage | null = null;
         try {
@@ -36,6 +39,11 @@ export function attachWebSocketServer(httpServer: http.Server): void {
             break;
           case 'vad_state':
             sessionManager.handleVadState(session, msg.payload.speaking);
+            if (msg.payload.speaking) {
+              voxtralSTT.startStreaming(session);
+            } else {
+              void voxtralSTT.stopStreaming(session);
+            }
             break;
           case 'ANALYZE':
             void mistralService.handleAnalyze(session, msg.payload);

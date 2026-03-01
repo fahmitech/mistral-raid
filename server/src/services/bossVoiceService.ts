@@ -5,7 +5,9 @@ import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
-const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS ?? 1000);
+const ENABLE_STREAMING_TTS = process.env.ENABLE_STREAMING_TTS !== 'false';
+// Time to first audio chunk before aborting (ms). Keep generous for cold starts.
+const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS ?? 2500);
 
 const BOSS_VOICE = {
   model_id: 'eleven_flash_v2_5',
@@ -41,8 +43,12 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
   const controller = new AbortController();
   session.activeTTSAbort = controller;
 
+  let receivedAudio = false;
   const timeout = setTimeout(() => {
-    controller.abort();
+    if (!receivedAudio) {
+      console.warn('[tts] Timeout waiting for first audio chunk');
+      controller.abort();
+    }
   }, TTS_TIMEOUT_MS);
 
   const url = `wss://api.elevenlabs.io/v1/text-to-speech/${BOSS_VOICE.voice_id}/stream-input` +
@@ -50,6 +56,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
     `&output_format=${encodeURIComponent(BOSS_VOICE.output_format)}`;
 
   const audioChunks: Buffer[] = [];
+  let sentFirstChunk = false;
 
   await new Promise<void>((resolve) => {
     const ws = new WebSocket(url, {
@@ -63,10 +70,18 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
 
     const finalize = () => {
       cleanup();
-      if (!controller.signal.aborted && audioChunks.length > 0) {
-        const audioBase64 = Buffer.concat(audioChunks).toString('base64');
-        sendToClient(session, { type: 'AUDIO_READY', payload: { audioBase64, format: 'mp3' } });
-        session.lastBossSpeechTime = Date.now();
+      if (ENABLE_STREAMING_TTS) {
+        if (!controller.signal.aborted) {
+          sendToClient(session, { type: 'AUDIO_DONE', payload: { format: 'mp3' } });
+        }
+      } else {
+        if (!controller.signal.aborted && audioChunks.length > 0) {
+          const audioBase64 = Buffer.concat(audioChunks).toString('base64');
+          sendToClient(session, { type: 'AUDIO_READY', payload: { audioBase64, format: 'mp3' } });
+          session.lastBossSpeechTime = Date.now();
+        } else if (!audioChunks.length) {
+          console.warn('[tts] No audio chunks received');
+        }
       }
       setTurnState(session, 'LISTENING');
       resolve();
@@ -99,23 +114,70 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
         if (!isBinary) {
           const text = typeof data === 'string' ? data : data.toString();
           const msg = JSON.parse(text) as { audio?: string; isFinal?: boolean };
-          if (msg.audio) audioChunks.push(Buffer.from(msg.audio, 'base64'));
+          if (msg.audio) {
+            if (ENABLE_STREAMING_TTS) {
+              sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: msg.audio, format: 'mp3' } });
+              if (!sentFirstChunk) {
+                sentFirstChunk = true;
+                session.lastBossSpeechTime = Date.now();
+              }
+            } else {
+              audioChunks.push(Buffer.from(msg.audio, 'base64'));
+            }
+            receivedAudio = true;
+            clearTimeout(timeout);
+          }
           if (msg.isFinal) ws.close();
           return;
         }
 
         if (Buffer.isBuffer(data)) {
-          audioChunks.push(data);
+          if (ENABLE_STREAMING_TTS) {
+            sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: data.toString('base64'), format: 'mp3' } });
+            if (!sentFirstChunk) {
+              sentFirstChunk = true;
+              session.lastBossSpeechTime = Date.now();
+            }
+          } else {
+            audioChunks.push(data);
+          }
+          receivedAudio = true;
+          clearTimeout(timeout);
           return;
         }
 
         if (data instanceof ArrayBuffer) {
-          audioChunks.push(Buffer.from(data));
+          const buf = Buffer.from(data);
+          if (ENABLE_STREAMING_TTS) {
+            sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: buf.toString('base64'), format: 'mp3' } });
+            if (!sentFirstChunk) {
+              sentFirstChunk = true;
+              session.lastBossSpeechTime = Date.now();
+            }
+          } else {
+            audioChunks.push(buf);
+          }
+          receivedAudio = true;
+          clearTimeout(timeout);
           return;
         }
 
         if (Array.isArray(data)) {
-          data.forEach((chunk) => audioChunks.push(chunk));
+          if (ENABLE_STREAMING_TTS) {
+            data.forEach((chunk) => {
+              sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: chunk.toString('base64'), format: 'mp3' } });
+            });
+            if (!sentFirstChunk && data.length) {
+              sentFirstChunk = true;
+              session.lastBossSpeechTime = Date.now();
+            }
+          } else {
+            data.forEach((chunk) => audioChunks.push(chunk));
+          }
+          if (data.length) {
+            receivedAudio = true;
+            clearTimeout(timeout);
+          }
         }
       } catch (err) {
         console.warn('[tts] Failed to parse ElevenLabs message:', err);

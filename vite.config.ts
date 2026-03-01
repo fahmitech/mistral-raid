@@ -8,6 +8,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['@ricky0123/vad-web'],
+    exclude: ['onnxruntime-web'],
   },
-  assetsInclude: ['**/*.onnx'],
+  assetsInclude: ['**/*.onnx', '**/*.wasm'],
 })

@@ -24,6 +24,7 @@ export function createSession(ws: WebSocket): Session {
     lastSpeechEndTime: 0,
     lastBossSpeechTime: 0,
     ws,
+    sttStream: null,
     directorInterval: null,
     lastDirectorDecision: null,
   };
@@ -43,6 +44,7 @@ export function destroySession(id: string): void {
   stopDirector(session);
   session.activeLLMAbort?.abort();
   session.activeTTSAbort?.abort();
+  session.sttStream?.queue.close();
   sessions.delete(id);
 }
 
@@ -58,6 +60,8 @@ export function handleBargeIn(session: Session): void {
   session.activeTTSAbort?.abort();
   session.activeLLMAbort = null;
   session.activeTTSAbort = null;
+  session.sttStream?.queue.close();
+  session.sttStream = null;
   setTurnState(session, 'LISTENING');
 }
 

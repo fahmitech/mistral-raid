@@ -8,6 +8,7 @@ import { BOSS_CONFIGS } from '../config/bosses';
 import { BossType } from '../config/types';
 import { BossEntity } from '../entities/BossEntity';
 import { AudioManager } from '../systems/AudioManager';
+import { SaveSystem } from '../systems/SaveSystem';
 import { wsClient } from '../network/WebSocketClient';
 import { micCapture } from '../systems/MicCapture';
 import { bossVoicePlayer } from '../systems/BossVoicePlayer';
@@ -36,6 +37,7 @@ export class ArenaScene extends Phaser.Scene {
   private bossMaxHp = 100;
   private arenaPhase: ArenaPhase = 'INTRO';
   private aiState: AIState = 'listening';
+  private options = SaveSystem.loadOptions();
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -54,6 +56,24 @@ export class ArenaScene extends Phaser.Scene {
   private devConsole!: DevConsole;
   private directorPanel!: DirectorPanel;
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private introTauntTimer: Phaser.Time.TimerEvent | null = null;
+  private introTauntSent = false;
+  private introAudioPlayed = false;
+  private ttsFallbackTimer: Phaser.Time.TimerEvent | null = null;
+  private waitingForTTS = false;
+  private micRetryHandler: (() => void) | null = null;
+  private pttActive = false;
+  private pttKeyDownHandler: (() => void) | null = null;
+  private pttKeyUpHandler: (() => void) | null = null;
+  private micIndicator!: Phaser.GameObjects.Text;
+  private micIndicatorBg!: Phaser.GameObjects.Rectangle;
+  private micError = false;
+  private transcriptText!: Phaser.GameObjects.Text;
+  private transcriptBg!: Phaser.GameObjects.Rectangle;
+  private transcriptTimer: Phaser.Time.TimerEvent | null = null;
+  private wsDebugText!: Phaser.GameObjects.Text;
+  private wsDebugBg!: Phaser.GameObjects.Rectangle;
+  private audioUnlockHandler: (() => void) | null = null;
   private toggleHandler: ((event: KeyboardEvent) => void) | null = null;
 
   private wsUnsub: (() => void) | null = null;
@@ -66,6 +86,7 @@ export class ArenaScene extends Phaser.Scene {
   create(): void {
     this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x101018, 1);
     this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+    this.setupAudio();
 
     const gs = GameState.get();
     const state = gs.getData();
@@ -107,6 +128,7 @@ export class ArenaScene extends Phaser.Scene {
       A: this.input.keyboard!.addKey('A'),
       S: this.input.keyboard!.addKey('S'),
       D: this.input.keyboard!.addKey('D'),
+      T: this.input.keyboard!.addKey('T'),
       SPACE: this.input.keyboard!.addKey('SPACE'),
       SHIFT: this.input.keyboard!.addKey('SHIFT'),
       F2: this.input.keyboard!.addKey('F2'),
@@ -117,6 +139,9 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
+    this.createMicIndicator();
+    this.createTranscriptOverlay();
+    this.createWsDebugOverlay();
 
     this.devConsole = new DevConsole('app');
     this.directorPanel = new DirectorPanel('app');
@@ -141,6 +166,124 @@ export class ArenaScene extends Phaser.Scene {
       this.directorPanel.toggle();
     };
     this.input.keyboard?.on('keydown-P', this.toggleHandler);
+
+    this.pttKeyDownHandler = () => this.startPushToTalk();
+    this.pttKeyUpHandler = () => this.stopPushToTalk();
+    this.input.keyboard?.on('keydown-T', this.pttKeyDownHandler);
+    this.input.keyboard?.on('keyup-T', this.pttKeyUpHandler);
+  }
+
+  private setupAudio(): void {
+    const audio = AudioManager.get();
+    audio.setOptions(this.options);
+    audio.init(this);
+
+    const unlockAndPlay = () => {
+      audio.unlockAudio();
+      this.playArenaIntroAudio();
+    };
+
+    if (!audio.isUnlocked() && !this.sound.locked) {
+      unlockAndPlay();
+      return;
+    }
+
+    if (audio.isUnlocked()) {
+      this.playArenaIntroAudio();
+      return;
+    }
+
+    this.audioUnlockHandler = () => {
+      unlockAndPlay();
+      this.audioUnlockHandler = null;
+    };
+    this.input.once('pointerdown', this.audioUnlockHandler);
+    this.input.keyboard?.once('keydown', this.audioUnlockHandler);
+  }
+
+  private playArenaIntroAudio(): void {
+    if (this.introAudioPlayed) return;
+    this.introAudioPlayed = true;
+    AudioManager.stopMusic(this);
+    AudioManager.get().playSFX('suspense_build', 0.8);
+    AudioManager.get().playSFX('low_rumble', 0.6);
+    AudioManager.get().playSFX('boss_intro', 0.75);
+    AudioManager.get().playMusic('boss');
+  }
+
+  private createMicIndicator(): void {
+    const y = INTERNAL_HEIGHT - 22;
+    this.micIndicatorBg = this.add.rectangle(56, y + 2, 104, 16, 0x000000, 0.45)
+      .setScrollFactor(0)
+      .setDepth(21);
+    this.micIndicator = this.add.text(8, y - 4, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#ff6677',
+    }).setScrollFactor(0).setDepth(22);
+    this.updateMicIndicator();
+  }
+
+  private createTranscriptOverlay(): void {
+    const y = INTERNAL_HEIGHT - 46;
+    this.transcriptBg = this.add.rectangle(INTERNAL_WIDTH / 2, y, INTERNAL_WIDTH - 12, 16, 0x000000, 0.45)
+      .setScrollFactor(0)
+      .setDepth(21)
+      .setVisible(false);
+    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 6, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#cceeff',
+      align: 'center',
+      wordWrap: { width: INTERNAL_WIDTH - 20 },
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(22).setVisible(false);
+  }
+
+  private createWsDebugOverlay(): void {
+    this.wsDebugBg = this.add.rectangle(56, 10, 110, 14, 0x000000, 0.45)
+      .setScrollFactor(0)
+      .setDepth(21);
+    this.wsDebugText = this.add.text(8, 4, 'WS: --', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#99aadd',
+    }).setScrollFactor(0).setDepth(22);
+  }
+
+  private updateWsDebug(label: string): void {
+    this.wsDebugText.setText(`WS: ${label}`);
+  }
+
+  private showTranscript(text: string, isFinal: boolean): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    this.transcriptBg.setVisible(true);
+    this.transcriptText.setVisible(true);
+    this.transcriptText.setText(`YOU: ${trimmed}`);
+    this.transcriptText.setColor(isFinal ? '#a6ffdd' : '#cceeff');
+
+    this.transcriptTimer?.remove(false);
+    if (isFinal) {
+      this.transcriptTimer = this.time.delayedCall(3200, () => {
+        this.transcriptBg.setVisible(false);
+        this.transcriptText.setVisible(false);
+        this.transcriptText.setText('');
+      });
+    }
+  }
+
+  private updateMicIndicator(): void {
+    let label = 'MIC: OFF';
+    let color = '#ff6677';
+    if (this.micError) {
+      label = 'MIC: BLOCKED';
+      color = '#ffaa55';
+    } else if (this.pttActive) {
+      label = 'MIC: LISTENING';
+      color = '#66ffcc';
+    }
+    this.micIndicator.setText(label);
+    this.micIndicator.setColor(color);
   }
 
   update(time: number, delta: number): void {
@@ -190,7 +333,10 @@ export class ArenaScene extends Phaser.Scene {
     wsClient.connect(url);
 
     this.wsUnsub = wsClient.onMessage((msg) => this.handleServerMessage(msg));
-    this.wsStatusUnsub = wsClient.onStatus((connected) => this.devConsole.setConnection(connected));
+    this.wsStatusUnsub = wsClient.onStatus((connected) => {
+      this.devConsole.setConnection(connected);
+      if (connected) this.scheduleIntroTaunt();
+    });
 
     this.telemetryTimer = this.time.addEvent({
       delay: 150,
@@ -202,22 +348,114 @@ export class ArenaScene extends Phaser.Scene {
   private startMicCapture(): void {
     micCapture.onError((err) => {
       this.devConsole.setError(`Microphone unavailable: ${err.message}`);
+      this.micError = true;
+      this.updateMicIndicator();
+      this.scheduleMicRetry();
     });
 
     micCapture.onSpeechStart(() => {
+      this.cancelTtsFallback();
       if (this.aiState === 'speaking') {
         bossVoicePlayer.stop();
         wsClient.send({ type: 'barge_in', payload: {} });
       }
     });
 
+    // Start VAD now (transmit gated by PTT).
+    micCapture.setTransmitEnabled(false);
     void micCapture.start();
+  }
+
+  private startPushToTalk(): void {
+    if (this.pttActive) return;
+    this.pttActive = true;
+    this.micError = false;
+    this.updateMicIndicator();
+    if (!micCapture.isActive) {
+      void micCapture.start();
+    }
+    if (wsClient.isConnected) {
+      wsClient.send({ type: 'vad_state', payload: { speaking: true } });
+    }
+    micCapture.setTransmitEnabled(true);
+  }
+
+  private stopPushToTalk(): void {
+    if (!this.pttActive) return;
+    this.pttActive = false;
+    this.updateMicIndicator();
+    micCapture.setTransmitEnabled(false);
+    if (wsClient.isConnected) {
+      wsClient.send({ type: 'vad_state', payload: { speaking: false } });
+    }
+  }
+
+  private scheduleMicRetry(): void {
+    if (micCapture.isActive) return;
+    if (this.micRetryHandler) return;
+
+    this.micRetryHandler = () => {
+      this.micRetryHandler = null;
+      this.devConsole.setError(null);
+      this.micError = false;
+      this.updateMicIndicator();
+      void micCapture.start();
+      micCapture.setTransmitEnabled(this.pttActive);
+    };
+    this.input.once('pointerdown', this.micRetryHandler);
+    this.input.keyboard?.once('keydown', this.micRetryHandler);
+  }
+
+  private scheduleTtsFallback(): void {
+    this.cancelTtsFallback();
+    this.waitingForTTS = true;
+    this.ttsFallbackTimer = this.time.delayedCall(2600, () => {
+      this.ttsFallbackTimer = null;
+      if (!this.waitingForTTS) return;
+      this.waitingForTTS = false;
+      if (bossVoicePlayer.isPlaying) return;
+      AudioManager.get().playSFX('boss_intro', 0.6);
+      this.devConsole.setTTSStatus('fallback_sfx');
+    });
+  }
+
+  private cancelTtsFallback(): void {
+    this.waitingForTTS = false;
+    this.ttsFallbackTimer?.remove(false);
+    this.ttsFallbackTimer = null;
+  }
+
+  private scheduleIntroTaunt(): void {
+    if (this.introTauntSent) return;
+    if (this.arenaPhase !== 'PHASE_1') return;
+    if (!wsClient.isConnected) return;
+    if (this.introTauntTimer) return;
+
+    this.introTauntTimer = this.time.delayedCall(800, () => {
+      this.introTauntTimer = null;
+      this.sendIntroTaunt();
+    });
+  }
+
+  private sendIntroTaunt(): void {
+    if (this.introTauntSent) return;
+    if (this.arenaPhase !== 'PHASE_1') return;
+    if (!wsClient.isConnected) return;
+    this.introTauntSent = true;
+
+    const payload = {
+      ...this.telemetry.compile('player-1'),
+      player_said: 'I have entered your arena. Show me what you are.',
+    };
+    wsClient.send({ type: 'ANALYZE', payload });
+    this.devConsole.setTTSStatus('waiting');
   }
 
   private startPhase1(): void {
     this.arenaPhase = 'PHASE_1';
     this.phaseStartTime = this.time.now;
     this.telemetry.startPhase(this.bossMaxHp);
+    this.scheduleIntroTaunt();
   }
 
   private beginTransition(forcedByTimeout: boolean): void {
@@ -236,6 +474,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private handleServerMessage(msg: ServerMessage): void {
+    this.updateWsDebug(msg.type);
     switch (msg.type) {
       case 'ai_state':
         this.aiState = msg.payload.state;
@@ -248,16 +487,28 @@ export class ArenaScene extends Phaser.Scene {
         break;
       case 'captions_partial':
         this.devConsole.setSTTPartial(msg.payload.text);
+        this.showTranscript(msg.payload.text, false);
         break;
       case 'captions_final':
         this.devConsole.setSTTFinal(msg.payload.text);
+        this.showTranscript(msg.payload.text, true);
         break;
       case 'BOSS_RESPONSE':
         this.handleBossResponse(msg.payload);
         break;
       case 'AUDIO_READY':
+        this.cancelTtsFallback();
         this.devConsole.setTTSStatus('playing');
         bossVoicePlayer.play(msg.payload.audioBase64, msg.payload.format);
+        break;
+      case 'AUDIO_CHUNK':
+        this.cancelTtsFallback();
+        this.devConsole.setTTSStatus('streaming');
+        bossVoicePlayer.streamChunk(msg.payload.audioBase64, msg.payload.format);
+        break;
+      case 'AUDIO_DONE':
+        bossVoicePlayer.endStream();
+        this.devConsole.setTTSStatus('idle');
         break;
       case 'director_update':
         this.directorPanel.update(msg.payload);
@@ -275,6 +526,8 @@ export class ArenaScene extends Phaser.Scene {
     this.devConsole.setBossResponse(response);
     this.tauntText.show(response.taunt);
     this.analyzingOverlay.hide();
+    this.devConsole.setTTSStatus('waiting');
+    this.scheduleTtsFallback();
     if (this.arenaPhase === 'TRANSITIONING') {
       this.arenaPhase = 'PHASE_2';
     }
@@ -447,9 +700,36 @@ export class ArenaScene extends Phaser.Scene {
     micCapture.stop();
     bossVoicePlayer.stop();
     this.telemetryTimer?.remove(false);
+    this.introTauntTimer?.remove(false);
+    this.cancelTtsFallback();
     this.mechanicInterpreter.clear();
     this.devConsole.destroy();
     this.directorPanel.destroy();
+    this.micIndicator?.destroy();
+    this.micIndicatorBg?.destroy();
+    this.transcriptTimer?.remove(false);
+    this.transcriptText?.destroy();
+    this.transcriptBg?.destroy();
+    this.wsDebugText?.destroy();
+    this.wsDebugBg?.destroy();
+    if (this.micRetryHandler) {
+      this.input.off('pointerdown', this.micRetryHandler);
+      this.input.keyboard?.off('keydown', this.micRetryHandler);
+      this.micRetryHandler = null;
+    }
+    if (this.pttKeyDownHandler) {
+      this.input.keyboard?.off('keydown-T', this.pttKeyDownHandler);
+      this.pttKeyDownHandler = null;
+    }
+    if (this.pttKeyUpHandler) {
+      this.input.keyboard?.off('keyup-T', this.pttKeyUpHandler);
+      this.pttKeyUpHandler = null;
+    }
+    if (this.audioUnlockHandler) {
+      this.input.off('pointerdown', this.audioUnlockHandler);
+      this.input.keyboard?.off('keydown', this.audioUnlockHandler);
+      this.audioUnlockHandler = null;
+    }
     if (this.toggleHandler) {
       this.input.keyboard?.off('keydown-P', this.toggleHandler);
       this.toggleHandler = null;
