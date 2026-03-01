@@ -25,6 +25,8 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   create(): void {
+    AudioManager.get().init(this);
+
     if (this.fromPause) {
       this.add.rectangle(160, 90, 320, 180, 0x000000, 0.6).setScrollFactor(0);
     } else {
@@ -103,8 +105,11 @@ export class OptionsScene extends Phaser.Scene {
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       this.rows.forEach((row, idx) => {
         if (row.text && row.text.getBounds().contains(pointer.x, pointer.y)) {
-          this.selectedIndex = idx;
-          this.refresh();
+          if (this.selectedIndex !== idx) {
+            this.selectedIndex = idx;
+            this.refresh();
+            AudioManager.playSFX(this, 'menu_hover');
+          }
         }
       });
     });
@@ -116,12 +121,19 @@ export class OptionsScene extends Phaser.Scene {
           this.toggle();
         }
       });
+      if (resetText.getBounds().contains(pointer.x, pointer.y)) {
+        AudioManager.playSFX(this, 'ui_click');
+      }
+      if (backText.getBounds().contains(pointer.x, pointer.y)) {
+        AudioManager.playSFX(this, 'menu_hover');
+      }
     });
   }
 
   private move(dir: number): void {
     this.selectedIndex = (this.selectedIndex + dir + this.rows.length) % this.rows.length;
     this.refresh();
+    AudioManager.playSFX(this, 'menu_hover');
   }
 
   private toggle(): void {
@@ -137,6 +149,7 @@ export class OptionsScene extends Phaser.Scene {
     SaveSystem.saveOptions(this.options);
     AudioManager.get().setOptions(this.options);
     this.refresh();
+    AudioManager.playSFX(this, 'ui_click');
   }
 
   private refresh(): void {
@@ -149,6 +162,7 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private resetSave(): void {
+    AudioManager.playSFX(this, 'ui_click');
     SaveSystem.deleteSave();
     if (!this.toast) return;
     this.toast.setText('Save data cleared.');
@@ -156,6 +170,7 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private back(): void {
+    AudioManager.playSFX(this, 'menu_hover');
     if (this.fromPause) {
       this.scene.stop();
       this.scene.launch('PauseScene');
