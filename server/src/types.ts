@@ -54,6 +54,15 @@ export interface TelemetrySummary {
   playerHpPercent: number;
   sampleCount: number;
   timestamp: number;
+  bossActive: boolean;
+  longTerm: {
+    avgAccuracy: number;
+    cornerPercentage: number;
+    dashPerMin: number;
+    dominantZone: string;
+    sampleCount: number;
+    windowSeconds: number;
+  };
 }
 
 // ── Boss Response (Mistral LLM output) ─────────────────────────

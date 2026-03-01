@@ -158,6 +158,15 @@ export async function generateBossReply(
     playerHpPercent: 0,
     sampleCount: 0,
     timestamp: Date.now(),
+    bossActive: false,
+    longTerm: {
+      avgAccuracy: 0,
+      cornerPercentage: 0,
+      dashPerMin: 0,
+      dominantZone: 'center',
+      sampleCount: 0,
+      windowSeconds: 0,
+    },
   };
 
   const userPrompt = buildUserPrompt(playerSaid, safeTelemetry);
@@ -198,6 +207,15 @@ export async function generateBossReply(
 }
 
 function buildUserPrompt(playerSaid: string, t: TelemetrySummary): string {
+  const long = t.longTerm ?? {
+    avgAccuracy: t.avgAccuracy,
+    cornerPercentage: t.cornerPercentageLast10s,
+    dashPerMin: t.totalDashCount * 6,
+    dominantZone: t.dominantZone,
+    sampleCount: t.sampleCount,
+    windowSeconds: 0,
+  };
+  const longWindow = long.windowSeconds > 0 ? `${Math.round(long.windowSeconds)}s` : 'long-term';
   return `
 Player said: "${playerSaid}"
 
@@ -209,6 +227,10 @@ Live combat telemetry:
 - Recent hits taken: ${t.recentHitsTaken}
 - Boss HP: ${t.bossHpPercent.toFixed(1)}%
 - Player HP: ${t.playerHpPercent.toFixed(1)}%
+ - Long-term (${longWindow}) accuracy: ${(long.avgAccuracy * 100).toFixed(1)}%
+ - Long-term corner time: ${long.cornerPercentage.toFixed(1)}%
+ - Long-term dash rate: ${long.dashPerMin.toFixed(1)}/min
+ - Long-term dominant zone: ${long.dominantZone}
 
 Respond with a JSON BossResponse object only.
   `.trim();
@@ -359,6 +381,15 @@ function coerceTelemetrySummary(rawPayload: Record<string, unknown>, fallback: T
     playerHpPercent: typeof raw.player_hp_at_transition === 'number' ? raw.player_hp_at_transition : 0,
     sampleCount: 0,
     timestamp: Date.now(),
+    bossActive: false,
+    longTerm: {
+      avgAccuracy: accuracy,
+      cornerPercentage: corner,
+      dashPerMin: dashes,
+      dominantZone: 'center',
+      sampleCount: 0,
+      windowSeconds: 0,
+    },
   };
 }
 

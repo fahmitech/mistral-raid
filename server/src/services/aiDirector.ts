@@ -30,7 +30,7 @@ export function startDirector(session: Session): void {
 
   const tick = async () => {
     const t = session.latestTelemetrySummary;
-    if (!t) return;
+    if (!t || !t.bossActive) return;
     try {
       const response = await getClient().chat.complete({
         model: 'mistral-small-latest',
@@ -74,9 +74,19 @@ export function stopDirector(session: Session): void {
 }
 
 function buildDirectorPrompt(t: TelemetrySummary): string {
+  const long = t.longTerm ?? {
+    avgAccuracy: t.avgAccuracy,
+    cornerPercentage: t.cornerPercentageLast10s,
+    dashPerMin: t.totalDashCount * 6,
+    dominantZone: t.dominantZone,
+    sampleCount: t.sampleCount,
+    windowSeconds: 0,
+  };
   return `Accuracy: ${(t.avgAccuracy * 100).toFixed(1)}% | Boss HP: ${t.bossHpPercent.toFixed(0)}% | ` +
     `Player HP: ${t.playerHpPercent.toFixed(0)}% | Corner time: ${t.cornerPercentageLast10s.toFixed(0)}% | ` +
-    `Hits taken: ${t.recentHitsTaken} | Dashes: ${t.totalDashCount}`;
+    `Hits taken: ${t.recentHitsTaken} | Dashes: ${t.totalDashCount} | ` +
+    `Long Acc: ${(long.avgAccuracy * 100).toFixed(0)}% | Long Corner: ${long.cornerPercentage.toFixed(0)}% | ` +
+    `Long Dash/min: ${long.dashPerMin.toFixed(1)} | Long Zone: ${long.dominantZone}`;
 }
 
 function clampInt(value: number, min: number, max: number): number {

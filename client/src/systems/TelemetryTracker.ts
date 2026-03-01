@@ -57,7 +57,7 @@ export class TelemetryTracker {
     this.phaseForcedByTimeout = false;
   }
 
-  update(player: Player, boss: Phaser.GameObjects.Sprite, delta: number): void {
+  update(player: Player, boss: Phaser.GameObjects.Sprite | null, delta: number): void {
     const now = performance.now();
     if (!this.lastPosition) this.lastPosition = new Phaser.Math.Vector2(player.x, player.y);
 
@@ -74,10 +74,11 @@ export class TelemetryTracker {
       if (zone.startsWith('top') || zone.startsWith('bot')) {
         if (zone.includes('left') || zone.includes('right')) this.cornerSamples += 1;
       }
-      const distToBoss = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
-      this.distanceSamples.push(distToBoss);
-
-      this.checkReaction(now, speed);
+      if (boss) {
+        const distToBoss = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
+        this.distanceSamples.push(distToBoss);
+        this.checkReaction(now, speed);
+      }
     }
 
     this.pruneRecentHits(now);
@@ -119,6 +120,10 @@ export class TelemetryTracker {
 
   setPhaseForcedByTimeout(forced: boolean): void {
     this.phaseForcedByTimeout = forced;
+  }
+
+  setBossMaxHp(bossMaxHp: number): void {
+    this.bossMaxHp = bossMaxHp;
   }
 
   getRawTelemetry(playerHp: number, playerMaxHp: number, bossHp: number): RawTelemetry {

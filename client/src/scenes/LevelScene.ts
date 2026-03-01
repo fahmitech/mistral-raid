@@ -45,6 +45,8 @@ import { LightingSystem } from '../systems/LightingSystem';
 import { MiniMap } from '../systems/MiniMap';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
+import { TelemetryTracker } from '../systems/TelemetryTracker';
+import { wsClient } from '../network/WebSocketClient';
 
 import { MusicLayer } from '../types/AudioTypes';
 
@@ -81,6 +83,8 @@ export class LevelScene extends Phaser.Scene {
   private shieldIndicator?: Phaser.GameObjects.Graphics;
   private heartSprites: Phaser.GameObjects.Image[] = [];
   private lastHP = -1;
+  private telemetryHud?: Phaser.GameObjects.Text;
+  private lastTelemetrySentAt = 0;
 
   private boss?: BossEntity;
   private bossBar?: Phaser.GameObjects.Graphics;
@@ -102,6 +106,11 @@ export class LevelScene extends Phaser.Scene {
   private debugMarker?: Phaser.GameObjects.Graphics;
   private debugToggleKey?: Phaser.Input.Keyboard.Key;
   private playerRenderGlitchFrames = 0;
+
+  // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
+  private telemetry = new TelemetryTracker();
+  private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private telemetryActive = false;
 
   // ─── Audio debug (F4 overlay) ─────────────────────────────────────────────────
   private audioDebugText?: Phaser.GameObjects.Text;
@@ -137,6 +146,7 @@ export class LevelScene extends Phaser.Scene {
     audio.setOptions(this.options);
     audio.init(this);
 
+    this.setupTelemetry();
 
     // Reset combat music state.
     this.activeAudioLayer = 'ambient';
@@ -237,7 +247,7 @@ export class LevelScene extends Phaser.Scene {
     this.input.on('pointerdown', this.handlePointerDown, this);
   }
 
-  update(time: number): void {
+  update(time: number, delta: number): void {
     this.lastUpdateTime = time;
     this.handleInput(time);
     this.updateCombatMusic(time);
@@ -280,6 +290,10 @@ export class LevelScene extends Phaser.Scene {
         shake: (d, i) => this.shakeCamera(d, i),
       });
       this.updateBossBar();
+    }
+
+    if (this.telemetryActive) {
+      this.telemetry.update(this.player, this.boss ?? null, delta);
     }
 
     this.checkBossTrigger();
@@ -344,6 +358,36 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private setupTelemetry(): void {
+    const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:8787';
+    wsClient.connect(url);
+    this.telemetry.startPhase(0);
+    this.telemetryActive = true;
+    this.lastTelemetrySentAt = 0;
+    this.telemetryTimer = this.time.addEvent({
+      delay: 150,
+      loop: true,
+      callback: () => this.sendTelemetry(),
+    });
+  }
+
+  private sendTelemetry(): void {
+    if (!this.telemetryActive) return;
+    if (!wsClient.isConnected) return;
+    const playerData = GameState.get().getData();
+    const bossHp = this.boss?.active ? this.boss.hp : 0;
+    const raw = this.telemetry.getRawTelemetry(playerData.playerHP, playerData.playerMaxHP, bossHp);
+    wsClient.send({ type: 'telemetry', payload: raw });
+    this.lastTelemetrySentAt = this.time.now;
+  }
+
+  private recordTelemetryHit(proj: Phaser.Physics.Arcade.Sprite): void {
+    if (!this.telemetryActive) return;
+    if (proj.getData('telemetryHit')) return;
+    proj.setData('telemetryHit', true);
+    this.telemetry.recordShotHit();
+  }
+
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (pointer.rightButtonDown()) {
       this.tryShield();
@@ -374,6 +418,8 @@ export class LevelScene extends Phaser.Scene {
     this.stairsCheck = undefined;
     this.minimapTimer?.remove(false);
     this.minimapTimer = undefined;
+    this.telemetryTimer?.remove(false);
+    this.telemetryTimer = null;
     this.time.removeAllEvents();
 
     // Kill tweens created by this Scene.
@@ -394,6 +440,8 @@ export class LevelScene extends Phaser.Scene {
     this.debugMarker = undefined;
     this.audioDebugText?.destroy();
     this.audioDebugText = undefined;
+    this.telemetryHud?.destroy();
+    this.telemetryHud = undefined;
 
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
@@ -421,6 +469,8 @@ export class LevelScene extends Phaser.Scene {
     safeClearGroup(this.enemyProjectiles);
     safeClearGroup(this.bossGroup);
     safeClearGroup(this.walls);
+    wsClient.disconnect();
+    this.telemetryActive = false;
   }
 
   private createBulletTextures(): void {
@@ -595,20 +645,20 @@ export class LevelScene extends Phaser.Scene {
     this.physics.add.overlap(this.enemyProjectiles, this.player, (proj) => {
       const dmg = (proj as Phaser.Physics.Arcade.Image).getData('damage') as number;
       proj.destroy();
-      this.damagePlayer(dmg || 1, this.lastUpdateTime);
+      this.damagePlayer(dmg || 1, this.lastUpdateTime, 'projectile');
     });
 
     this.physics.add.overlap(this.player, this.enemies, (_playerObj, enemyObj) => {
       const enemy = enemyObj as Enemy | undefined;
       const damage = enemy?.config?.damage;
       if (typeof damage !== 'number') return;
-      this.damagePlayer(damage, this.lastUpdateTime);
+      this.damagePlayer(damage, this.lastUpdateTime, 'melee');
     });
 
     this.physics.add.overlap(this.player, this.bossGroup, (_p, bossObj) => {
       const boss = bossObj as BossEntity;
       if (!boss.active) return;
-      this.damagePlayer(2 + boss.phase, this.lastUpdateTime);
+      this.damagePlayer(2 + boss.phase, this.lastUpdateTime, 'melee');
     });
 
   }
@@ -697,6 +747,16 @@ export class LevelScene extends Phaser.Scene {
     this.shieldIndicator = this.add.graphics().setScrollFactor(0).setDepth(20);
 
     this.createHearts();
+
+    this.telemetryHud = this.add
+      .text(rightX, 18, '', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '4px',
+        color: '#66ff99',
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(20);
   }
 
   private createHearts(): void {
@@ -765,6 +825,20 @@ export class LevelScene extends Phaser.Scene {
           this.shieldIndicator.fillRect(80, 170, 30 * pct, 3);
         }
       }
+    }
+
+    if (this.telemetryHud) {
+      const connected = wsClient.isConnected;
+      const since = this.lastTelemetrySentAt > 0 ? time - this.lastTelemetrySentAt : Infinity;
+      const sinceText = Number.isFinite(since) ? `${(since / 1000).toFixed(1)}s` : '--';
+      const status = this.telemetryActive ? 'ON' : 'OFF';
+      const ws = connected ? 'OK' : 'OFF';
+      this.telemetryHud.setText(`TLM:${status} WS:${ws} ${sinceText}`);
+
+      let color = '#66ff99';
+      if (!connected) color = '#ff6666';
+      else if (since > 1000) color = '#ffcc66';
+      this.telemetryHud.setColor(color);
     }
   }
 
@@ -1052,6 +1126,9 @@ export class LevelScene extends Phaser.Scene {
       const proj = this.physics.add.sprite(muzzleX, muzzleY, textureKey);
       proj.setDepth(10);
       this.playerProjectiles.add(proj);
+      if (this.telemetryActive) {
+        this.telemetry.recordShotFired();
+      }
       proj.setScale(config.projectileScale ?? 1);
       if (config.projectileSpinDegPerSec) {
         proj.setAngularVelocity(config.projectileSpinDegPerSec);
@@ -1159,6 +1236,9 @@ export class LevelScene extends Phaser.Scene {
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
     this.shakeCamera(28, 0.0025);
     AudioManager.playSFX(this, 'dash');
+    if (this.telemetryActive) {
+      this.telemetry.recordDash(dir);
+    }
   }
 
   private spawnDashTrail(x1: number, y1: number, x2: number, y2: number): void {
@@ -1341,6 +1421,7 @@ export class LevelScene extends Phaser.Scene {
   private handleEnemyHit(proj: Phaser.Physics.Arcade.Sprite, enemy: Enemy): void {
     if (!enemy.active) return;
     if (this.isBombProjectile(proj)) {
+      this.recordTelemetryHit(proj);
       this.explodeBomb(proj);
       return;
     }
@@ -1348,6 +1429,7 @@ export class LevelScene extends Phaser.Scene {
     const knockback = (proj.getData('knockback') as number) ?? 0;
     const weaponType = (proj.getData('weaponType') as ItemType) ?? ItemType.WeaponSword;
     this.processEnemyDamage(enemy, damage, weaponType, knockback, proj.x, proj.y);
+    this.recordTelemetryHit(proj);
     this.shakeCamera(45, this.weaponConfig?.shakeIntensity ?? 0.003);
     this.applyPierce(proj);
   }
@@ -1355,6 +1437,7 @@ export class LevelScene extends Phaser.Scene {
   private handleBossHit(proj: Phaser.Physics.Arcade.Sprite, boss: BossEntity): void {
     if (!boss.active) return;
     if (this.isBombProjectile(proj)) {
+      this.recordTelemetryHit(proj);
       this.explodeBomb(proj);
       return;
     }
@@ -1362,6 +1445,7 @@ export class LevelScene extends Phaser.Scene {
     const weaponType = (proj.getData('weaponType') as ItemType) ?? ItemType.WeaponSword;
     const result = boss.applyDamage(damage);
     this.spawnHitParticles(boss.x, boss.y, this.getWeaponHitColor(weaponType));
+    this.recordTelemetryHit(proj);
     if (weaponType === ItemType.WeaponHammer) {
       this.spawnHammerShockwave(boss.x, boss.y);
     }
@@ -1545,7 +1629,7 @@ export class LevelScene extends Phaser.Scene {
   private triggerExploder(enemy: Enemy): void {
     const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
     if (dist <= ENEMY_EXPLODE_RANGE) {
-      this.damagePlayer(enemy.config.damage * 3, this.lastUpdateTime);
+      this.damagePlayer(enemy.config.damage * 3, this.lastUpdateTime, 'hazard');
       this.shakeCamera(80, 0.008);
     }
   }
@@ -1568,6 +1652,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleBossDeath(boss: BossEntity): void {
+    this.telemetry.setBossMaxHp(0);
     this.boss = undefined;
     boss.destroy();
     this.time.timeScale = 0.25;
@@ -1657,6 +1742,7 @@ export class LevelScene extends Phaser.Scene {
     const posX = this.maze.bossRoom.cx * TILE_SIZE + 8;
     const posY = (this.maze.bossRoom.cy - 2) * TILE_SIZE + 8;
     this.boss = BossFactory.spawnBoss(this, this.levelData.bossType, posX, posY, this.bossGroup);
+    this.telemetry.setBossMaxHp(this.boss.maxHP);
     if (this.anims.exists(`${this.boss.config.spriteKey}_idle`)) {
       this.boss.play(`${this.boss.config.spriteKey}_idle`);
     }
@@ -1772,7 +1858,7 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private damagePlayer(amount: number, time: number): void {
+  private damagePlayer(amount: number, time: number, source: 'melee' | 'projectile' | 'hazard' = 'melee'): void {
     if (this.player.isShieldActive(time)) {
       this.player.shieldActiveUntil = 0;
       this.player.shieldCooldownUntil = time + SHIELD_COOLDOWN_MS;
@@ -1787,6 +1873,9 @@ export class LevelScene extends Phaser.Scene {
     if (this.player.isInvincible(time)) return;
 
     GameState.get().takeDamage(amount);
+    if (this.telemetryActive) {
+      this.telemetry.recordDamage(source, amount);
+    }
     this.player.setInvincible(INVINCIBLE_MS, time);
     this.damageLog.push({ amount, time });
     const hpPct = GameState.get().getData().playerHP / GameState.get().getData().playerMaxHP;
