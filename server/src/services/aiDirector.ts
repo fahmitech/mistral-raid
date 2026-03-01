@@ -1,4 +1,4 @@
-import Mistral from '@mistralai/mistralai';
+import { Mistral } from '@mistralai/mistralai';
 import type { Session, TelemetrySummary } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 
@@ -30,7 +30,7 @@ export function startDirector(session: Session): void {
         ],
         responseFormat: { type: 'json_object' },
       });
-      const content = response.choices?.[0]?.message?.content ?? '{}';
+      const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
       const parsed = JSON.parse(content) as { difficultyDelta: number; enemyBias: string; reason: string };
       const difficultyDelta = clampInt(parsed.difficultyDelta, -1, 1);
       const enemyBias = typeof parsed.enemyBias === 'string' && parsed.enemyBias.length
@@ -72,4 +72,12 @@ function buildDirectorPrompt(t: TelemetrySummary): string {
 function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function extractContentString(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return null;
+  return content
+    .map((chunk) => (typeof chunk?.text === 'string' ? chunk.text : ''))
+    .join('');
 }

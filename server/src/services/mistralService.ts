@@ -1,4 +1,4 @@
-import Mistral from '@mistralai/mistralai';
+import { Mistral } from '@mistralai/mistralai';
 import type { BossResponse, MechanicConfig, Session, TelemetrySummary } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
@@ -158,18 +158,23 @@ export async function generateBossReply(
     if (session) session.activeLLMAbort = controller;
     const timer = setTimeout(() => controller.abort(), overrideTimeout ?? timeout);
     try {
-      const response = await client.chat.complete({
-        model,
-        messages: [
-          { role: 'system', content: ARCHITECT_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        responseFormat: { type: 'json_object' },
-        signal: controller.signal,
-      });
+      const response = await client.chat.complete(
+        {
+          model,
+          messages: [
+            { role: 'system', content: ARCHITECT_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          responseFormat: { type: 'json_object' },
+        },
+        {
+          signal: controller.signal,
+          timeoutMs: overrideTimeout ?? timeout,
+        }
+      );
       clearTimeout(timer);
       if (session) session.activeLLMAbort = null;
-      const content = response.choices?.[0]?.message?.content ?? '{}';
+      const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
       const parsed = JSON.parse(content);
       return validateBossResponse(parsed);
     } catch (err) {
@@ -345,4 +350,12 @@ function coerceTelemetrySummary(rawPayload: Record<string, unknown>, fallback: T
     sampleCount: 0,
     timestamp: Date.now(),
   };
+}
+
+function extractContentString(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return null;
+  return content
+    .map((chunk) => (typeof chunk?.text === 'string' ? chunk.text : ''))
+    .join('');
 }

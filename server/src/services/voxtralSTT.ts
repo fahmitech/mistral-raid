@@ -1,4 +1,4 @@
-import { RealtimeTranscription, AudioEncoding } from '@mistralai/mistralai/extra/realtime';
+import { RealtimeTranscription, AudioEncoding } from '@mistralai/mistralai/extra/realtime/index.js';
 import type { Session } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { canStartBossReply, setTurnState } from './sessionManager.js';
@@ -30,8 +30,7 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
     for await (const event of client.transcribeStream(
       singleUtteranceStream(utteranceBuffer),
       'voxtral-mini-transcribe-realtime-2602',
-      { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } },
-      STT_TARGET_DELAY_MS
+      { audioFormat: { encoding: AudioEncoding.PcmS16le, sampleRate: 16000 } }
     )) {
       if (event.type === 'transcription.text.delta') {
         const delta = (event as { text?: string; delta?: string }).text ?? (event as { delta?: string }).delta ?? '';
