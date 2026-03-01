@@ -1,0 +1,33 @@
+{
+  "totalApiCalls": 3,
+  "totalEstimatedCredits": 21,
+  "sounds": {
+    "low_rumble": {
+      "name": "low_rumble",
+      "prompt": "Deep ominous low frequency subterranean rumble, dungeon boss room atmosphere, 2 seconds",
+      "promptHash": "4ec1c5bb68f7",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T14:48:38.882Z",
+      "durationSecs": 2.5,
+      "estimatedCredits": 2
+    },
+    "suspense_build": {
+      "name": "suspense_build",
+      "prompt": "Building suspense sting, approaching boss danger in dungeon, ominous low strings rumble, 3 seconds",
+      "promptHash": "357dfa701101",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T14:48:38.915Z",
+      "durationSecs": 3.5,
+      "estimatedCredits": 3
+    },
+    "global_presence": {
+      "name": "global_presence",
+      "prompt": "Extremely subtle dungeon presence atmosphere, barely audible low frequency hum, deep stone resonance, no melody, subliminal, 20 seconds",
+      "promptHash": "94f60349e999",
+      "type": "sfx",
+      "generatedAt": "2026-03-01T14:48:41.086Z",
+      "durationSecs": 20,
+      "estimatedCredits": 16
+    }
+  }
+}

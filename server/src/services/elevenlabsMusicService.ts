@@ -18,11 +18,12 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
+import { emit, makeEvent, trackStart, trackEnd } from './telemetry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const AUDIO_DIR   = path.join(__dirname, '..', '..', 'generated-audio');
-const MUSIC_DIR   = path.join(AUDIO_DIR, 'music');
-const SFX_DIR     = path.join(AUDIO_DIR, 'sfx');
+const AUDIO_DIR = path.join(__dirname, '..', '..', 'generated-audio');
+const MUSIC_DIR = path.join(AUDIO_DIR, 'music');
+const SFX_DIR = path.join(AUDIO_DIR, 'sfx');
 const MANIFEST_PATH = path.join(AUDIO_DIR, 'manifest.json');
 
 // Ensure subdirectories exist at module load time
@@ -31,19 +32,19 @@ const MANIFEST_PATH = path.join(AUDIO_DIR, 'manifest.json');
 // ─── Manifest types ─────────────────────────────────────────────────────────────
 
 interface ManifestEntry {
-  name:              string;
-  prompt:            string;
-  promptHash:        string;  // MD5 of the prompt — detect if prompt changed
-  type:              'music' | 'sfx';
-  generatedAt:       string;
-  durationSecs:      number;
-  estimatedCredits:  number;
+  name: string;
+  prompt: string;
+  promptHash: string;  // MD5 of the prompt — detect if prompt changed
+  type: 'music' | 'sfx';
+  generatedAt: string;
+  durationSecs: number;
+  estimatedCredits: number;
 }
 
 interface Manifest {
-  totalApiCalls:           number;
-  totalEstimatedCredits:   number;
-  sounds:                  Record<string, ManifestEntry>;
+  totalApiCalls: number;
+  totalEstimatedCredits: number;
+  sounds: Record<string, ManifestEntry>;
 }
 
 // ─── Public types ───────────────────────────────────────────────────────────────
@@ -51,21 +52,21 @@ interface Manifest {
 export type SoundType = 'music' | 'sfx';
 
 export interface SoundDefinition {
-  name:      string;
-  prompt:    string;
-  type:      SoundType;
+  name: string;
+  prompt: string;
+  type: SoundType;
   duration?: number; // seconds
 }
 
 export interface GeneratedResult {
-  url:       string;
+  url: string;
   fromCache: boolean;
 }
 
 export interface AudioStats {
-  totalApiCalls:          number;
-  totalEstimatedCredits:  number;
-  cachedCount:            number;
+  totalApiCalls: number;
+  totalEstimatedCredits: number;
+  cachedCount: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -116,13 +117,14 @@ function urlPath(type: SoundType, filename: string): string {
  * Never calls ElevenLabs if a cached file already exists on disk.
  */
 export async function generateAndCache(def: SoundDefinition): Promise<GeneratedResult> {
-  const filename  = `${def.name}.mp3`;
+  const filename = `${def.name}.mp3`;
   const targetDir = subDir(def.type);
-  const filePath  = path.join(targetDir, filename);
-  const url       = urlPath(def.type, filename);
+  const filePath = path.join(targetDir, filename);
+  const url = urlPath(def.type, filename);
 
   // ── Cache hit (new subfolder) ──────────────────────────────────────────────
   if (fs.existsSync(filePath)) {
+    emit(makeEvent('', 'audio', 'audio.cache.hit', { name: def.name, audioType: def.type, source: 'subfolder' }));
     return { url, fromCache: true };
   }
 
@@ -130,7 +132,7 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
   const legacyPath = path.join(AUDIO_DIR, filename);
   if (fs.existsSync(legacyPath)) {
     fs.copyFileSync(legacyPath, filePath);
-    console.log(`[music-svc] Migrated "${filename}" → ${def.type}/ subfolder`);
+    emit(makeEvent('', 'audio', 'audio.cache.hit', { name: def.name, audioType: def.type, source: 'legacy' }));
     return { url, fromCache: true };
   }
 
@@ -139,53 +141,51 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY not set in environment');
 
   const durationSecs = def.duration ?? 10;
-  const credits      = estimateCredits(durationSecs, def.type);
+  const credits = estimateCredits(durationSecs, def.type);
 
-  console.log(
-    `[music-svc] Generating "${def.name}" ` +
-    `(${def.type}, ~${durationSecs}s, ~${credits} credits)…`
-  );
+  const audioCtx = trackStart('', 'audio', 'audio.generate.start', {
+    name: def.name, audioType: def.type, durationSecs, prompt: def.prompt.slice(0, 100),
+  });
 
   const response = await axios.post(
     'https://api.elevenlabs.io/v1/sound-generation',
     {
-      text:               def.prompt,
-      duration_seconds:   durationSecs,
-      prompt_influence:   0.3,
+      text: def.prompt,
+      duration_seconds: durationSecs,
+      prompt_influence: 0.3,
     },
     {
       headers: {
-        'xi-api-key':   apiKey,
-        Accept:         'audio/mpeg',
+        'xi-api-key': apiKey,
+        Accept: 'audio/mpeg',
         'Content-Type': 'application/json',
       },
       responseType: 'arraybuffer',
-      timeout:      90_000,
+      timeout: 90_000,
     }
   );
 
-  fs.writeFileSync(filePath, Buffer.from(response.data as ArrayBuffer));
+  const audioBuffer = Buffer.from(response.data as ArrayBuffer);
+  fs.writeFileSync(filePath, audioBuffer);
+
+  trackEnd(audioCtx, 'audio', 'audio.generate.end', {
+    name: def.name, audioType: def.type, fileSizeBytes: audioBuffer.length, estimatedCredits: credits,
+  });
 
   // ── Update manifest ────────────────────────────────────────────────────────
   const manifest = loadManifest();
-  manifest.totalApiCalls          += 1;
-  manifest.totalEstimatedCredits  += credits;
-  manifest.sounds[def.name]        = {
-    name:             def.name,
-    prompt:           def.prompt,
-    promptHash:       md5(def.prompt),
-    type:             def.type,
-    generatedAt:      new Date().toISOString(),
+  manifest.totalApiCalls += 1;
+  manifest.totalEstimatedCredits += credits;
+  manifest.sounds[def.name] = {
+    name: def.name,
+    prompt: def.prompt,
+    promptHash: md5(def.prompt),
+    type: def.type,
+    generatedAt: new Date().toISOString(),
     durationSecs,
     estimatedCredits: credits,
   };
   saveManifest(manifest);
-
-  console.log(
-    `[music-svc] ✓ "${def.name}" saved. ` +
-    `Total: ${manifest.totalApiCalls} calls / ` +
-    `~${manifest.totalEstimatedCredits} estimated credits`
-  );
 
   return { url, fromCache: false };
 }
@@ -195,9 +195,9 @@ export async function generateAndCache(def: SoundDefinition): Promise<GeneratedR
 export function getStats(): AudioStats {
   const m = loadManifest();
   return {
-    totalApiCalls:         m.totalApiCalls,
+    totalApiCalls: m.totalApiCalls,
     totalEstimatedCredits: m.totalEstimatedCredits,
-    cachedCount:           Object.keys(m.sounds).length,
+    cachedCount: Object.keys(m.sounds).length,
   };
 }
 

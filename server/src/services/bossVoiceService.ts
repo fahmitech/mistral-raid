@@ -3,6 +3,7 @@ import type { RawData } from 'ws';
 import type { Session } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
+import { trackStart, trackEnd, trackError } from './telemetry.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const ENABLE_STREAMING_TTS = process.env.ENABLE_STREAMING_TTS !== 'false';
@@ -36,9 +37,16 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
   const apiKey = getApiKey();
   if (!apiKey) {
     console.warn('[tts] ELEVENLABS_API_KEY not set');
+    trackError({ startTime: Date.now(), sessionId: session.id }, 'tts', 'tts.call.error', {
+      error: 'API key missing', reason: 'api_key_missing',
+    });
     setTurnState(session, 'LISTENING');
     return;
   }
+
+  const ttsCtx = trackStart(session.id, 'tts', 'tts.call.start', {
+    textLength: tauntText.length, voiceId: BOSS_VOICE.voice_id, streaming: ENABLE_STREAMING_TTS,
+  });
 
   const controller = new AbortController();
   session.activeTTSAbort = controller;
@@ -57,6 +65,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
 
   const audioChunks: Buffer[] = [];
   let sentFirstChunk = false;
+  let chunkCount = 0;
 
   await new Promise<void>((resolve) => {
     const ws = new WebSocket(url, {
@@ -115,6 +124,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
           const text = typeof data === 'string' ? data : data.toString();
           const msg = JSON.parse(text) as { audio?: string; isFinal?: boolean };
           if (msg.audio) {
+            chunkCount++;
             if (ENABLE_STREAMING_TTS) {
               sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: msg.audio, format: 'mp3' } });
               if (!sentFirstChunk) {
@@ -132,6 +142,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
         }
 
         if (Buffer.isBuffer(data)) {
+          chunkCount++;
           if (ENABLE_STREAMING_TTS) {
             sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: data.toString('base64'), format: 'mp3' } });
             if (!sentFirstChunk) {
@@ -147,6 +158,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
         }
 
         if (data instanceof ArrayBuffer) {
+          chunkCount++;
           const buf = Buffer.from(data);
           if (ENABLE_STREAMING_TTS) {
             sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: buf.toString('base64'), format: 'mp3' } });
@@ -163,6 +175,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
         }
 
         if (Array.isArray(data)) {
+          chunkCount += data.length;
           if (ENABLE_STREAMING_TTS) {
             data.forEach((chunk) => {
               sendToClient(session, { type: 'AUDIO_CHUNK', payload: { audioBase64: chunk.toString('base64'), format: 'mp3' } });
@@ -184,8 +197,16 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
       }
     });
 
-    ws.on('close', () => finalize());
+    ws.on('close', () => {
+      trackEnd(ttsCtx, 'tts', 'tts.call.end', {
+        chunkCount, streaming: ENABLE_STREAMING_TTS,
+      });
+      finalize();
+    });
     ws.on('error', (err: Error) => {
+      trackError(ttsCtx, 'tts', 'tts.call.error', {
+        error: err.message, reason: 'ws_error',
+      });
       console.warn('[tts] ElevenLabs WS error:', err);
       finalize();
     });

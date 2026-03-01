@@ -1,4 +1,5 @@
 import type { RawTelemetry, Session, TelemetrySummary } from '../types.js';
+import { emit, makeEvent } from './telemetry.js';
 
 interface SampleEntry {
   sample: RawTelemetry;
@@ -48,6 +49,11 @@ export function ingest(session: Session, raw: RawTelemetry): void {
   if (now - state.lastSummaryAt >= SUMMARY_INTERVAL_MS) {
     state.lastSummaryAt = now;
     session.latestTelemetrySummary = buildSummary(state.recentSamples, state.longSamples, now);
+    emit(makeEvent(session.id, 'telemetry', 'telemetry.ingest', {
+      sampleCount: state.recentSamples.length,
+      playerHpPercent: session.latestTelemetrySummary.playerHpPercent,
+      bossHpPercent: session.latestTelemetrySummary.bossHpPercent,
+    }));
   }
 }
 
@@ -86,7 +92,7 @@ function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], 
   const latest = (recentSamples[recentSamples.length - 1] ?? longSamples[longSamples.length - 1])?.sample;
   const bossActive = typeof latest?.bossMaxHp === 'number' && latest.bossMaxHp > 0;
   const bossHpPercent = bossActive && typeof latest?.bossHp === 'number'
-    ? Math.max(0, Math.min(100, (latest.bossHp / latest.bossMaxHp) * 100))
+    ? Math.max(0, Math.min(100, (latest.bossHp / latest.bossMaxHp!) * 100))
     : 0;
   const playerHpPercent = typeof latest?.maxHp === 'number' && latest.maxHp > 0
     ? Math.max(0, Math.min(100, (latest.hp / latest.maxHp) * 100))

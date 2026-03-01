@@ -1,6 +1,8 @@
 import { Mistral } from '@mistralai/mistralai';
 import type { Session, TelemetrySummary } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
+import { trackStart, trackEnd, trackError } from './telemetry.js';
+import { logLLMCall } from './llmLogger.js';
 
 const ENABLE_DIRECTOR = process.env.ENABLE_DIRECTOR !== 'false';
 const DIRECTOR_INTERVAL_MS = Number(process.env.DIRECTOR_INTERVAL_MS ?? 20000);
@@ -31,6 +33,7 @@ export function startDirector(session: Session): void {
   const tick = async () => {
     const t = session.latestTelemetrySummary;
     if (!t || !t.bossActive) return;
+    const ctx = trackStart(session.id, 'director', 'director.tick.start', { bossActive: true });
     try {
       const response = await getClient().chat.complete({
         model: 'mistral-small-latest',
@@ -55,8 +58,30 @@ export function startDirector(session: Session): void {
         type: 'director_update',
         payload: { difficultyDelta, enemyBias, reason, timestamp: Date.now() },
       });
-      console.log(`[director] difficultyDelta=${difficultyDelta} enemyBias=${enemyBias} reason="${reason}"`);
+      const latencyMs = Date.now() - ctx.startTime;
+      trackEnd(ctx, 'director', 'director.tick.end', { difficultyDelta, enemyBias, reason });
+      logLLMCall({
+        model: 'mistral-small-latest',
+        purpose: 'director',
+        sessionId: session.id,
+        prompt: buildDirectorPrompt(t),
+        response: content,
+        latencyMs,
+      });
+
     } catch (err) {
+      trackError(ctx, 'director', 'director.tick.end', {
+        difficultyDelta: 0, enemyBias: 'mixed',
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      logLLMCall({
+        model: 'mistral-small-latest',
+        purpose: 'director',
+        sessionId: session.id,
+        prompt: buildDirectorPrompt(t),
+        error: err instanceof Error ? err.message : String(err),
+        latencyMs: Date.now() - ctx.startTime,
+      });
       console.warn('[director] Failed to compute director decision:', err);
     }
   };

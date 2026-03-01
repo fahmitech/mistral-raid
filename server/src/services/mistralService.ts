@@ -3,6 +3,8 @@ import type { BossResponse, MechanicConfig, Session, TelemetrySummary } from '..
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
 import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
+import { trackStart, trackEnd, trackError } from './telemetry.js';
+import { logLLMCall } from './llmLogger.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -112,14 +114,14 @@ const FALLBACK_RESPONSE: BossResponse = {
 
 const MODEL_CASCADE: Array<{ model: string; timeout: number }> = DEMO_MODE
   ? [
-      { model: 'mistral-large-latest', timeout: 6000 },
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ]
+    { model: 'mistral-large-latest', timeout: 6000 },
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ]
   : [
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ];
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ];
 
 export async function handleAnalyze(session: Session, rawPayload: Record<string, unknown>): Promise<void> {
   if (session.turnState === 'THINKING' || session.turnState === 'AI_SPEAKING') return;
@@ -172,7 +174,12 @@ export async function generateBossReply(
   const userPrompt = buildUserPrompt(playerSaid, safeTelemetry);
   const overrideTimeout = process.env.LLM_TIMEOUT_MS ? Number(process.env.LLM_TIMEOUT_MS) : null;
 
-  for (const { model, timeout } of MODEL_CASCADE) {
+  for (let i = 0; i < MODEL_CASCADE.length; i++) {
+    const { model, timeout } = MODEL_CASCADE[i];
+    const sid = session?.id ?? '';
+    const ctx = trackStart(sid, 'llm', 'llm.call.start', {
+      model, promptLength: userPrompt.length, purpose: 'boss_reply',
+    });
     const controller = new AbortController();
     if (session) session.activeLLMAbort = controller;
     const timer = setTimeout(() => controller.abort(), overrideTimeout ?? timeout);
@@ -195,11 +202,37 @@ export async function generateBossReply(
       if (session) session.activeLLMAbort = null;
       const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
       const parsed = JSON.parse(content);
-      return validateBossResponse(parsed);
+      const result = validateBossResponse(parsed);
+      const latencyMs = Date.now() - ctx.startTime;
+      trackEnd(ctx, 'llm', 'llm.call.end', {
+        model, responseLength: content.length, purpose: 'boss_reply',
+        tokenUsage: (response as Record<string, unknown>).usage ?? undefined,
+      });
+      logLLMCall({
+        model,
+        purpose: 'boss_reply',
+        sessionId: sid,
+        prompt: userPrompt,
+        response: content,
+        latencyMs,
+      });
+      return result;
     } catch (err) {
       clearTimeout(timer);
       if (session) session.activeLLMAbort = null;
-      console.warn(`[mistral] Model ${model} failed:`, err);
+      const cascadeContinues = i < MODEL_CASCADE.length - 1;
+      trackError(ctx, 'llm', 'llm.call.error', {
+        model, error: err instanceof Error ? err.message : String(err),
+        cascadeContinues, purpose: 'boss_reply',
+      });
+      logLLMCall({
+        model,
+        purpose: 'boss_reply',
+        sessionId: sid,
+        prompt: userPrompt,
+        error: err instanceof Error ? err.message : String(err),
+        latencyMs: Date.now() - ctx.startTime,
+      });
     }
   }
 

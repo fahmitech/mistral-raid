@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { Session, TurnState } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { startDirector, stopDirector } from './aiDirector.js';
+import { emit, makeEvent } from './telemetry.js';
 import type { WebSocket } from 'ws';
 
 const sessions = new Map<string, Session>();
@@ -30,6 +31,7 @@ export function createSession(ws: WebSocket): Session {
   };
 
   sessions.set(id, session);
+  emit(makeEvent(id, 'session', 'session.created', {}));
   startDirector(session);
   return session;
 }
@@ -45,13 +47,16 @@ export function destroySession(id: string): void {
   session.activeLLMAbort?.abort();
   session.activeTTSAbort?.abort();
   session.sttStream?.queue.close();
+  emit(makeEvent(id, 'session', 'session.destroyed', { durationMs: 0 }));
   sessions.delete(id);
 }
 
 export function setTurnState(session: Session, state: TurnState): void {
+  const from = session.turnState;
   session.turnState = state;
   const aiState = state === 'THINKING' ? 'thinking' : state === 'AI_SPEAKING' ? 'speaking' : 'listening';
   session.aiState = aiState;
+  emit(makeEvent(session.id, 'session', 'session.state.change', { from, to: state }));
   sendToClient(session, { type: 'ai_state', payload: { state: aiState } });
 }
 

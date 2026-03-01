@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import { audioRouter } from './routes/audio.js';
 import { bossRouter } from './routes/boss.js';
+import { telemetryRouter } from './routes/telemetry.js';
 import { attachWebSocketServer } from './ws/WebSocketServer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,12 +38,13 @@ app.use(express.json());
 
 // Serve generated audio files — subfolders first, then legacy flat root
 app.use('/generated-audio/music', express.static(path.join(GENERATED_DIR, 'music')));
-app.use('/generated-audio/sfx',   express.static(path.join(GENERATED_DIR, 'sfx')));
-app.use('/generated-audio',       express.static(GENERATED_DIR));
+app.use('/generated-audio/sfx', express.static(path.join(GENERATED_DIR, 'sfx')));
+app.use('/generated-audio', express.static(GENERATED_DIR));
 
 // Audio API routes
 app.use('/api/audio', audioRouter);
 app.use('/api/boss', bossRouter);
+app.use('/api/telemetry', telemetryRouter);
 
 
 app.get('/health', (_req, res) => {
