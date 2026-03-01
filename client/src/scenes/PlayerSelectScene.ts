@@ -219,10 +219,11 @@ export class PlayerSelectScene extends Phaser.Scene {
 
   private updateSelection(): void {
     this.portraitSprites.forEach((sprite, idx) => {
-      const bg = sprite.getData('bg') as Phaser.GameObjects.Graphics;
-      const label = sprite.getData('label') as Phaser.GameObjects.Text;
-      const boxSize = sprite.getData('boxSize') as number;
-      const halfBox = sprite.getData('halfBox') as number;
+      const bg = sprite.getData('bg') as Phaser.GameObjects.Graphics | undefined;
+      const label = sprite.getData('label') as Phaser.GameObjects.Text | undefined;
+      const boxSize = (sprite.getData('boxSize') as number) ?? 0;
+      const halfBox = (sprite.getData('halfBox') as number) ?? 0;
+      if (!bg || !label) return;
 
       bg.clear();
       bg.fillStyle(0x0a0f1e, 0.9);

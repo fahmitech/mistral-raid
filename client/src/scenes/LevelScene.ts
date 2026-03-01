@@ -28,7 +28,7 @@ import {
   RoomType,
   TileType,
 } from '../config/types';
-import { GameState, getWeaponDamageMultiplier, getWeaponProjectileColor } from '../core/GameState';
+import { GameState } from '../core/GameState';
 import { MazeData, MazeGenerator } from '../core/MazeGenerator';
 import { getLevelData } from '../core/LevelConfig';
 import { EnemyFactory } from '../core/EnemyFactory';
@@ -38,6 +38,7 @@ import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { BossEntity } from '../entities/BossEntity';
 import { Item } from '../entities/Item';
+import { WeaponConfig, WeaponExplosionConfig } from '../config/types';
 import { LootSystem } from '../systems/LootSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { LightingSystem } from '../systems/LightingSystem';
@@ -93,6 +94,7 @@ export class LevelScene extends Phaser.Scene {
 
   private options = SaveSystem.loadOptions();
   private currentWeaponType: ItemType = ItemType.WeaponSword;
+  private weaponConfig!: WeaponConfig;
   private lastUpdateTime = 0;
 
   private debugEnabled = false;
@@ -517,14 +519,17 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createPlayer(): void {
-    const state = GameState.get().getData();
+    const gs = GameState.get();
+    const state = gs.getData();
     const config = CHARACTER_CONFIGS[state.character];
     this.playerSpriteKey = config.spriteKey;
     const spawnX = this.maze.playerSpawn.x * TILE_SIZE + 8;
     const spawnY = this.maze.playerSpawn.y * TILE_SIZE + 8;
     const weaponConfig = ITEM_CONFIGS[state.equippedWeapon];
+    const weaponBehavior = GameState.get().getWeaponConfig(state.equippedWeapon);
     this.currentWeaponType = state.equippedWeapon;
-    this.player = new Player(this, spawnX, spawnY, `${this.playerSpriteKey}_idle_anim_f0`, weaponConfig);
+    this.weaponConfig = weaponBehavior;
+    this.player = new Player(this, spawnX, spawnY, `${this.playerSpriteKey}_idle_anim_f0`, weaponConfig, weaponBehavior);
     this.add.existing(this.player);
     this.physics.add.existing(this.player);
     if (!this.player.body) {
@@ -534,6 +539,17 @@ export class LevelScene extends Phaser.Scene {
     if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
       this.player.play(`${this.playerSpriteKey}_idle`);
     }
+    this.applyEquippedWeapon();
+  }
+
+  private applyEquippedWeapon(): void {
+    const state = GameState.get();
+    const weaponType = state.getEquippedWeaponType();
+    const weaponItem = ITEM_CONFIGS[weaponType];
+    const behavior = state.getWeaponConfig(weaponType);
+    this.currentWeaponType = weaponType;
+    this.weaponConfig = behavior;
+    this.player.setWeapon(weaponItem, behavior, weaponType);
   }
 
   private spawnItems(): void {
@@ -563,15 +579,17 @@ export class LevelScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.enemies);
     this.physics.add.collider(this.bossGroup, this.walls);
 
-    this.physics.add.collider(this.playerProjectiles, this.walls, (obj) => obj.destroy());
+    this.physics.add.collider(this.playerProjectiles, this.walls, (obj) =>
+      this.handleProjectileWallHit(obj as Phaser.Physics.Arcade.Sprite)
+    );
     this.physics.add.collider(this.enemyProjectiles, this.walls, (obj) => obj.destroy());
 
     this.physics.add.overlap(this.playerProjectiles, this.enemies, (proj, enemy) => {
-      this.handleEnemyHit(proj as Phaser.Physics.Arcade.Image, enemy as Enemy);
+      this.handleEnemyHit(proj as Phaser.Physics.Arcade.Sprite, enemy as Enemy);
     });
 
     this.physics.add.overlap(this.playerProjectiles, this.bossGroup, (proj, boss) => {
-      this.handleBossHit(proj as Phaser.Physics.Arcade.Image, boss as BossEntity);
+      this.handleBossHit(proj as Phaser.Physics.Arcade.Sprite, boss as BossEntity);
     });
 
     this.physics.add.overlap(this.enemyProjectiles, this.player, (proj) => {
@@ -695,10 +713,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateHUD(time: number): void {
-    const state = GameState.get().getData();
+    const gs = GameState.get();
+    const state = gs.getData();
     if (state.equippedWeapon !== this.currentWeaponType) {
-      this.currentWeaponType = state.equippedWeapon;
-      this.player.setWeapon(ITEM_CONFIGS[state.equippedWeapon]);
+      this.applyEquippedWeapon();
     }
     if (this.coinText) this.coinText.setText(`COINS: ${state.coins}`);
     if (this.scoreText) this.scoreText.setText(`SCORE: ${state.score}`);
@@ -829,7 +847,8 @@ export class LevelScene extends Phaser.Scene {
     if (this.cursors.up?.isDown || this.keys.W.isDown) move.y -= 1;
     if (this.cursors.down?.isDown || this.keys.S.isDown) move.y += 1;
 
-    const state = GameState.get().getData();
+    const gs = GameState.get();
+    const state = gs.getData();
     if (move.lengthSq() > 0) {
       move.normalize();
       this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
@@ -858,11 +877,10 @@ export class LevelScene extends Phaser.Scene {
     this.player.setAimAngle(aimAngle);
 
     const primaryDown = pointer.isDown && (pointer.leftButtonDown() || pointer.primaryDown);
-    if (primaryDown) {
-      if (time - this.lastShotAt >= state.playerFireRate) {
-        this.lastShotAt = time;
-        this.shootProjectile();
-      }
+    const fireRate = gs.getEffectiveFireRate(state.playerFireRate, state.equippedWeapon);
+    if (primaryDown && time - this.lastShotAt >= fireRate) {
+      this.lastShotAt = time;
+      this.shootProjectile();
     }
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
@@ -1013,32 +1031,71 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private shootProjectile(): void {
-    const state = GameState.get().getData();
-    const weaponMult = getWeaponDamageMultiplier(state.equippedWeapon);
-    const damage = state.playerDamage * weaponMult;
-
+    const gs = GameState.get();
+    const state = gs.getData();
+    const weaponType = state.equippedWeapon;
+    const config = this.weaponConfig ?? gs.getWeaponConfig(weaponType);
+    this.weaponConfig = config;
+    const damageBase = gs.getEffectiveWeaponDamage(state.playerDamage, weaponType);
     const baseAngle = this.player.aimAngle;
-    const angles = state.isMultiShot ? [baseAngle, baseAngle - 0.2, baseAngle + 0.2] : [baseAngle];
-
     const muzzleX = this.player.x + Math.cos(baseAngle) * 10;
     const muzzleY = this.player.y + Math.sin(baseAngle) * 10;
 
+    const angles = this.buildWeaponAngles(baseAngle, config);
+    if (state.isMultiShot) {
+      angles.push(baseAngle - 0.2, baseAngle + 0.2);
+    }
+
     angles.forEach((angle) => {
-      const proj = this.physics.add.image(muzzleX, muzzleY, 'player_bullet');
+      const hasTexture = this.textures.exists(config.projectileKey);
+      const textureKey = hasTexture ? config.projectileKey : 'player_bullet';
+      const proj = this.physics.add.sprite(muzzleX, muzzleY, textureKey);
       proj.setDepth(10);
-      proj.setData('damage', damage);
       this.playerProjectiles.add(proj);
-      proj.setTint(getWeaponProjectileColor(state.equippedWeapon));
-      proj.setVelocity(Math.cos(angle) * PROJECTILE_SPEED, Math.sin(angle) * PROJECTILE_SPEED);
-      this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => proj.destroy());
+      proj.setScale(config.projectileScale ?? 1);
+      if (config.projectileSpinDegPerSec) {
+        proj.setAngularVelocity(config.projectileSpinDegPerSec);
+      } else {
+        proj.setAngularVelocity(0);
+      }
+      if (!hasTexture && config.muzzleFlashColor) {
+        proj.setTint(config.muzzleFlashColor);
+      }
+
+      const { damage, crit } = this.computeProjectileDamage(damageBase, config);
+      proj.setData('damage', damage);
+      proj.setData('knockback', config.knockback);
+      proj.setData('weaponType', weaponType);
+      proj.setData('pierce', config.pierce ?? 0);
+      proj.setData('isBomb', !!config.explosion);
+      proj.setRotation(angle + (config.projectileRotationOffset ?? 0));
+      proj.setVelocity(Math.cos(angle) * config.projectileSpeed, Math.sin(angle) * config.projectileSpeed);
+
+      if (config.holdAnimationKey && this.anims.exists(config.holdAnimationKey)) {
+        proj.play(config.holdAnimationKey);
+      } else if (proj.anims) {
+        proj.anims.stop();
+      }
+
+      if (config.explosion) {
+        proj.setData('explosion', config.explosion);
+        const fuse = this.time.delayedCall(config.explosion.fuseMs, () => this.explodeBomb(proj));
+        proj.setData('fuse', fuse);
+      } else {
+        this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => {
+          if (proj.active) proj.destroy();
+        });
+      }
+
+      if (crit) {
+        this.spawnHitParticles(proj.x, proj.y, 0xfff6a6);
+      }
     });
 
-    this.spawnMuzzleFlash(muzzleX, muzzleY);
-    this.player.weaponSprite.setRotation(baseAngle + Math.PI / 2);
-    this.player.weaponSprite.setTint(0xffffff);
-    this.time.delayedCall(50, () => this.player.weaponSprite.clearTint());
-    this.shakeCamera(28, 0.002);
-    AudioManager.playSFX(this, 'sword_attack');
+    this.player.playWeaponAttack(config, weaponType);
+    this.spawnMuzzleFlash(muzzleX, muzzleY, config.muzzleFlashColor, config.muzzleFlashSize);
+    this.shakeCamera(28, config.shakeIntensity);
+    AudioManager.get().weaponShoot(weaponType);
   }
 
   private spawnEnemyProjectile(x: number, y: number, vx: number, vy: number, damage: number, color: number): void {
@@ -1050,14 +1107,34 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(ENEMY_PROJECTILE_LIFETIME_MS, () => proj.destroy());
   }
 
-  private spawnMuzzleFlash(x: number, y: number): void {
-    const flash = this.add.circle(x, y, 3, 0xffffff, 1).setDepth(12);
+  private spawnMuzzleFlash(x: number, y: number, color: number, size: number): void {
+    const flash = this.add.circle(x, y, size, color, 1).setDepth(12);
     this.tweens.add({
       targets: flash,
       alpha: 0,
       duration: 45,
       onComplete: () => flash.destroy(),
     });
+  }
+
+  private buildWeaponAngles(baseAngle: number, config: WeaponConfig): number[] {
+    if (config.projectileCount <= 1 || config.spreadDeg <= 0) {
+      return [baseAngle];
+    }
+    const spread = Phaser.Math.DegToRad(config.spreadDeg);
+    const angles: number[] = [];
+    for (let i = 0; i < config.projectileCount; i += 1) {
+      const t = config.projectileCount === 1 ? 0.5 : i / (config.projectileCount - 1);
+      angles.push(baseAngle - spread / 2 + spread * t);
+    }
+    return angles;
+  }
+
+  private computeProjectileDamage(baseDamage: number, config: WeaponConfig): { damage: number; crit: boolean } {
+    if (config.critChance && Math.random() < config.critChance) {
+      return { damage: baseDamage * 1.5, crit: true };
+    }
+    return { damage: baseDamage, crit: false };
   }
 
   private tryDash(time: number): void {
@@ -1117,7 +1194,7 @@ export class LevelScene extends Phaser.Scene {
       const next = WEAPON_ORDER[(startIdx + i) % WEAPON_ORDER.length];
       if (owned.has(next)) {
         state.equipWeapon(next);
-        this.player.setWeapon(ITEM_CONFIGS[next]);
+        this.applyEquippedWeapon();
         this.player.weaponSprite.setTint(0xffffff);
         this.time.delayedCall(80, () => this.player.weaponSprite.clearTint());
         this.shakeCamera(20, 0.002);
@@ -1219,6 +1296,11 @@ export class LevelScene extends Phaser.Scene {
     } else {
       state.addItem(item.config, item.qty);
       AudioManager.get().pickup();
+      if (item.config.type.startsWith('w_')) {
+        state.equipWeapon(item.config.type as ItemType);
+        this.applyEquippedWeapon();
+        ScoreSystem.floatingText(this, item.x, item.y, 'EQUIPPED', '#66ccff');
+      }
     }
     item.destroy();
   }
@@ -1256,11 +1338,57 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private handleEnemyHit(proj: Phaser.Physics.Arcade.Image, enemy: Enemy): void {
-    const damage = proj.getData('damage') as number;
-    proj.destroy();
-    enemy.takeDamage(damage);
-    enemy.setTint(0xff00ff);
+  private handleEnemyHit(proj: Phaser.Physics.Arcade.Sprite, enemy: Enemy): void {
+    if (!enemy.active) return;
+    if (this.isBombProjectile(proj)) {
+      this.explodeBomb(proj);
+      return;
+    }
+    const damage = (proj.getData('damage') as number) ?? 1;
+    const knockback = (proj.getData('knockback') as number) ?? 0;
+    const weaponType = (proj.getData('weaponType') as ItemType) ?? ItemType.WeaponSword;
+    this.processEnemyDamage(enemy, damage, weaponType, knockback, proj.x, proj.y);
+    this.shakeCamera(45, this.weaponConfig?.shakeIntensity ?? 0.003);
+    this.applyPierce(proj);
+  }
+
+  private handleBossHit(proj: Phaser.Physics.Arcade.Sprite, boss: BossEntity): void {
+    if (!boss.active) return;
+    if (this.isBombProjectile(proj)) {
+      this.explodeBomb(proj);
+      return;
+    }
+    const damage = (proj.getData('damage') as number) ?? 1;
+    const weaponType = (proj.getData('weaponType') as ItemType) ?? ItemType.WeaponSword;
+    const result = boss.applyDamage(damage);
+    this.spawnHitParticles(boss.x, boss.y, this.getWeaponHitColor(weaponType));
+    if (weaponType === ItemType.WeaponHammer) {
+      this.spawnHammerShockwave(boss.x, boss.y);
+    }
+    if (result.phaseChanged) {
+      this.showPhaseText(boss.phase);
+    }
+    if (result.died) {
+      this.handleBossDeath(boss);
+    }
+    this.applyPierce(proj);
+  }
+
+  private processEnemyDamage(
+    enemy: Enemy,
+    amount: number,
+    weaponType: ItemType,
+    knockback: number,
+    originX: number,
+    originY: number
+  ): void {
+    enemy.takeDamage(amount);
+    const tint = this.getWeaponHitColor(weaponType);
+    enemy.setTint(tint);
+    this.spawnHitParticles(enemy.x, enemy.y, tint);
+    if (weaponType === ItemType.WeaponHammer) {
+      this.spawnHammerShockwave(enemy.x, enemy.y);
+    }
     this.time.delayedCall(80, () => {
       if (!enemy.active) return;
       if (enemy.config.behavior === EnemyBehavior.Shielded && enemy.hp > enemy.maxHP * 0.5) {
@@ -1268,43 +1396,150 @@ export class LevelScene extends Phaser.Scene {
       } else {
         enemy.clearTint();
       }
-      return true;
     });
-    this.shakeCamera(45, 0.003);
-    this.spawnHitParticles(enemy.x, enemy.y, 0xff00ff);
 
     if (enemy.hp <= 0) {
-      enemy.die();
-      AudioManager.playSFX(this, 'enemy_die');
-      ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
-      GameState.get().addScore(enemy.xp);
-      if (enemy.config.behavior === EnemyBehavior.Exploder) {
-        this.triggerExploder(enemy);
-      }
-      this.spawnDeathParticles(enemy.x, enemy.y);
-      this.maybeDropLoot(enemy.x, enemy.y);
-      if (enemy.config.behavior === EnemyBehavior.SplitOnDeath) {
-        this.spawnSummonedEnemy(enemy.config.type as EnemyType, enemy.x + 8, enemy.y + 8);
-        this.spawnSummonedEnemy(enemy.config.type as EnemyType, enemy.x - 8, enemy.y - 8);
-      }
-      enemy.destroy();
+      this.handleEnemyDeath(enemy);
+      return;
+    }
+
+    const angle = Phaser.Math.Angle.Between(originX, originY, enemy.x, enemy.y);
+    enemy.setVelocity(Math.cos(angle) * knockback, Math.sin(angle) * knockback);
+  }
+
+  private handleEnemyDeath(enemy: Enemy): void {
+    if (!enemy.active) return;
+    enemy.die();
+    AudioManager.playSFX(this, 'enemy_die');
+    ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
+    GameState.get().addScore(enemy.xp);
+    if (enemy.config.behavior === EnemyBehavior.Exploder) {
+      this.triggerExploder(enemy);
+    }
+    this.spawnDeathParticles(enemy.x, enemy.y);
+    this.maybeDropLoot(enemy.x, enemy.y);
+    if (enemy.config.behavior === EnemyBehavior.SplitOnDeath) {
+      this.spawnSummonedEnemy(enemy.config.type as EnemyType, enemy.x + 8, enemy.y + 8);
+      this.spawnSummonedEnemy(enemy.config.type as EnemyType, enemy.x - 8, enemy.y - 8);
+    }
+    enemy.destroy();
+  }
+
+  private applyPierce(proj: Phaser.Physics.Arcade.Sprite): void {
+    if (this.isBombProjectile(proj)) return;
+    const pierce = proj.getData('pierce') as number | undefined;
+    if (pierce && pierce > 0) {
+      proj.setData('pierce', pierce - 1);
+      this.nudgeProjectile(proj);
     } else {
-      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
-      enemy.setVelocity(Math.cos(angle) * 95, Math.sin(angle) * 95);
+      proj.destroy();
     }
   }
 
-  private handleBossHit(proj: Phaser.Physics.Arcade.Image, boss: BossEntity): void {
-    const damage = proj.getData('damage') as number;
+  private nudgeProjectile(proj: Phaser.Physics.Arcade.Sprite): void {
+    const body = proj.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body) return;
+    const velocity = body.velocity.clone();
+    if (velocity.lengthSq() === 0) return;
+    velocity.normalize().scale(6);
+    proj.x += velocity.x;
+    proj.y += velocity.y;
+  }
+
+  private getWeaponHitColor(type: ItemType): number {
+    switch (type) {
+      case ItemType.WeaponDagger:
+        return 0xb3f0ff;
+      case ItemType.WeaponKatana:
+        return 0xff5555;
+      case ItemType.WeaponHammer:
+        return 0xffaa55;
+      case ItemType.WeaponBomb:
+        return 0xaaffcc;
+      case ItemType.WeaponSword:
+      default:
+        return 0x66ccff;
+    }
+  }
+
+  private spawnHammerShockwave(x: number, y: number): void {
+    const ring = this.add.circle(x, y, 6, 0xffaa55, 0.4).setDepth(11);
+    this.tweens.add({
+      targets: ring,
+      radius: 24,
+      alpha: 0,
+      duration: 160,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private handleProjectileWallHit(obj: Phaser.GameObjects.GameObject): void {
+    const proj = obj as Phaser.Physics.Arcade.Sprite;
+    if (this.isBombProjectile(proj)) {
+      this.explodeBomb(proj);
+    } else {
+      proj.destroy();
+    }
+  }
+
+  private isBombProjectile(proj: Phaser.Physics.Arcade.Sprite): boolean {
+    return !!proj.getData('isBomb');
+  }
+
+  private explodeBomb(proj: Phaser.Physics.Arcade.Sprite): void {
+    if (!proj.active) return;
+    const explosion = proj.getData('explosion') as WeaponExplosionConfig | undefined;
+    const fuse = proj.getData('fuse') as Phaser.Time.TimerEvent | undefined;
+    fuse?.remove(false);
+    proj.setData('isBomb', false);
     proj.destroy();
-    const result = boss.applyDamage(damage);
-    this.spawnHitParticles(boss.x, boss.y, 0xffffff);
-    if (result.phaseChanged) {
-      this.showPhaseText(boss.phase);
+    if (!explosion) return;
+    const damage = (proj.getData('damage') as number) ?? 1;
+    this.spawnBombFlash(proj.x, proj.y, explosion.flashColor, explosion.radius);
+    this.shakeCamera(260, explosion.shake);
+    AudioManager.get().weaponExplode();
+
+    const enemies = this.enemies.getChildren() as Enemy[];
+    enemies.forEach((enemy) => {
+      if (!enemy.active) return;
+      if (Phaser.Math.Distance.Between(proj.x, proj.y, enemy.x, enemy.y) <= explosion.radius) {
+        this.processEnemyDamage(enemy, damage, ItemType.WeaponBomb, 80, proj.x, proj.y);
+      }
+    });
+
+    if (this.boss && this.boss.active) {
+      if (Phaser.Math.Distance.Between(proj.x, proj.y, this.boss.x, this.boss.y) <= explosion.radius + 12) {
+        const result = this.boss.applyDamage(damage);
+        this.spawnHitParticles(this.boss.x, this.boss.y, this.getWeaponHitColor(ItemType.WeaponBomb));
+        if (result.phaseChanged) {
+          this.showPhaseText(this.boss.phase);
+        }
+        if (result.died) {
+          this.handleBossDeath(this.boss);
+        }
+      }
     }
-    if (result.died) {
-      this.handleBossDeath(boss);
-    }
+  }
+
+  private spawnBombFlash(x: number, y: number, color: number, radius: number): void {
+    const flash = this.add.circle(x, y, 4, color, 0.9).setDepth(12);
+    const ring = this.add.circle(x, y, 2, color, 0.4).setDepth(12);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 2,
+      duration: 100,
+      onComplete: () => flash.destroy(),
+    });
+    this.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 220,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private triggerExploder(enemy: Enemy): void {

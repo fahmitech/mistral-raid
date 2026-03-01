@@ -462,6 +462,11 @@ export class AudioManager {
     const tone = FALLBACK_TONES[name];
     if (!tone) return;
     const [freq, dur, type, vol] = tone;
+    this.playTone(freq, dur, type, vol);
+  }
+
+  private playTone(freq: number, durMs: number, type: OscillatorType, vol: number): void {
+    if (!this.ctx || !this.sfxGain) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
@@ -470,7 +475,7 @@ export class AudioManager {
     osc.connect(gain);
     gain.connect(this.sfxGain);
     osc.start();
-    osc.stop(this.ctx.currentTime + dur / 1000);
+    osc.stop(this.ctx.currentTime + durMs / 1000);
   }
 
   // ─── Music Layer Management ────────────────────────────────────────────────────
@@ -530,6 +535,34 @@ export class AudioManager {
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(1.0, now + 0.5);
     this.musicNodes.set(name, { source, gain, name });
+  }
+
+  weaponShoot(type: ItemType): void {
+    switch (type) {
+      case ItemType.WeaponSword:
+        this.playSFX('sword_attack', 0.8);
+        break;
+      case ItemType.WeaponDagger:
+        this.playTone(760, 55, 'triangle', 0.05);
+        break;
+      case ItemType.WeaponKatana:
+        this.playTone(480, 80, 'sawtooth', 0.07);
+        break;
+      case ItemType.WeaponHammer:
+        this.playTone(320, 110, 'square', 0.09);
+        break;
+      case ItemType.WeaponBomb:
+        this.playTone(220, 90, 'triangle', 0.08);
+        break;
+      default:
+        this.playSFX('sword_attack', 0.8);
+        break;
+    }
+  }
+
+  weaponExplode(): void {
+    this.playTone(160, 200, 'sawtooth', 0.12);
+    this.playTone(60, 260, 'triangle', 0.08);
   }
 
   private fadeOutAllMusic(durationSec: number): void {

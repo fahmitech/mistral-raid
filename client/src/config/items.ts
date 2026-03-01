@@ -3,7 +3,7 @@ import { ItemConfig, ItemEffect, ItemRarity, ItemType } from './types';
 export const ITEM_CONFIGS: Record<ItemType, ItemConfig> = {
   [ItemType.WeaponSword]: {
     type: ItemType.WeaponSword,
-    name: 'Iron Sword',
+    name: 'Sword',
     sprite: 'weapon_regular_sword',
     effect: ItemEffect.BoostDamage,
     value: 1,
@@ -11,8 +11,8 @@ export const ITEM_CONFIGS: Record<ItemType, ItemConfig> = {
   },
   [ItemType.WeaponDagger]: {
     type: ItemType.WeaponDagger,
-    name: 'Sharp Dagger',
-    sprite: 'weapon_knife',
+    name: 'NINJA THROWER',
+    sprite: 'weapon_shuriken',
     effect: ItemEffect.BoostDamage,
     value: 1,
     rarity: ItemRarity.Common,
@@ -35,7 +35,7 @@ export const ITEM_CONFIGS: Record<ItemType, ItemConfig> = {
   },
   [ItemType.WeaponBomb]: {
     type: ItemType.WeaponBomb,
-    name: 'Bomb',
+    name: 'Pixel Bomb',
     sprite: 'bomb_f0',
     effect: ItemEffect.BoostDamage,
     value: 4,
@@ -129,10 +129,10 @@ export const WEAPON_ORDER: ItemType[] = [
 
 export const WEAPON_LABELS: Record<ItemType, string> = {
   [ItemType.WeaponSword]: 'SWORD',
-  [ItemType.WeaponDagger]: 'DAGGER',
+  [ItemType.WeaponDagger]: 'NINJA THROWER',
   [ItemType.WeaponKatana]: 'KATANA',
   [ItemType.WeaponHammer]: 'HAMMER',
-  [ItemType.WeaponBomb]: 'BOMB',
+  [ItemType.WeaponBomb]: 'PIXEL BOMB',
   [ItemType.FlaskRed]: 'FLASK',
   [ItemType.FlaskBlue]: 'FLASK',
   [ItemType.FlaskGreen]: 'FLASK',

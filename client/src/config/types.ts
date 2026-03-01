@@ -124,6 +124,36 @@ export interface InventorySlot {
   qty: number;
 }
 
+export interface WeaponExplosionConfig {
+  radius: number;
+  fuseMs: number;
+  flashColor: number;
+  shake: number;
+}
+
+export interface WeaponConfig {
+  damageMult: number;
+  fireRateMult: number;
+  projectileCount: number;
+  spreadDeg: number;
+  projectileSpeed: number;
+  knockback: number;
+  projectileKey: string;
+  projectileScale: number;
+  projectileSpinDegPerSec?: number;
+  projectileRotationOffset?: number;
+  muzzleFlashColor: number;
+  muzzleFlashSize: number;
+  shakeIntensity: number;
+  holdOffset: { x: number; y: number };
+  rotationOffset: number;
+  weaponScale: number;
+  pierce?: number;
+  critChance?: number;
+  explosion?: WeaponExplosionConfig;
+  holdAnimationKey?: string;
+}
+
 export interface GameStateData {
   level: number;
   score: number;

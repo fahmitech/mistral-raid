@@ -1,0 +1,20 @@
+@keyframes shuriken-spin {
+  from { transform: translateX(-150px) rotate(0deg); }
+  to { transform: translateX(150px) rotate(1080deg); }
+}
+
+@keyframes hammer-smash {
+  0%, 100% { transform: translateY(-40px) rotate(-45deg); }
+  50% { transform: translateY(10px) rotate(0deg); }
+}
+
+@keyframes fireball-fly {
+  0% { transform: translateX(0) scale(0.5); opacity: 0; }
+  50% { transform: translateX(50px) scale(1.2); opacity: 1; }
+  100% { transform: translateX(100px) scale(0.5); opacity: 0; }
+}
+
+.preview-animation-shuriken { animation: shuriken-spin 1.5s infinite linear; }
+.preview-animation-hammer { animation: hammer-smash 0.8s infinite ease-in; }
+.preview-animation-katana { animation: fireball-fly 1s infinite ease-out; }
+/* Add bomb animation similarly */
