@@ -10,6 +10,7 @@ import { CreditsScene } from './scenes/CreditsScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { VictoryScene } from './scenes/VictoryScene';
 import { AudioDebugOverlay } from './systems/AudioDebugOverlay';
+import { ArenaScene } from './scenes/ArenaScene';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH, ZOOM } from './config/constants';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -44,6 +45,7 @@ const config: Phaser.Types.Core.GameConfig = {
     CreditsScene,
     GameOverScene,
     VictoryScene,
+    ArenaScene,
     AudioDebugOverlay,
   ],
   backgroundColor: '#0a0a1a',

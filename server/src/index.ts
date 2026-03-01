@@ -4,7 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import http from 'http';
 import { audioRouter } from './routes/audio.js';
+import { bossRouter } from './routes/boss.js';
+import { attachWebSocketServer } from './ws/WebSocketServer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +41,7 @@ app.use('/generated-audio',       express.static(GENERATED_DIR));
 
 // Audio API routes
 app.use('/api/audio', audioRouter);
+app.use('/api/boss', bossRouter);
 
 
 app.get('/health', (_req, res) => {
@@ -45,8 +49,11 @@ app.get('/health', (_req, res) => {
 });
 
 
-app.listen(PORT, () => {
-  console.log(`[server] Mistral Raid audio server running at http://localhost:${PORT}`);
+const httpServer = http.createServer(app);
+attachWebSocketServer(httpServer);
+
+httpServer.listen(PORT, () => {
+  console.log(`[server] Mistral Raid server running at http://localhost:${PORT}`);
   console.log(`[server] Generated audio stored in: ${GENERATED_DIR}`);
 
   if (!process.env.ELEVENLABS_API_KEY) {
@@ -54,6 +61,4 @@ app.listen(PORT, () => {
   } else {
     console.log('[server] ElevenLabs API key loaded');
   }
-
-
 });

@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "^0.0.16",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

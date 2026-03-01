@@ -5,5 +5,8 @@ export default defineConfig({
   publicDir: 'public',
   server: {
     port: 5173
-  }
+  },
+  optimizeDeps: {
+    exclude: ['@ricky0123/vad-web'],
+  },
 })
