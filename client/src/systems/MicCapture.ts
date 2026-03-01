@@ -1,4 +1,6 @@
 import * as vad from '@ricky0123/vad-web';
+import vadModelUrl from '@ricky0123/vad-web/dist/silero_vad.onnx?url';
+import vadWorkletUrl from '@ricky0123/vad-web/dist/vad.worklet.bundle.min.js?url';
 import { wsClient } from '../network/WebSocketClient';
 
 class MicCapture {
@@ -16,6 +18,9 @@ class MicCapture {
       }
 
       this.vad = await MicVADRef.new({
+        modelURL: vadModelUrl,
+        workletURL: vadWorkletUrl,
+        modelFetcher: (path: string) => fetch(path).then((res) => res.arrayBuffer()),
         onSpeechStart: () => {
           wsClient.send({ type: 'vad_state', payload: { speaking: true } });
           this.speechStartHandler?.();

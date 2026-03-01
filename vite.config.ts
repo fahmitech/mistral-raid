@@ -7,6 +7,7 @@ export default defineConfig({
     port: 5173
   },
   optimizeDeps: {
-    exclude: ['@ricky0123/vad-web'],
+    include: ['@ricky0123/vad-web'],
   },
+  assetsInclude: ['**/*.onnx'],
 })
