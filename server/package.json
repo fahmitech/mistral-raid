@@ -9,11 +9,11 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
+    "@mistralai/mistralai": "^1.14.1",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "@mistralai/mistralai": "^1.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
