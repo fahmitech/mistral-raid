@@ -214,6 +214,7 @@ export class PlayerSelectScene extends Phaser.Scene {
     this.selectedIndex =
       (this.selectedIndex + dir + CHARACTER_ORDER.length) % CHARACTER_ORDER.length;
     this.updateSelection();
+    AudioManager.playSFX(this, 'menu_hover');
   }
 
   private updateSelection(): void {
@@ -288,14 +289,22 @@ export class PlayerSelectScene extends Phaser.Scene {
   }
 
   private confirm(): void {
+    AudioManager.playSFX(this, 'ui_click');
     const type = CHARACTER_ORDER[this.selectedIndex];
     const state = GameState.get();
     state.reset();
     state.setCharacter(type);
-    this.scene.start('LevelScene', { level: 1 });
+    this.cameras.main.fadeOut(280, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('LevelScene', { level: 1 });
+    });
   }
 
   private back(): void {
-    this.scene.start('MenuScene');
+    AudioManager.playSFX(this, 'menu_hover');
+    this.cameras.main.fadeOut(280, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start('MenuScene');
+    });
   }
 }

@@ -44,6 +44,7 @@ import { LightingSystem } from '../systems/LightingSystem';
 import { MiniMap } from '../systems/MiniMap';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
+import { DirectorState } from '../systems/DirectorState';
 import { MusicLayer } from '../types/AudioTypes';
 
 export class LevelScene extends Phaser.Scene {
@@ -103,6 +104,14 @@ export class LevelScene extends Phaser.Scene {
   // ─── Audio debug (F4 overlay) ─────────────────────────────────────────────────
   private audioDebugText?: Phaser.GameObjects.Text;
 
+  // ─── AI Director (F5 panel) ───────────────────────────────────────────────────
+  private directorPanel?: Phaser.GameObjects.Text;
+  private roomsCleared = 0;
+  private enemiesKilledTotal = 0;
+  private damageTakenTotal = 0;
+  private damageDealtTotal = 0;
+  private sessionStartTime = 0;
+
   // ─── Audio state ─────────────────────────────────────────────────────────────
   private activeAudioLayer: MusicLayer = 'ambient';
   private combatMusicActive = false;
@@ -144,6 +153,13 @@ export class LevelScene extends Phaser.Scene {
     this.lastFootstepAt = 0;
     this.lastTelemetryUpdate = 0;
 
+    // Reset Director tracking for this level
+    this.roomsCleared = 0;
+    this.enemiesKilledTotal = 0;
+    this.damageTakenTotal = 0;
+    this.damageDealtTotal = 0;
+    this.sessionStartTime = Date.now();
+
     // Start dungeon ambient music
     AudioManager.playMusic(this, 'dungeon_ambient');
 
@@ -173,6 +189,8 @@ export class LevelScene extends Phaser.Scene {
 
     this.createPlayer();
     this.spawnItems();
+    // Apply AI Director decision before spawning enemies
+    this.levelData = DirectorState.get().applyToLevelData(this.levelData);
     EnemyFactory.spawnEnemies(this, this.maze, this.levelData, this.enemies);
 
     this.setupCollisions();
@@ -197,6 +215,19 @@ export class LevelScene extends Phaser.Scene {
 
     this.cameras.main.fadeIn(500, 0, 0, 0);
     this.showLevelIntro();
+
+    // Auto-show AI Director panel for visibility during testing (F5 toggles it off)
+    this.directorPanel = this.add
+      .text(160, 18, DirectorState.get().getPanelText(), {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '9px',
+        color: '#cc99ff',
+        backgroundColor: 'rgba(0,0,0,0.72)',
+        padding: { x: 5, y: 3 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(9999);
 
     this.stairsSprite = this.add.image(
       this.maze.stairs.x * TILE_SIZE + 8,
@@ -227,17 +258,25 @@ export class LevelScene extends Phaser.Scene {
       F2: this.input.keyboard!.addKey('F2'),
       F3: this.input.keyboard!.addKey('F3'),
       F4: this.input.keyboard!.addKey('F4'),
+      F5: this.input.keyboard!.addKey('F5'),
     };
     this.debugToggleKey = this.keys.F2;
 
     this.input.off('pointerdown', this.handlePointerDown, this);
     this.input.on('pointerdown', this.handlePointerDown, this);
+
+    // Debug: force an early Director telemetry call after 5 s to verify the HTTP pipeline
+    this.time.delayedCall(5000, () => {
+      console.log('📡 [Director] Sending forced test telemetry (HTTP) at t=5s');
+      this.sendTelemetryToDirector();
+    });
   }
 
   update(time: number): void {
     this.lastUpdateTime = time;
     this.handleInput(time);
     this.updateCombatMusic(time);
+    this.updateDirectorTelemetry(time);
 
     this.player.updateBlink(time);
     // Defensive: keep the player above the fog overlay even if something resets depths.
@@ -391,6 +430,8 @@ export class LevelScene extends Phaser.Scene {
     this.debugMarker = undefined;
     this.audioDebugText?.destroy();
     this.audioDebugText = undefined;
+    this.directorPanel?.destroy();
+    this.directorPanel = undefined;
 
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
@@ -944,6 +985,29 @@ export class LevelScene extends Phaser.Scene {
       );
     }
 
+    if (this.keys.F5 && Phaser.Input.Keyboard.JustDown(this.keys.F5)) {
+      if (this.directorPanel) {
+        this.directorPanel.destroy();
+        this.directorPanel = undefined;
+      } else {
+        this.directorPanel = this.add
+          .text(160, 18, '', {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            fontSize: '9px',
+            color: '#cc99ff',
+            backgroundColor: 'rgba(0,0,0,0.72)',
+            padding: { x: 5, y: 3 },
+          })
+          .setOrigin(0.5, 0)
+          .setScrollFactor(0)
+          .setDepth(9999);
+      }
+    }
+
+    if (this.directorPanel) {
+      this.directorPanel.setText(DirectorState.get().getPanelText());
+    }
+
     this.updatePickupHint();
   }
 
@@ -1258,6 +1322,7 @@ export class LevelScene extends Phaser.Scene {
   private handleEnemyHit(proj: Phaser.Physics.Arcade.Image, enemy: Enemy): void {
     const damage = proj.getData('damage') as number;
     proj.destroy();
+    this.damageDealtTotal += damage;
     enemy.takeDamage(damage);
     enemy.setTint(0xff00ff);
     this.time.delayedCall(80, () => {
@@ -1273,6 +1338,7 @@ export class LevelScene extends Phaser.Scene {
     this.spawnHitParticles(enemy.x, enemy.y, 0xff00ff);
 
     if (enemy.hp <= 0) {
+      this.enemiesKilledTotal += 1;
       enemy.die();
       AudioManager.playSFX(this, 'enemy_die');
       ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
@@ -1316,7 +1382,7 @@ export class LevelScene extends Phaser.Scene {
 
   private maybeDropLoot(x: number, y: number): void {
     if (Math.random() > 0.4) return;
-    const config = LootSystem.rollDrop();
+    const config = DirectorState.get().getBiasedLootOverride() ?? LootSystem.rollDrop();
     const isManual = config.type.startsWith('w_');
     const drop = ItemFactory.spawnItem(this, config, x, y, this.items, isManual);
     if (config.type === ItemType.Coin && this.anims.exists('coin_spin')) {
@@ -1553,6 +1619,7 @@ export class LevelScene extends Phaser.Scene {
     GameState.get().takeDamage(amount);
     this.player.setInvincible(INVINCIBLE_MS, time);
     this.damageLog.push({ amount, time });
+    this.damageTakenTotal += amount;
     const hpPct = GameState.get().getData().playerHP / GameState.get().getData().playerMaxHP;
     if (hpPct <= 0.3) {
       AudioManager.get().startHeartbeat();
@@ -1627,11 +1694,45 @@ export class LevelScene extends Phaser.Scene {
         this.enemyQuietStart = 0;
         this.activeAudioLayer = 'ambient';
         AudioManager.playMusic(this, 'dungeon_ambient');
+        // Room cleared — send telemetry to AI Director
+        this.roomsCleared += 1;
+        this.sendTelemetryToDirector();
         if (GameState.get().getData().playerHP / GameState.get().getData().playerMaxHP > 0.3) {
           AudioManager.get().stopHeartbeat();
         }
       }
     }
+  }
+
+  private updateDirectorTelemetry(time: number): void {
+    if (this.lastTelemetryUpdate === 0) {
+      this.lastTelemetryUpdate = time;
+      return;
+    }
+    if (time - this.lastTelemetryUpdate > 20_000) {
+      this.lastTelemetryUpdate = time;
+      this.sendTelemetryToDirector();
+    }
+  }
+
+  private sendTelemetryToDirector(): void {
+    const state = GameState.get().getData();
+    const playTimeSeconds = (Date.now() - this.sessionStartTime) / 1000;
+    DirectorState.get().sendTelemetry({
+      sessionId: DirectorState.get().sessionId,
+      level: state.level,
+      roomsCleared: this.roomsCleared,
+      enemiesKilled: this.enemiesKilledTotal,
+      playerHP: state.playerHP,
+      playerMaxHP: state.playerMaxHP,
+      coins: state.coins,
+      score: state.score,
+      damageDealt: this.damageDealtTotal,
+      damageTaken: this.damageTakenTotal,
+      playTimeSeconds,
+      weaponType: state.equippedWeapon,
+      character: state.character,
+    });
   }
 
   private showLevelIntro(): void {
