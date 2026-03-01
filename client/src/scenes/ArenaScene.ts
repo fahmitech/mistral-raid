@@ -5,7 +5,7 @@ import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { ITEM_CONFIGS } from '../config/items';
 import { BOSS_CONFIGS } from '../config/bosses';
-import { BossType } from '../config/types';
+import { BossType, ItemType } from '../config/types';
 import { BossEntity } from '../entities/BossEntity';
 import { AudioManager } from '../systems/AudioManager';
 import { SaveSystem } from '../systems/SaveSystem';
@@ -79,6 +79,10 @@ export class ArenaScene extends Phaser.Scene {
   private wsUnsub: (() => void) | null = null;
   private wsStatusUnsub: (() => void) | null = null;
 
+  private lives = 3;
+  private livesText?: Phaser.GameObjects.Text;
+  private arenaDefeated = false;
+
   constructor() {
     super('ArenaScene');
   }
@@ -91,6 +95,8 @@ export class ArenaScene extends Phaser.Scene {
     const gs = GameState.get();
     const state = gs.getData();
     gs.setHP(state.playerMaxHP);
+    this.lives = gs.getLives();
+    this.arenaDefeated = false;
     const charConfig = CHARACTER_CONFIGS[state.character];
     this.playerSpriteKey = charConfig.spriteKey;
     const weaponType = state.equippedWeapon;
@@ -129,6 +135,8 @@ export class ArenaScene extends Phaser.Scene {
       S: this.input.keyboard!.addKey('S'),
       D: this.input.keyboard!.addKey('D'),
       T: this.input.keyboard!.addKey('T'),
+      I: this.input.keyboard!.addKey('I'),
+      R: this.input.keyboard!.addKey('R'),
       SPACE: this.input.keyboard!.addKey('SPACE'),
       SHIFT: this.input.keyboard!.addKey('SHIFT'),
       F2: this.input.keyboard!.addKey('F2'),
@@ -139,6 +147,11 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
+    this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#ffdd44',
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
     this.createMicIndicator();
     this.createTranscriptOverlay();
     this.createWsDebugOverlay();
@@ -317,9 +330,21 @@ export class ArenaScene extends Phaser.Scene {
     if (this.keys.F2 && Phaser.Input.Keyboard.JustDown(this.keys.F2)) {
       this.devConsole.toggle();
     }
-    if (GameState.get().isDead() && this.arenaPhase !== 'DEFEAT') {
+    if (GameState.get().isDead() && this.arenaPhase !== 'DEFEAT' && !this.arenaDefeated) {
       this.arenaPhase = 'DEFEAT';
-      this.scene.start('GameOverScene');
+      this.arenaDefeated = true;
+      this.lives -= 1;
+      GameState.get().setLives(this.lives);
+      if (this.lives <= 0) {
+        AudioManager.get().stopHeartbeat();
+        AudioManager.stopAll(this);
+        this.cameras.main.fadeOut(600, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this.scene.start('GameOverScene');
+        });
+      } else {
+        this.showArenaRetryOverlay();
+      }
     }
 
     if (this.bossHp <= 0 && this.arenaPhase !== 'VICTORY') {
@@ -588,6 +613,15 @@ export class ArenaScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.ESC)) {
       this.scene.start('MenuScene');
     }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.I)) {
+      this.scene.pause();
+      this.scene.launch('InventoryScene');
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
+      this.usePotion();
+    }
   }
 
   private shootProjectile(angle: number): void {
@@ -691,6 +725,91 @@ export class ArenaScene extends Phaser.Scene {
     this.player.setInvincible(INVINCIBLE_MS, now);
     this.telemetry.recordDamage(source, amount);
     AudioManager.playSFX(this, 'enemy_hit');
+  }
+
+  private usePotion(): void {
+    const state = GameState.get();
+    const order = [ItemType.FlaskRed, ItemType.FlaskBigRed, ItemType.FlaskGreen];
+    for (const type of order) {
+      const slot = state.inventory.find((s) => s.config.type === type);
+      if (slot) {
+        if (type === ItemType.FlaskBigRed) {
+          state.heal(3);
+        } else {
+          state.heal(1);
+        }
+        if (type === ItemType.FlaskGreen) {
+          const duration = ITEM_CONFIGS[ItemType.FlaskGreen].duration ?? 8000;
+          state.applyShield(duration);
+        }
+        state.removeItem(slot.config, 1);
+        AudioManager.playSFX(this, 'potion_drink');
+        this.spawnHealEffect();
+        break;
+      }
+    }
+  }
+
+  private spawnHealEffect(): void {
+    const label = this.add.text(this.player.x, this.player.y - 10, '+HP', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#33ff66',
+    }).setOrigin(0.5).setDepth(20);
+    this.tweens.add({
+      targets: label,
+      y: label.y - 14,
+      alpha: 0,
+      duration: 700,
+      onComplete: () => label.destroy(),
+    });
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (Math.PI * 2 * i) / 8;
+      const particle = this.add.circle(this.player.x, this.player.y, 2, 0x33ff66, 0.8).setDepth(12);
+      const dx = Math.cos(angle) * 12;
+      const dy = Math.sin(angle) * 12;
+      this.tweens.add({
+        targets: particle,
+        x: particle.x + dx,
+        y: particle.y + dy,
+        alpha: 0,
+        duration: 350,
+        onComplete: () => particle.destroy(),
+      });
+    }
+  }
+
+  private showArenaRetryOverlay(): void {
+    const gs = GameState.get();
+    gs.setHP(gs.getData().playerMaxHP);
+    AudioManager.get().stopHeartbeat();
+    AudioManager.stopAll(this);
+
+    const cx = INTERNAL_WIDTH / 2;
+    const cy = INTERNAL_HEIGHT / 2;
+    this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
+    this.add.text(cx, cy - 18, 'YOU DIED', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '10px',
+      color: '#ff4444',
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
+    this.add.text(cx, cy, `LIVES REMAINING: ${this.lives}`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '6px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
+    this.add.text(cx, cy + 14, 'Retrying...', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#aaaaaa',
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
+
+    this.time.delayedCall(2500, () => {
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.restart();
+      });
+    });
   }
 
   shutdown(): void {

@@ -21,6 +21,7 @@ import { ENEMY_CONFIGS } from '../config/enemies';
 import { ITEM_CONFIGS, WEAPON_LABELS, WEAPON_ORDER } from '../config/items';
 import {
   EnemyBehavior,
+  EnemyConfig,
   EnemyType,
   ItemEffect,
   ItemType,
@@ -50,6 +51,10 @@ import { wsClient } from '../network/WebSocketClient';
 
 import { MusicLayer } from '../types/AudioTypes';
 
+// Persists across scene.restart() calls so retries reuse the exact same map and enemy positions.
+interface EnemySpawnRecord { x: number; y: number; config: EnemyConfig; }
+let _checkpoint: { maze: MazeData; spawns: EnemySpawnRecord[]; level: number } | null = null;
+
 export class LevelScene extends Phaser.Scene {
   private levelData!: LevelData;
   private maze!: MazeData;
@@ -74,6 +79,8 @@ export class LevelScene extends Phaser.Scene {
   private hintText?: Phaser.GameObjects.Text;
   private weaponText?: Phaser.GameObjects.Text;
   private levelText?: Phaser.GameObjects.Text;
+  private enemyCountText?: Phaser.GameObjects.Text;
+  private livesText?: Phaser.GameObjects.Text;
   private coinText?: Phaser.GameObjects.Text;
   private scoreText?: Phaser.GameObjects.Text;
   private scoreBg?: Phaser.GameObjects.Rectangle;
@@ -90,6 +97,13 @@ export class LevelScene extends Phaser.Scene {
   private bossBar?: Phaser.GameObjects.Graphics;
   private bossNameText?: Phaser.GameObjects.Text;
   private bossTriggered = false;
+  private currentLevel = 1;
+  private levelCompleting = false;
+  private lives = 3;
+  private isRetry = false;
+  private checkpointEnemiesKilled = 0;
+  private enemiesKilledThisLevel = 0;
+  private retrying = false;
   private stairsSprite?: Phaser.GameObjects.Image;
   private stairsActive = false;
 
@@ -128,7 +142,7 @@ export class LevelScene extends Phaser.Scene {
     super('LevelScene');
   }
 
-  init(data: { level?: number; continue?: boolean }): void {
+  init(data: { level?: number; continue?: boolean; lives?: number; enemiesKilled?: number; isRetry?: boolean }): void {
     const state = GameState.get();
     if (data?.continue) {
       const save = SaveSystem.load();
@@ -138,6 +152,13 @@ export class LevelScene extends Phaser.Scene {
     } else if (data?.level) {
       state.setLevel(data.level);
     }
+    this.currentLevel = data?.level ?? 1;
+    this.lives = data?.lives ?? 3;
+    this.isRetry = data?.isRetry ?? false;
+    this.checkpointEnemiesKilled = data?.enemiesKilled ?? 0;
+    this.enemiesKilledThisLevel = 0;
+    this.levelCompleting = false;
+    this.retrying = false;
     this.levelData = getLevelData(state.getData().level);
   }
 
@@ -171,7 +192,13 @@ export class LevelScene extends Phaser.Scene {
 
     this.createBulletTextures();
 
-    this.maze = new MazeGenerator().generate(this.levelData);
+    // Reuse the saved maze on retry so the player returns to the exact same map.
+    const usingCheckpoint = this.isRetry && _checkpoint?.level === this.currentLevel;
+    if (usingCheckpoint) {
+      this.maze = _checkpoint!.maze;
+    } else {
+      this.maze = new MazeGenerator().generate(this.levelData);
+    }
     this.physics.world.setBounds(0, 0, this.maze.width * TILE_SIZE, this.maze.height * TILE_SIZE);
 
     this.createFloor();
@@ -186,7 +213,26 @@ export class LevelScene extends Phaser.Scene {
 
     this.createPlayer();
     this.spawnItems();
-    EnemyFactory.spawnEnemies(this, this.maze, this.levelData, this.enemies);
+
+    if (usingCheckpoint) {
+      // Spawn only the enemies that were still alive when the player died.
+      for (let i = this.checkpointEnemiesKilled; i < _checkpoint!.spawns.length; i += 1) {
+        const s = _checkpoint!.spawns[i];
+        const enemy = new Enemy(this, s.x, s.y, s.config);
+        this.add.existing(enemy);
+        this.physics.add.existing(enemy);
+        enemy.setCollideWorldBounds(true);
+        this.enemies.add(enemy);
+      }
+    } else {
+      // Fresh level — spawn exactly the right enemies for this level and save for retry.
+      const spawned = this.spawnLevelEnemies();
+      _checkpoint = {
+        maze: this.maze,
+        spawns: spawned.map((e) => ({ x: e.x, y: e.y, config: e.config })),
+        level: this.currentLevel,
+      };
+    }
 
     this.setupCollisions();
     this.setupCamera();
@@ -672,7 +718,7 @@ export class LevelScene extends Phaser.Scene {
     const margin = 6;
     const rightX = INTERNAL_WIDTH - margin;
     this.levelText = this.add
-      .text(6, 6, `LEVEL ${this.levelData.level}`, {
+      .text(6, 6, `LEVEL ${this.currentLevel}`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffcc00',
@@ -680,8 +726,28 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
+    const initKills = this.checkpointEnemiesKilled;
+    const initThreshold = this.getKillThreshold();
+    this.enemyCountText = this.add
+      .text(6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '5px',
+        color: '#ff8888',
+      })
+      .setScrollFactor(0)
+      .setDepth(20);
+
+    this.livesText = this.add
+      .text(6, 22, `LIVES: ${this.lives}`, {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '5px',
+        color: '#44ffcc',
+      })
+      .setScrollFactor(0)
+      .setDepth(20);
+
     this.coinText = this.add
-      .text(6, 14, 'COINS: 0', {
+      .text(6, 30, 'COINS: 0', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffdd44',
@@ -778,6 +844,12 @@ export class LevelScene extends Phaser.Scene {
     if (state.equippedWeapon !== this.currentWeaponType) {
       this.applyEquippedWeapon();
     }
+    if (this.levelText) this.levelText.setText(`LEVEL ${this.currentLevel}`);
+    if (this.enemyCountText) {
+      const totalKilled = this.checkpointEnemiesKilled + this.enemiesKilledThisLevel;
+      this.enemyCountText.setText(`KILLS: ${totalKilled} / ${this.getKillThreshold()}`);
+    }
+    if (this.livesText) this.livesText.setText(`LIVES: ${this.lives}`);
     if (this.coinText) this.coinText.setText(`COINS: ${state.coins}`);
     if (this.scoreText) this.scoreText.setText(`SCORE: ${state.score}`);
     if (this.weaponText) {
@@ -1493,6 +1565,7 @@ export class LevelScene extends Phaser.Scene {
 
   private handleEnemyDeath(enemy: Enemy): void {
     if (!enemy.active) return;
+    this.enemiesKilledThisLevel += 1;
     enemy.die();
     AudioManager.playSFX(this, 'enemy_die');
     ScoreSystem.floatingText(this, enemy.x, enemy.y, `+${enemy.xp}`, '#ffdd44');
@@ -1507,6 +1580,8 @@ export class LevelScene extends Phaser.Scene {
       this.spawnSummonedEnemy(enemy.config.type as EnemyType, enemy.x - 8, enemy.y - 8);
     }
     enemy.destroy();
+    // After destroy, check if the kill threshold for this level has been reached.
+    this.time.delayedCall(100, () => this.checkKillThreshold());
   }
 
   private applyPierce(proj: Phaser.Physics.Arcade.Sprite): void {
@@ -1725,17 +1800,52 @@ export class LevelScene extends Phaser.Scene {
     AudioManager.get().playSFXAt('elemental_magic', x, y, this.player.x, this.player.y, 0.6);
   }
 
-  private checkBossTrigger(): void {
-    if (this.bossTriggered) return;
-    const tileX = Math.floor(this.player.x / TILE_SIZE);
-    const tileY = Math.floor(this.player.y / TILE_SIZE);
-    const room = this.maze.bossRoom;
-    if (tileX >= room.x && tileX < room.x + room.w && tileY >= room.y && tileY < room.y + room.h) {
-      this.bossTriggered = true;
-      AudioManager.get().playSFX('suspense_build', 0.8);
-      AudioManager.get().playSFX('low_rumble', 0.6);
-      this.spawnBoss();
+  /** Spawn exactly the enemies defined for the current level and return them for checkpoint saving. */
+  private spawnLevelEnemies(): Enemy[] {
+    if (this.currentLevel === 1) {
+      // Level 1 — 7 basic enemies (Goblin + Imp)
+      return this.spawnEnemiesCustom(7, [EnemyType.Goblin, EnemyType.Imp]);
     }
+    if (this.currentLevel === 2) {
+      // Level 2 — 3 elite enemies, completely different types from Level 1
+      return this.spawnEnemiesCustom(3, [EnemyType.Chort, EnemyType.BigZombie, EnemyType.Skelet]);
+    }
+    return [];
+  }
+
+  /** Spawn `count` enemies chosen round-robin from `types`, placed in maze rooms. */
+  private spawnEnemiesCustom(count: number, types: EnemyType[]): Enemy[] {
+    const rooms = this.maze.rooms.filter(
+      (r) => r.type === RoomType.Normal || r.type === RoomType.Secret
+    );
+    if (rooms.length === 0 || types.length === 0) return [];
+    const result: Enemy[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const room = rooms[i % rooms.length];
+      const type = types[i % types.length];
+      const base = ENEMY_CONFIGS[type];
+      const config: EnemyConfig = {
+        ...base,
+        hp: Math.round(base.hp * this.levelData.enemyHPMult),
+        speed: base.speed * this.levelData.enemySpdMult,
+      };
+      const rx = Phaser.Math.Between(room.x + 1, room.x + room.w - 2);
+      const ry = Phaser.Math.Between(room.y + 1, room.y + room.h - 2);
+      const worldX = rx * TILE_SIZE + TILE_SIZE / 2;
+      const worldY = ry * TILE_SIZE + TILE_SIZE / 2;
+      const enemy = new Enemy(this, worldX, worldY, config);
+      this.add.existing(enemy);
+      this.physics.add.existing(enemy);
+      enemy.setCollideWorldBounds(true);
+      this.enemies.add(enemy);
+      result.push(enemy);
+    }
+    return result;
+  }
+
+  private checkBossTrigger(): void {
+    // ArenaScene is launched exclusively via handleLevelComplete after the kill threshold is met.
+    // Boss room entry is disabled — do nothing here.
   }
 
   private spawnBoss(): void {
@@ -1885,10 +1995,19 @@ export class LevelScene extends Phaser.Scene {
     this.spawnPlayerHitEffects();
 
     if (GameState.get().isDead()) {
-      this.cameras.main.fadeOut(600, 0, 0, 0);
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start('GameOverScene');
-      });
+      if (this.retrying) return;
+      this.retrying = true;
+      this.lives -= 1;
+      if (this.lives <= 0) {
+        AudioManager.get().stopHeartbeat();
+        AudioManager.stopAll(this);
+        this.cameras.main.fadeOut(600, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+          this.scene.start('GameOverScene');
+        });
+      } else {
+        this.showRetryOverlay();
+      }
     }
   }
 
@@ -1956,6 +2075,97 @@ export class LevelScene extends Phaser.Scene {
           AudioManager.get().stopHeartbeat();
         }
       }
+    }
+  }
+
+  private showRetryOverlay(): void {
+    // Restore HP so the player can fight again.
+    const gs = GameState.get();
+    gs.setHP(gs.getData().playerMaxHP);
+    // Stop all audio cleanly — it will reinitialise when the scene restarts.
+    AudioManager.get().stopHeartbeat();
+    AudioManager.stopAll(this);
+    this.combatMusicActive = false;
+    this.activeAudioLayer = 'ambient';
+
+    const totalKilled = this.checkpointEnemiesKilled + this.enemiesKilledThisLevel;
+    const threshold = this.getKillThreshold();
+    const remaining = Math.max(0, threshold - totalKilled);
+
+    this.add.rectangle(160, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
+
+    this.add.text(160, 64, 'YOU DIED', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ff4444',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
+
+    const livesLabel = this.lives === 1 ? '1 LIFE REMAINING' : `${this.lives} LIVES REMAINING`;
+    this.add.text(160, 80, livesLabel, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '5px',
+      color: '#44ffcc',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
+
+    const killsLabel = `KILLS: ${totalKilled} / ${threshold}  (${remaining} TO GO)`;
+    this.add.text(160, 94, killsLabel, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '4px',
+      color: '#ffcc44',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
+
+    this.add.text(160, 108, 'RESTARTING LEVEL...', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '4px',
+      color: '#888888',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
+
+    this.time.delayedCall(2500, () => {
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.restart({
+          level: this.currentLevel,
+          lives: this.lives,
+          enemiesKilled: this.checkpointEnemiesKilled + this.enemiesKilledThisLevel,
+          isRetry: true,
+        });
+      });
+    });
+  }
+
+  private getKillThreshold(): number {
+    if (this.currentLevel === 1) return 7;
+    if (this.currentLevel === 2) return 3;
+    return 0;
+  }
+
+  private checkKillThreshold(): void {
+    if (this.levelCompleting) return;
+    const threshold = this.getKillThreshold();
+    if (threshold <= 0) return;
+    const totalKilled = this.checkpointEnemiesKilled + this.enemiesKilledThisLevel;
+    if (totalKilled >= threshold) {
+      this.handleLevelComplete();
+    }
+  }
+
+  private handleLevelComplete(): void {
+    if (this.levelCompleting) return;
+    this.levelCompleting = true;
+
+    if (this.currentLevel === 1) {
+      this.currentLevel = 2;
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.restart({ level: 2, lives: this.lives });
+      });
+    } else if (this.currentLevel === 2) {
+      // All Level 2 enemies defeated — launch the final boss arena.
+      GameState.get().setLives(this.lives);
+      this.cameras.main.fadeOut(800, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('ArenaScene');
+      });
     }
   }
 

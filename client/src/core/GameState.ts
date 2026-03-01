@@ -18,6 +18,7 @@ export class GameState {
   private damageBoostTimer: number | null = null;
   private shieldTimer: number | null = null;
   private multishotTimer: number | null = null;
+  private livesCount = 3;
 
   private constructor() {
     this.data = this.defaultState();
@@ -46,6 +47,15 @@ export class GameState {
   reset(): void {
     this.clearTimers();
     this.data = this.defaultState();
+    this.livesCount = 3;
+  }
+
+  setLives(n: number): void {
+    this.livesCount = Math.max(0, n);
+  }
+
+  getLives(): number {
+    return this.livesCount;
   }
 
   nextLevel(): void {

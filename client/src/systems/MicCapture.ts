@@ -170,7 +170,7 @@ class MicCapture {
     const available = buffer.length - this.resampleOffset;
     const outputLength = Math.floor(available / this.resampleRatio);
     if (outputLength <= 0) {
-      this.resampleTail = buffer;
+      this.resampleTail = buffer as Float32Array<ArrayBuffer>;
       return new Float32Array(0);
     }
 

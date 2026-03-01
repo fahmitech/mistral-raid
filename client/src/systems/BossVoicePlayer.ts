@@ -163,7 +163,7 @@ class BossVoicePlayer {
     if (this.streamQueue.length) {
       const chunk = this.streamQueue.shift()!;
       try {
-        this.sourceBuffer.appendBuffer(chunk);
+        this.sourceBuffer.appendBuffer(chunk as unknown as ArrayBuffer);
       } catch (err) {
         console.warn('[BossVoicePlayer] appendBuffer failed:', err);
       }
