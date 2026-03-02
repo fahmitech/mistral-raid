@@ -938,6 +938,34 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(20);
 
     this.updateDashChargesDisplay();
+
+    // ── Clickable zones over dash and shield bars ──────────────────────────
+    const hitPad = 6; // extra hit area above/below the bars
+    this.add
+      .rectangle(
+        dashRect.x + dashRect.width / 2,
+        dashRect.y + dashRect.height / 2,
+        dashRect.width + 8,
+        dashRect.height + hitPad * 2
+      )
+      .setScrollFactor(0)
+      .setDepth(25)
+      .setAlpha(0.001)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.tryDash(this.lastUpdateTime));
+
+    this.add
+      .rectangle(
+        shieldRect.x + shieldRect.width / 2,
+        shieldRect.y + shieldRect.height / 2,
+        shieldRect.width + 8,
+        shieldRect.height + hitPad * 2
+      )
+      .setScrollFactor(0)
+      .setDepth(25)
+      .setAlpha(0.001)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.tryShield());
   }
 
   private createHearts(): { maxHearts: number; endX: number } {
@@ -1679,6 +1707,21 @@ export class LevelScene extends Phaser.Scene {
     if (item.config.effect === ItemEffect.AddCoins) {
       state.addCoins(item.config.value);
       ScoreSystem.floatingText(this, item.x, item.y, `+${item.config.value}`, '#ffcc00');
+    } else if (item.config.effect === ItemEffect.HealHP) {
+      // Health potions heal directly — no inventory needed
+      const amount = item.config.value || 1;
+      state.heal(amount);
+      AudioManager.playSFX(this, 'potion_drink');
+      this.spawnHealEffect();
+      ScoreSystem.floatingText(this, item.x, item.y, `+${amount} HP`, '#33ff66');
+    } else if (item.config.effect === ItemEffect.Shield) {
+      // Shield potions activate shield immediately
+      const duration = item.config.duration ?? SHIELD_DURATION_MS;
+      state.applyShield(duration);
+      this.player.setShieldActive(duration, this.lastUpdateTime);
+      AudioManager.playSFX(this, 'shield_activate');
+      this.spawnShieldShatter();
+      ScoreSystem.floatingText(this, item.x, item.y, 'SHIELDED!', '#7c4dff');
     } else if (item.config.effect === ItemEffect.RestoreDash) {
       const restored = state.restoreDashCharges(item.config.value || 1);
       this.updateDashChargesDisplay();
