@@ -1048,30 +1048,62 @@ export class LevelScene extends Phaser.Scene {
       this.updateHearts();
     }
 
-    const dashRemaining = Math.max(0, this.player.dashCooldownUntil - time);
-    if (this.dashBar) {
+    // ── Dash bar — segmented charge display ──────────────────────────────────
+    const { x: dx, y: dy, width: dw, height: dh } = this.dashCooldownRect;
+    if (this.dashBar && dw > 0) {
       this.dashBar.clear();
-      this.dashBar.fillStyle(0x444444, 1);
-      this.dashBar.fillRect(10, 172, 30, 3);
-      const pct = dashRemaining <= 0 ? 1 : 1 - dashRemaining / DASH_COOLDOWN_MS;
-      this.dashBar.fillStyle(0x00ffff, 0.85);
-      this.dashBar.fillRect(10, 172, 30 * pct, 3);
+      const charges = GameState.get().getDashCharges();
+      const dashRemaining = Math.max(0, this.player.dashCooldownUntil - time);
+      const recharging = dashRemaining > 0;
+      const segW = Math.floor((dw - (DASH_MAX_CHARGES - 1) * 2) / DASH_MAX_CHARGES);
+      for (let i = 0; i < DASH_MAX_CHARGES; i += 1) {
+        const segX = dx + i * (segW + 2);
+        const filled = i < charges;
+        const isRecharging = !filled && i === charges && recharging;
+        if (filled) {
+          this.dashBar.fillStyle(0x00e5ff, 0.9);
+          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
+        } else if (isRecharging) {
+          const pct = 1 - dashRemaining / DASH_COOLDOWN_MS;
+          this.dashBar.fillStyle(0x004455, 0.6);
+          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
+          this.dashBar.fillStyle(0x00b8cc, 0.85);
+          this.dashBar.fillRoundedRect(segX, dy, Math.max(2, segW * pct), dh, 2);
+        } else {
+          this.dashBar.fillStyle(0x00304a, 0.5);
+          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
+        }
+      }
     }
 
-    if (this.shieldIndicator) {
+    // ── Shield bar — cooldown / active state ──────────────────────────────────
+    const { x: sx, y: sy, width: sw, height: sh } = this.shieldBarRect;
+    if (this.shieldIndicator && sw > 0) {
       this.shieldIndicator.clear();
-      if (this.player.isShieldActive(time) || GameState.get().getData().hasShield) {
-        const pulse = 0.5 + Math.sin(time / 120) * 0.2;
-        this.shieldIndicator.lineStyle(1, 0x33aaff, 0.9);
-        this.shieldIndicator.strokeCircle(90, 172, 5 + pulse * 2);
+      const shieldActive = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
+      if (shieldActive) {
+        // Pulsing full bar while shield is active
+        const pulse = 0.7 + Math.sin(time / 150) * 0.3;
+        this.shieldIndicator.fillStyle(0x7c4dff, pulse);
+        this.shieldIndicator.fillRoundedRect(sx, sy, sw, sh, 2);
+        this.shieldIndicator.lineStyle(1, 0xbb88ff, 0.9);
+        this.shieldIndicator.strokeRoundedRect(sx, sy, sw, sh, 2);
       } else {
         const shieldRemaining = Math.max(0, this.player.shieldCooldownUntil - time);
-        if (shieldRemaining > 0) {
-          const pct = 1 - shieldRemaining / SHIELD_COOLDOWN_MS;
-          this.shieldIndicator.fillStyle(0x113355, 1);
-          this.shieldIndicator.fillRect(80, 170, 30, 3);
-          this.shieldIndicator.fillStyle(0x3399ff, 0.6);
-          this.shieldIndicator.fillRect(80, 170, 30 * pct, 3);
+        const pct = shieldRemaining > 0 ? 1 - shieldRemaining / SHIELD_COOLDOWN_MS : 1;
+        // Background (empty)
+        this.shieldIndicator.fillStyle(0x1a0a3a, 0.5);
+        this.shieldIndicator.fillRoundedRect(sx, sy, sw, sh, 2);
+        // Fill
+        if (pct > 0) {
+          const color = pct >= 1 ? 0x9966ff : 0x4422aa;
+          this.shieldIndicator.fillStyle(color, 0.85);
+          this.shieldIndicator.fillRoundedRect(sx, sy, sw * pct, sh, 2);
+        }
+        // Ready glow when fully recharged
+        if (pct >= 1) {
+          this.shieldIndicator.lineStyle(1, 0xaa77ff, 0.6);
+          this.shieldIndicator.strokeRoundedRect(sx, sy, sw, sh, 2);
         }
       }
     }
