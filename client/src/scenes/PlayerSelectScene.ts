@@ -3,6 +3,7 @@ import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
+import { CoopState } from '../systems/CoopState';
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -291,6 +292,7 @@ export class PlayerSelectScene extends Phaser.Scene {
 
   private confirm(): void {
     AudioManager.playSFX(this, 'ui_click');
+    CoopState.reset(); // ensure solo mode — no AI companion
     const type = CHARACTER_ORDER[this.selectedIndex];
     const state = GameState.get();
     state.reset();

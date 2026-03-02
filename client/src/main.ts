@@ -11,6 +11,8 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { VictoryScene } from './scenes/VictoryScene';
 import { AudioDebugOverlay } from './systems/AudioDebugOverlay';
 import { ArenaScene } from './scenes/ArenaScene';
+import { CoopSelectScene } from './scenes/CoopSelectScene';
+import { AICompanionDebugOverlay } from './systems/AICompanionDebugOverlay';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH, ZOOM } from './config/constants';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -39,6 +41,7 @@ scale: {
     BootScene,
     MenuScene,
     PlayerSelectScene,
+    CoopSelectScene,
     LevelScene,
     PauseScene,
     InventoryScene,
@@ -48,6 +51,7 @@ scale: {
     VictoryScene,
     ArenaScene,
     AudioDebugOverlay,
+    AICompanionDebugOverlay,
   ],
   backgroundColor: '#0a0a1a',
   audio: { disableWebAudio: false },

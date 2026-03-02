@@ -14,6 +14,7 @@ export const PLAYER_BODY_OFFSET_Y = 4;
 export const DASH_DISTANCE = 44;
 export const DASH_COOLDOWN_MS = 1500;
 export const DASH_INVINCIBLE_MS = 180;
+export const DASH_MAX_CHARGES = 7;
 
 export const INVINCIBLE_MS = 700;
 

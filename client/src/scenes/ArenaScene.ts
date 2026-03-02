@@ -8,6 +8,7 @@ import { BOSS_CONFIGS } from '../config/bosses';
 import { BossType, ItemType } from '../config/types';
 import { BossEntity } from '../entities/BossEntity';
 import { AudioManager } from '../systems/AudioManager';
+import { CoopState } from '../systems/CoopState';
 import { SaveSystem } from '../systems/SaveSystem';
 import { wsClient } from '../network/WebSocketClient';
 import { micCapture } from '../systems/MicCapture';
@@ -88,6 +89,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   create(): void {
+    CoopState.reset(); // Arena Demo is always solo — no AI companion
     this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x101018, 1);
     this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();

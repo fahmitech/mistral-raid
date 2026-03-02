@@ -2,6 +2,8 @@ import { Router } from 'express';
 import https from 'https';
 import type { CompanionContext } from '../agents/gameCompanionAgent.js';
 import { queryCompanion } from '../agents/gameCompanionAgent.js';
+import type { CompanionCombatContext, CompanionPersonality } from '../agents/aiCompanionCombatAgent.js';
+import { generateCompanionDecision } from '../agents/aiCompanionCombatAgent.js';
 
 export const companionRouter = Router();
 
@@ -92,5 +94,41 @@ companionRouter.post('/query', async (req, res) => {
   } catch (err) {
     console.error('[companion] query error:', err);
     res.status(500).json({ error: 'Companion unavailable' });
+  }
+});
+
+/**
+ * POST /api/companion/combat-decision
+ * Body: { context: CompanionCombatContext, personality: CompanionPersonality }
+ * Returns: { decision: CompanionDecision }
+ *
+ * Called every ~500ms by LevelScene when AI Co-Op mode is active.
+ * Uses mistral-large-latest to pick movement/attack/dash/protect/speak.
+ */
+companionRouter.post('/combat-decision', async (req, res) => {
+  const { context, personality } = req.body as {
+    context?: CompanionCombatContext;
+    personality?: CompanionPersonality;
+  };
+
+  if (!context) {
+    res.status(400).json({ error: 'context is required' });
+    return;
+  }
+
+  const validPersonalities: CompanionPersonality[] = ['aggressive', 'tactical', 'protector', 'balanced'];
+  const safePersonality: CompanionPersonality = validPersonalities.includes(personality as CompanionPersonality)
+    ? (personality as CompanionPersonality)
+    : 'balanced';
+
+  try {
+    const decision = await generateCompanionDecision(context, safePersonality);
+    res.json({ decision });
+  } catch (err) {
+    console.error('[companion] combat-decision error:', err);
+    // Return a safe fallback so the client always gets a valid response
+    res.json({
+      decision: { movement: 'idle', attack: false, target_id: null, dash: false, protect: false, speak: null },
+    });
   }
 });

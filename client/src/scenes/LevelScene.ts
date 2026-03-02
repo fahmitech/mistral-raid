@@ -3,6 +3,7 @@ import {
   DASH_COOLDOWN_MS,
   DASH_DISTANCE,
   DASH_INVINCIBLE_MS,
+  DASH_MAX_CHARGES,
   ENEMY_EXPLODE_RANGE,
   ENEMY_PROJECTILE_LIFETIME_MS,
   ENEMY_PROJECTILE_SPEED,
@@ -50,6 +51,9 @@ import { TelemetryTracker } from '../systems/TelemetryTracker';
 import { AssistantChat } from '../systems/AssistantChat';
 import { buildContext } from '../systems/DirectionHelper';
 import { wsClient } from '../network/WebSocketClient';
+import { AICompanion, type CompanionDecision } from '../entities/AICompanion';
+import { CoopState } from '../systems/CoopState';
+import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
 
 import { MusicLayer } from '../types/AudioTypes';
 
@@ -88,8 +92,15 @@ export class LevelScene extends Phaser.Scene {
   private scoreBg?: Phaser.GameObjects.Rectangle;
   private weaponBg?: Phaser.GameObjects.Rectangle;
   private dashBar?: Phaser.GameObjects.Graphics;
+  private dashBarBg?: Phaser.GameObjects.Graphics;
+  private dashCooldownRect = { x: 0, y: 0, width: 0, height: 0 };
+  private shieldBarRect = { x: 0, y: 0, width: 0, height: 0 };
+  private shieldBarBg?: Phaser.GameObjects.Graphics;
   private dashLabel?: Phaser.GameObjects.Text;
+  private shieldLabel?: Phaser.GameObjects.Text;
   private shieldIndicator?: Phaser.GameObjects.Graphics;
+  private leftSeparator?: Phaser.GameObjects.Graphics;
+  private rightSeparator?: Phaser.GameObjects.Graphics;
   private heartSprites: Phaser.GameObjects.Image[] = [];
   private lastHP = -1;
   private telemetryHud?: Phaser.GameObjects.Text;
@@ -123,9 +134,23 @@ export class LevelScene extends Phaser.Scene {
   private debugToggleKey?: Phaser.Input.Keyboard.Key;
   private playerRenderGlitchFrames = 0;
 
-  // ─── AI Companion ─────────────────────────────────────────────────────────────
+  // ─── AI Companion chat (voice/text assistant) ─────────────────────────────────
   private assistantChat?: AssistantChat;
   private lastProximityCheck = 0;
+
+  // ─── AI Co-Op Companion ────────────────────────────────────────────────────────
+  private companion?: AICompanion;
+  private companionProjectiles?: Phaser.Physics.Arcade.Group;
+  private companionDecisionTimer?: Phaser.Time.TimerEvent;
+  private companionDecisionPending = false;
+  private lastCompanionDecision: CompanionDecision | null = null;
+  private companionDecisionLatencyMs = 0;
+  private companionFallbackActive = false;
+  private companionRequestCount = 0;
+  private companionDebugOverlayOpen = false;
+  private companionSpeakText?: Phaser.GameObjects.Text;
+  private companionSpeakTimer?: Phaser.Time.TimerEvent;
+  private companionLabel?: Phaser.GameObjects.Text;
 
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
@@ -240,7 +265,13 @@ export class LevelScene extends Phaser.Scene {
       };
     }
 
+    // ── AI Co-Op companion (spawned before collision setup so groups exist) ──────
+    if (CoopState.get().isCoopMode) {
+      this.createCompanion();
+    }
+
     this.setupCollisions();
+    if (this.companion) this.setupCompanionCollisions();
     this.setupCamera();
     this.createHUD();
 
@@ -292,6 +323,7 @@ export class LevelScene extends Phaser.Scene {
       F2: this.input.keyboard!.addKey('F2'),
       F3: this.input.keyboard!.addKey('F3'),
       F4: this.input.keyboard!.addKey('F4'),
+      F9: this.input.keyboard!.addKey('F9'),
       H: this.input.keyboard!.addKey('H'),
     };
     this.debugToggleKey = this.keys.F2;
@@ -370,6 +402,7 @@ export class LevelScene extends Phaser.Scene {
     this.updateHUD(time);
     this.lighting.update(this.player.x, this.player.y);
     this.updateDebug(time);
+    if (this.companion?.active) this.updateCompanion(time);
   }
 
   private ensurePlayerRenderable(): void {
@@ -541,6 +574,24 @@ export class LevelScene extends Phaser.Scene {
     safeClearGroup(this.walls);
     this.assistantChat?.destroy();
     this.assistantChat = undefined;
+
+    // AI Co-Op companion cleanup
+    this.companionDecisionTimer?.remove(false);
+    this.companionDecisionTimer = undefined;
+    this.companionSpeakTimer?.remove(false);
+    this.companionSpeakTimer = undefined;
+    this.companionSpeakText?.destroy();
+    this.companionSpeakText = undefined;
+    this.companionLabel?.destroy();
+    this.companionLabel = undefined;
+    this.companion?.destroyCompanion();
+    this.companion = undefined;
+    safeClearGroup(this.companionProjectiles);
+    if (this.companionDebugOverlayOpen) {
+      this.scene.stop('AICompanionDebugOverlay');
+      this.companionDebugOverlayOpen = false;
+    }
+
     wsClient.disconnect();
     this.telemetryActive = false;
   }
@@ -826,19 +877,55 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(20)
       .setVisible(false);
 
+    // Hearts + dash/shield bars
+    const heartConfig = this.createHearts();
+
+    const abilityW = 56;
+    const abilityH = 6;
+    const gap = 8;
+    const labelStyle = { fontFamily: '"Press Start 2P"', fontSize: '6px', resolution: 1 } as const;
+
+    const dashRect = {
+      x: heartConfig.endX + 8,
+      y: INTERNAL_HEIGHT - 14,
+      width: abilityW,
+      height: abilityH,
+    };
+    const shieldRect = {
+      x: Math.round(dashRect.x + abilityW + gap + 14),
+      y: INTERNAL_HEIGHT - 14,
+      width: abilityW,
+      height: abilityH,
+    };
+
+    this.dashCooldownRect = dashRect;
+    this.shieldBarRect = shieldRect;
+
+    this.dashBarBg = this.add.graphics().setScrollFactor(0).setDepth(18);
+    this.shieldBarBg = this.add.graphics().setScrollFactor(0).setDepth(18);
+    this.dashBar = this.add.graphics().setScrollFactor(0).setDepth(19);
+    this.shieldIndicator = this.add.graphics().setScrollFactor(0).setDepth(19);
+
+    this.drawAbilityBackground(this.dashBarBg, dashRect);
+    this.drawAbilityBackground(this.shieldBarBg, shieldRect);
+
     this.dashLabel = this.add
-      .text(10, 168, 'DASH', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#006666',
-      })
+      .text(dashRect.x, dashRect.y - 4, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
+      .setOrigin(0, 1)
       .setScrollFactor(0)
-      .setDepth(20);
+      .setDepth(20)
+      .setStroke('#000000', 1);
 
-    this.dashBar = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.shieldIndicator = this.add.graphics().setScrollFactor(0).setDepth(20);
+    this.shieldLabel = this.add
+      .text(shieldRect.x, shieldRect.y - 4, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
+      .setOrigin(0, 1)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setStroke('#000000', 1);
 
-    this.createHearts();
+    this.leftSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
+    this.rightSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
+    this.drawSeparators(heartConfig);
 
     this.telemetryHud = this.add
       .text(rightX, 18, '', {
@@ -849,19 +936,83 @@ export class LevelScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(20);
+
+    this.updateDashChargesDisplay();
   }
 
-  private createHearts(): void {
+  private createHearts(): { maxHearts: number; endX: number } {
     this.heartSprites.forEach((heart) => heart.destroy());
     this.heartSprites = [];
     const maxHearts = Math.ceil(GameState.get().getData().playerMaxHP / 2);
+    const startX = 6;
+    const spacing = 18;
+    const heartY = INTERNAL_HEIGHT - 12;
     for (let i = 0; i < maxHearts; i += 1) {
       const heart = this.add
-        .image(10 + i * 14, 164, 'ui_heart_full')
+        .image(startX + i * spacing, heartY, 'ui_heart_full')
+        .setOrigin(0, 1)
+        .setScale(1)
         .setScrollFactor(0)
         .setDepth(20);
       this.heartSprites.push(heart);
     }
+    return { maxHearts, endX: startX + maxHearts * spacing };
+  }
+
+  private updateDashChargesDisplay(): void {
+    if (this.dashLabel) {
+      this.dashLabel.setColor('#00e5ff');
+      this.dashLabel.setAlpha(0.95);
+    }
+  }
+
+  private drawAbilityBackground(
+    graphics: Phaser.GameObjects.Graphics | undefined,
+    rect: { x: number; y: number; width: number; height: number }
+  ): void {
+    if (!graphics) return;
+    graphics.clear();
+    graphics.fillStyle(0x000000, 0.55);
+    graphics.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, 3);
+    graphics.lineStyle(1, 0xffffff, 0.15);
+    graphics.strokeRoundedRect(rect.x, rect.y, rect.width, rect.height, 3);
+  }
+
+  private drawSeparators(heartConfig: { maxHearts: number; endX: number }): void {
+    const sepHeight = 28;
+    const sepTop = INTERNAL_HEIGHT - sepHeight - 10;
+    const draw = (graphics: Phaser.GameObjects.Graphics | undefined, x: number) => {
+      if (!graphics) return;
+      graphics.clear();
+      graphics.fillStyle(0xffffff, 0.15);
+      graphics.fillRect(x, sepTop, 2, sepHeight);
+      graphics.fillStyle(0xffffff, 0.05);
+      graphics.fillRect(x + 2, sepTop, 1, sepHeight);
+    };
+    draw(this.leftSeparator, heartConfig.endX + 10);
+    draw(this.rightSeparator, this.shieldBarRect.x + this.shieldBarRect.width + 10);
+  }
+
+  private flashDashWarning(): void {
+    if (!this.dashLabel) return;
+    this.dashLabel.setColor('#ff6b6b');
+    this.tweens.add({
+      targets: this.dashLabel,
+      alpha: { from: 1, to: 0.4 },
+      yoyo: true,
+      repeat: 1,
+      duration: 160,
+    });
+    this.time.delayedCall(260, () => this.updateDashChargesDisplay());
+  }
+
+  private pulseDashIcon(): void {
+    if (!this.dashBarBg) return;
+    this.tweens.add({
+      targets: this.dashBarBg,
+      alpha: { from: 0.6, to: 1 },
+      duration: 180,
+    });
   }
 
   private updateHUD(time: number): void {
@@ -1111,6 +1262,16 @@ export class LevelScene extends Phaser.Scene {
       }
     }
 
+    if (this.keys.F9 && Phaser.Input.Keyboard.JustDown(this.keys.F9) && CoopState.get().isCoopMode) {
+      if (this.companionDebugOverlayOpen) {
+        this.scene.stop('AICompanionDebugOverlay');
+        this.companionDebugOverlayOpen = false;
+      } else {
+        this.scene.launch('AICompanionDebugOverlay');
+        this.companionDebugOverlayOpen = true;
+      }
+    }
+
     if (this.keys.F4 && Phaser.Input.Keyboard.JustDown(this.keys.F4)) {
       if (this.audioDebugText) {
         this.audioDebugText.destroy();
@@ -1325,6 +1486,10 @@ export class LevelScene extends Phaser.Scene {
   private tryDash(time: number): void {
     if (time < this.player.dashCooldownUntil) return;
     if (this.player.invincibleUntil - time > 60) return;
+    if (!GameState.get().spendDashCharge()) {
+      this.flashDashWarning();
+      return;
+    }
 
     const dir = this.player.lastDir.clone();
     if (dir.lengthSq() === 0) dir.set(1, 0);
@@ -1344,6 +1509,7 @@ export class LevelScene extends Phaser.Scene {
     this.player.setInvincible(DASH_INVINCIBLE_MS, time);
     this.shakeCamera(28, 0.0025);
     AudioManager.playSFX(this, 'dash');
+    this.updateDashChargesDisplay();
     if (this.telemetryActive) {
       this.telemetry.recordDash(dir);
     }
@@ -1481,6 +1647,12 @@ export class LevelScene extends Phaser.Scene {
     if (item.config.effect === ItemEffect.AddCoins) {
       state.addCoins(item.config.value);
       ScoreSystem.floatingText(this, item.x, item.y, `+${item.config.value}`, '#ffcc00');
+    } else if (item.config.effect === ItemEffect.RestoreDash) {
+      const restored = state.restoreDashCharges(item.config.value || 1);
+      this.updateDashChargesDisplay();
+      this.pulseDashIcon();
+      AudioManager.get().pickup();
+      ScoreSystem.floatingText(this, item.x, item.y, `DASH ${restored}/${DASH_MAX_CHARGES}`, '#9c7bff');
     } else {
       state.addItem(item.config, item.qty);
       AudioManager.get().pickup();
@@ -2259,6 +2431,219 @@ export class LevelScene extends Phaser.Scene {
         title.destroy();
         subtitle.destroy();
       },
+    });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // AI CO-OP COMPANION METHODS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /** Spawn the AI companion near the player spawn and initialise its groups. */
+  private createCompanion(): void {
+    const coop = CoopState.get();
+    const spawnX = this.maze.playerSpawn.x * TILE_SIZE + 8 + 20;
+    const spawnY = this.maze.playerSpawn.y * TILE_SIZE + 8;
+    const spriteKey = `${coop.companionSpriteKey}_idle_anim_f0`;
+    const resolvedKey = this.textures.exists(spriteKey) ? spriteKey : 'knight_m_idle_anim_f0';
+
+    this.companion = new AICompanion(this, spawnX, spawnY, resolvedKey, coop.companionPersonality, 6);
+    this.add.existing(this.companion);
+    this.physics.add.existing(this.companion);
+    this.companion.initPhysics();
+
+    const animKey = `${coop.companionSpriteKey}_idle`;
+    if (this.anims.exists(animKey)) this.companion.play(animKey);
+
+    // Projectile group
+    this.companionProjectiles = this.physics.add.group();
+
+    // Callback so companion can fire bullets managed by LevelScene
+    this.companion.onShoot = (x, y, vx, vy, damage) => {
+      this.fireCompanionProjectile(x, y, vx, vy, damage);
+    };
+
+    // HUD badge
+    this.companionLabel = this.add
+      .text(160, 170, '★ AI Companion Powered by Mistral  [F9]', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '4px',
+        color: '#8844cc',
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(20);
+
+    // Decision loop — call Mistral every 500ms
+    this.companionDecisionTimer = this.time.addEvent({
+      delay: 500,
+      loop: true,
+      callback: this.requestCompanionDecision,
+      callbackScope: this,
+    });
+  }
+
+  /** Register companion↔wall and companion-projectile↔enemy collisions. */
+  private setupCompanionCollisions(): void {
+    if (!this.companion || !this.companionProjectiles) return;
+
+    this.physics.add.collider(this.companion, this.walls);
+    this.physics.add.collider(this.companionProjectiles, this.walls, (proj) => {
+      (proj as Phaser.Physics.Arcade.Sprite).destroy();
+    });
+    this.physics.add.overlap(this.companionProjectiles, this.enemies, (proj, enemy) => {
+      this.handleCompanionProjectileHit(
+        proj as Phaser.Physics.Arcade.Sprite,
+        enemy as Enemy
+      );
+    });
+  }
+
+  /** Called each frame when companion is alive. */
+  private updateCompanion(time: number): void {
+    if (!this.companion) return;
+
+    // Keep companion sprite above fog overlay
+    if (this.lighting) {
+      const fogDepth = this.lighting.getOverlayDepth();
+      if (this.companion.depth <= fogDepth) this.companion.setDepth(fogDepth + 1);
+    }
+
+    // Core autonomous tick — always hunts + attacks enemies.
+    // Mistral decision refines priority/dash/speak; null when fallback is active.
+    this.companion.tick(
+      this.companionFallbackActive ? null : this.lastCompanionDecision,
+      this.player.x,
+      this.player.y,
+      this.enemies,
+      time
+    );
+
+    // Push debug data to registry for F9 overlay
+    if (this.companionDebugOverlayOpen) {
+      const debugData: CompanionDebugData = {
+        personality: CoopState.get().companionPersonality,
+        lastMovement: this.lastCompanionDecision?.movement ?? 'fallback',
+        lastAttack: this.lastCompanionDecision?.attack ?? false,
+        lastDash: this.lastCompanionDecision?.dash ?? false,
+        lastProtect: this.lastCompanionDecision?.protect ?? false,
+        lastSpeak: this.lastCompanionDecision?.speak ?? null,
+        decisionLatencyMs: this.companionDecisionLatencyMs,
+        fallbackActive: this.companionFallbackActive,
+        companionHp: this.companion ? `${this.companion.hp}/${this.companion.maxHp}` : 'N/A',
+        requestCount: this.companionRequestCount,
+      };
+      this.registry.set('companion_debug', debugData);
+    }
+  }
+
+  /** POST context to server → apply returned decision (non-blocking). */
+  private requestCompanionDecision(): void {
+    if (!this.companion || this.companionDecisionPending) return;
+
+    const context = this.buildCompanionContext();
+    const personality = CoopState.get().companionPersonality;
+    const start = performance.now();
+    this.companionDecisionPending = true;
+    this.companionRequestCount += 1;
+
+    const serverUrl = (import.meta as unknown as { env: Record<string, string> }).env?.VITE_SERVER_URL
+      ?? 'http://localhost:8787';
+
+    fetch(`${serverUrl}/api/companion/combat-decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context, personality }),
+      signal: AbortSignal.timeout(3500),
+    })
+      .then((r) => r.json())
+      .then((data: { decision: CompanionDecision }) => {
+        this.lastCompanionDecision = data.decision;
+        this.companionDecisionLatencyMs = Math.round(performance.now() - start);
+        this.companionFallbackActive = false;
+        this.showCompanionSpeak(data.decision.speak);
+      })
+      .catch(() => {
+        this.companionFallbackActive = true;
+        this.lastCompanionDecision = null;
+      })
+      .finally(() => {
+        this.companionDecisionPending = false;
+      });
+  }
+
+  /** Build the payload sent to the server each decision cycle. */
+  private buildCompanionContext(): object {
+    const activeEnemies = (this.enemies.getChildren() as Enemy[])
+      .filter((e) => e.active)
+      .map((e, i) => ({ id: i, hp: e.hp, x: e.x, y: e.y }));
+
+    const bossState = this.boss?.active
+      ? { hp: this.boss.hp, maxHp: this.boss.maxHP, x: this.boss.x, y: this.boss.y }
+      : null;
+
+    const treasure = (this.items.getChildren() as Item[])
+      .filter((i) => i.active)
+      .slice(0, 4)
+      .map((i) => ({ x: i.x, y: i.y }));
+
+    const gs = GameState.get().getData();
+    const companionHpRatio = this.companion ? this.companion.hp / this.companion.maxHp : 1;
+
+    return {
+      player_position: { x: this.player.x, y: this.player.y },
+      companion_position: { x: this.companion!.x, y: this.companion!.y },
+      enemies: activeEnemies,
+      boss_state: bossState,
+      player_hp_ratio: gs.playerHP / gs.playerMaxHP,
+      companion_hp_ratio: companionHpRatio,
+      nearby_treasure: treasure,
+      difficulty: this.levelData.level,
+    };
+  }
+
+  /** Spawn a companion bullet (tinted purple) in the LevelScene physics world. */
+  private fireCompanionProjectile(x: number, y: number, vx: number, vy: number, damage: number): void {
+    if (!this.companionProjectiles) return;
+    const proj = this.physics.add.sprite(x, y, 'player_bullet');
+    proj.setTint(0xaa44ff);
+    proj.setDepth(10);
+    proj.setData('damage', damage);
+    this.companionProjectiles.add(proj);
+    proj.setVelocity(vx, vy);
+    this.time.delayedCall(PROJECTILE_LIFETIME_MS, () => { if (proj.active) proj.destroy(); });
+  }
+
+  /** Handle companion projectile hitting an enemy. */
+  private handleCompanionProjectileHit(proj: Phaser.Physics.Arcade.Sprite, enemy: Enemy): void {
+    if (!proj.active || !enemy.active) return;
+    const damage = (proj.getData('damage') as number) ?? 1;
+    proj.destroy();
+    this.processEnemyDamage(enemy, damage, ItemType.WeaponSword, 40, proj.x, proj.y);
+  }
+
+  /** Display a companion speech bubble above the companion sprite. */
+  private showCompanionSpeak(speak: string | null): void {
+    if (!speak || !this.companion) return;
+
+    this.companionSpeakText?.destroy();
+    this.companionSpeakTimer?.remove(false);
+
+    this.companionSpeakText = this.add
+      .text(this.companion.x, this.companion.y - 14, speak, {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '4px',
+        color: '#cc88ff',
+        stroke: '#110022',
+        strokeThickness: 2,
+        backgroundColor: 'rgba(10,0,20,0.7)',
+        padding: { x: 3, y: 2 },
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(25);
+
+    this.companionSpeakTimer = this.time.delayedCall(2800, () => {
+      this.companionSpeakText?.destroy();
+      this.companionSpeakText = undefined;
     });
   }
 }

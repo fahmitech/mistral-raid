@@ -189,9 +189,9 @@ export class MenuScene extends Phaser.Scene {
   private createMenu(): void {
     const panel = this.add.graphics();
     panel.fillStyle(0x06101e, 0.92);
-    panel.fillRoundedRect(88, 62, 144, 96, 6);
+    panel.fillRoundedRect(84, 62, 152, 112, 6);
     panel.lineStyle(1, 0x224466, 0.9);
-    panel.strokeRoundedRect(88, 62, 144, 96, 6);
+    panel.strokeRoundedRect(84, 62, 152, 112, 6);
 
     const hasSave = SaveSystem.hasSave();
     this.items =[
@@ -199,6 +199,11 @@ export class MenuScene extends Phaser.Scene {
         label: 'New Game',
         enabled: true,
         action: () => this.startScene('PlayerSelectScene'),
+      },
+      {
+        label: 'AI Co-Op Mode',
+        enabled: true,
+        action: () => this.startScene('CoopSelectScene'),
       },
       {
         label: 'Continue',
@@ -227,17 +232,18 @@ export class MenuScene extends Phaser.Scene {
       },
     ];
 
-    const startY = 74;
+    const startY = 72;
     this.items.forEach((item, idx) => {
+      const isCoopItem = item.label === 'AI Co-Op Mode';
       const text = this.add
-        .text(160, startY + idx * 16, item.label, {
+        .text(160, startY + idx * 14, item.label, {
           fontFamily: '"Press Start 2P"',
-          fontSize: '8px', // Fixed from 6px to 8px
-          color: '#aabbcc',
+          fontSize: '7px',
+          color: isCoopItem ? '#cc88ff' : '#aabbcc',
           resolution: 2,
         })
         .setOrigin(0.5);
-      
+
       item.text = text;
     });
 
@@ -275,9 +281,9 @@ export class MenuScene extends Phaser.Scene {
       if (!item.enabled) {
         item.text.setColor('#666777');
       } else if (idx === this.selectedIndex) {
-        item.text.setColor('#ffdd00');
+        item.text.setColor(item.label === 'AI Co-Op Mode' ? '#dd99ff' : '#ffdd00');
       } else {
-        item.text.setColor('#aabbcc');
+        item.text.setColor(item.label === 'AI Co-Op Mode' ? '#8844aa' : '#aabbcc');
       }
     });
   }
