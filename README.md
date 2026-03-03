@@ -6,6 +6,10 @@
 
 A dungeon crawler where the final boss runs on Mistral AI. It transcribes your voice with Voxtral realtime STT, cross-references what you said against live combat telemetry, and generates a personalized taunt and attack mechanics on the fly. Trash-talk a boss that knows your accuracy is 34% and you've spent 40% of the fight hiding in a corner, then hear it say so out loud, voiced by ElevenLabs. Every sound in the game (40+ SFX, 7 music tracks, and the boss voice itself) is AI-generated, with adaptive telemetry shifting the music mood live based on combat state. Built with four Mistral models across four independent AI agents running simultaneously: The Architect (boss brain), the Dungeon Director (adaptive difficulty), the Dungeon Companion (tactical chat with voice queries), and an AI Co-Op partner that literally plays the game alongside you.
 
+## Demo
+
+[![Mistral Raid Demo](https://img.youtube.com/vi/eJLfJQi96Yo/maxresdefault.jpg)](https://www.youtube.com/watch?v=eJLfJQi96Yo)
+
 ---
 
 ## What We Built
