@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 export class CreditsScene extends Phaser.Scene {
   private container!: Phaser.GameObjects.Container;
@@ -17,8 +17,7 @@ export class CreditsScene extends Phaser.Scene {
     this.createBackground();
     this.createScroll();
 
-    const back = createReadableText(this, 160, 168, '[ BACK TO MENU ]', {
-        fontFamily: '"Press Start 2P"',
+    const back = createGameText(this, 160, 168, '[ BACK TO MENU ]', {
         fontSize: '5px',
         color: '#cccccc',
       })
@@ -104,8 +103,7 @@ export class CreditsScene extends Phaser.Scene {
     ];
 
     const texts = lines.map((line, idx) =>
-      createReadableText(this, 160, idx * 12, line, {
-          fontFamily: '"Press Start 2P"',
+      createGameText(this, 160, idx * 12, line, {
           fontSize: idx === 0 ? '8px' : '5px',
           color: '#ffffff',
         })

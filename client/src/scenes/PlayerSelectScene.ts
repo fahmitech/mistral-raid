@@ -4,7 +4,7 @@ import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 import { CoopState } from '../systems/CoopState';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -38,16 +38,12 @@ export class PlayerSelectScene extends Phaser.Scene {
     AudioManager.get().init(this);
     this.createBackground();
 
-    this.add
-      .text(160, 8, 'CHOOSE YOUR HERO', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: '#ffffff',
-        stroke: '#8833cc',
-        strokeThickness: 2,
-        resolution: 1,
-      })
-      .setOrigin(0.5);
+    createGameText(this, 160, 8, 'CHOOSE YOUR HERO', {
+      fontSize: '8px',
+      color: '#ffffff',
+      stroke: '#8833cc',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
 
     this.createTopSelection();
     this.createShowcasePanel();
@@ -111,8 +107,7 @@ export class PlayerSelectScene extends Phaser.Scene {
       sprite.setScale(1.0); // 1x scale so sprites fit cleanly inside boxes
 
       // Names well below the box
-      const label = createReadableText(this, x, portraitY + halfBox + 4, cfg.label.toUpperCase(), {
-          fontFamily: '"Press Start 2P"',
+      const label = createGameText(this, x, portraitY + halfBox + 4, cfg.label.toUpperCase(), {
           fontSize: '8px',
           color: '#667788',
           resolution: 1,
@@ -142,8 +137,7 @@ export class PlayerSelectScene extends Phaser.Scene {
     cardBg.strokeRoundedRect(120, 72, 190, 90, 6);
 
     // Hero Name
-    this.selectedNameText = createReadableText(this, 130, 78, '', {
-        fontFamily: '"Press Start 2P"',
+    this.selectedNameText = createGameText(this, 130, 78, '', {
         fontSize: '8px',
         color: '#00ffcc',
         resolution: 1,
@@ -151,8 +145,7 @@ export class PlayerSelectScene extends Phaser.Scene {
       .setOrigin(0, 0);
 
     // Description
-    this.descText = createReadableText(this, 130, 92, '', {
-        fontFamily: '"Press Start 2P"',
+    this.descText = createGameText(this, 130, 92, '', {
         fontSize: '8px',
         color: '#aabbcc',
         resolution: 1,
@@ -167,8 +160,7 @@ export class PlayerSelectScene extends Phaser.Scene {
     const labelX = 130;
     const baseY = 126;
     ['HP', 'SPD', 'DMG', 'RATE'].forEach((label, idx) => {
-      const text = createReadableText(this, labelX, baseY + idx * 10, label, {
-          fontFamily: '"Press Start 2P"',
+      const text = createGameText(this, labelX, baseY + idx * 10, label, {
           fontSize: '8px',
           color: '#8899aa',
           resolution: 1,
@@ -189,16 +181,14 @@ export class PlayerSelectScene extends Phaser.Scene {
   }
 
   private createButtons(): void {
-    this.backText = createReadableText(this, 16, 172, '[ BACK ]', {
-        fontFamily: '"Press Start 2P"',
+    this.backText = createGameText(this, 16, 172, '[ BACK ]', {
         fontSize: '8px',
         color: '#999999',
         resolution: 1,
       })
       .setOrigin(0, 0.5);
 
-    this.confirmText = createReadableText(this, 304, 172, '[ CONFIRM ]', {
-        fontFamily: '"Press Start 2P"',
+    this.confirmText = createGameText(this, 304, 172, '[ CONFIRM ]', {
         fontSize: '8px',
         color: '#00ffcc',
         resolution: 1,

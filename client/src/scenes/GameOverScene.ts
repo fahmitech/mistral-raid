@@ -3,7 +3,7 @@ import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { CharacterType } from '../config/types';
 import { AudioManager } from '../systems/AudioManager';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 const TAUNTS = [
   'The dungeon remembers your name. It always does.',
@@ -38,8 +38,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   private playPhase1(): void {
-    const title = createReadableText(this, 160, 70, 'GAME OVER', {
-        fontFamily: '"Press Start 2P"',
+    const title = createGameText(this, 160, 70, 'GAME OVER', {
         fontSize: '24px',
         color: '#ff3b3b',
         resolution: 1,
@@ -198,7 +197,6 @@ export class GameOverScene extends Phaser.Scene {
     const statsX = 56;
 
     const labelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: '"Press Start 2P"',
       fontSize: '8px',
       color: '#3399ff',
       resolution: 1,
@@ -208,7 +206,6 @@ export class GameOverScene extends Phaser.Scene {
     };
 
     const valueStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: '"Press Start 2P"',
       fontSize: '8px',
       color: '#ffffff',
       resolution: 1,
@@ -217,14 +214,14 @@ export class GameOverScene extends Phaser.Scene {
       shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true },
     };
 
-    const lvlLabel = this.add.text(statsX, midY, 'LEVEL ', labelStyle).setDepth(10).setAlpha(0);
-    const lvlVal = this.add.text(statsX + 48, midY, `${state.level}`, valueStyle).setDepth(10).setAlpha(0);
+    const lvlLabel = createGameText(this, statsX, midY, 'LEVEL ', labelStyle).setDepth(10).setAlpha(0);
+    const lvlVal = createGameText(this, statsX + 48, midY, `${state.level}`, valueStyle).setDepth(10).setAlpha(0);
 
-    const scrLabel = this.add.text(statsX, midY + lineH, 'SCORE ', labelStyle).setDepth(10).setAlpha(0);
-    const scrVal = this.add.text(statsX + 48, midY + lineH, `${state.score}`, valueStyle).setDepth(10).setAlpha(0);
+    const scrLabel = createGameText(this, statsX, midY + lineH, 'SCORE ', labelStyle).setDepth(10).setAlpha(0);
+    const scrVal = createGameText(this, statsX + 48, midY + lineH, `${state.score}`, valueStyle).setDepth(10).setAlpha(0);
 
-    const coinLabel = this.add.text(statsX, midY + lineH * 2, 'COINS ', labelStyle).setDepth(10).setAlpha(0);
-    const coinVal = this.add.text(statsX + 48, midY + lineH * 2, `${state.coins}`, valueStyle).setDepth(10).setAlpha(0);
+    const coinLabel = createGameText(this, statsX, midY + lineH * 2, 'COINS ', labelStyle).setDepth(10).setAlpha(0);
+    const coinVal = createGameText(this, statsX + 48, midY + lineH * 2, `${state.coins}`, valueStyle).setDepth(10).setAlpha(0);
 
     this.uiElements.push(lvlLabel, lvlVal, scrLabel, scrVal, coinLabel, coinVal);
 
@@ -237,8 +234,7 @@ export class GameOverScene extends Phaser.Scene {
     // Quote column: starts right after separator
     const quoteX = 158;
 
-    const quoteText = createReadableText(this, quoteX, midY, taunt, {
-        fontFamily: '"Press Start 2P"',
+    const quoteText = createGameText(this, quoteX, midY, taunt, {
         fontSize: '8px',
         color: '#996666',
         resolution: 1,
@@ -258,8 +254,7 @@ export class GameOverScene extends Phaser.Scene {
     btnSep.lineBetween(40, btnY - 24, 280, btnY - 24);
     this.uiElements.push(btnSep);
 
-    const playAgain = createReadableText(this, 160, btnY - 14, 'PLAY AGAIN?', {
-        fontFamily: '"Press Start 2P"',
+    const playAgain = createGameText(this, 160, btnY - 14, 'PLAY AGAIN?', {
         fontSize: '8px',
         color: '#ffffff',
         resolution: 1,
@@ -269,8 +264,7 @@ export class GameOverScene extends Phaser.Scene {
       .setAlpha(0);
     this.uiElements.push(playAgain);
 
-    this.yesText = createReadableText(this, 120, btnY + 4, '[ YES ]', {
-        fontFamily: '"Press Start 2P"',
+    this.yesText = createGameText(this, 120, btnY + 4, '[ YES ]', {
         fontSize: '8px',
         color: '#ffdd00',
         resolution: 1,
@@ -281,8 +275,7 @@ export class GameOverScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.uiElements.push(this.yesText);
 
-    this.noText = createReadableText(this, 200, btnY + 4, '[ MENU ]', {
-        fontFamily: '"Press Start 2P"',
+    this.noText = createGameText(this, 200, btnY + 4, '[ MENU ]', {
         fontSize: '8px',
         color: '#889aab',
         resolution: 1,

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from './TextFactory';
 
 export class TauntText {
   private scene: Phaser.Scene;
@@ -14,8 +14,7 @@ export class TauntText {
       .setScrollFactor(0)
       .setDepth(19)
       .setVisible(false);
-    this.text = createReadableText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, '', {
-      fontFamily: '"Press Start 2P"',
+    this.text = createGameText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, '', {
       fontSize: '5px',
       color: '#ff88aa',
       align: 'center',

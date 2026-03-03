@@ -21,7 +21,7 @@ import { AnalyzingOverlay } from '../ui/AnalyzingOverlay';
 import { DevConsole } from '../ui/DevConsole';
 import { DirectorPanel } from '../ui/DirectorPanel';
 import type { AIState, ArenaPhase, BossResponse, ServerMessage } from '../types/arena';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 interface SimpleProjectile {
   obj: Phaser.GameObjects.Arc;
@@ -150,8 +150,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
-    this.livesText = createReadableText(this, INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
-      fontFamily: '"Press Start 2P"',
+    this.livesText = createGameText(this, INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontSize: '5px',
       color: '#ffdd44',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
@@ -232,8 +231,7 @@ export class ArenaScene extends Phaser.Scene {
     this.micIndicatorBg = this.add.rectangle(56, y + 2, 104, 16, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.micIndicator = createReadableText(this, 8, y - 4, '', {
-      fontFamily: '"Press Start 2P"',
+    this.micIndicator = createGameText(this, 8, y - 4, '', {
       fontSize: '5px',
       color: '#ff6677',
     }).setScrollFactor(0).setDepth(22);
@@ -246,8 +244,7 @@ export class ArenaScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(21)
       .setVisible(false);
-    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 6, '', {
-      fontFamily: '"Press Start 2P"',
+    this.transcriptText = createGameText(this, INTERNAL_WIDTH / 2, y - 6, '', {
       fontSize: '5px',
       color: '#cceeff',
       align: 'center',
@@ -259,8 +256,7 @@ export class ArenaScene extends Phaser.Scene {
     this.wsDebugBg = this.add.rectangle(56, 10, 110, 14, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.wsDebugText = createReadableText(this, 8, 4, 'WS: --', {
-      fontFamily: '"Press Start 2P"',
+    this.wsDebugText = createGameText(this, 8, 4, 'WS: --', {
       fontSize: '5px',
       color: '#99aadd',
     }).setScrollFactor(0).setDepth(22);
@@ -754,8 +750,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private spawnHealEffect(): void {
-    const label = this.add.text(this.player.x, this.player.y - 10, '+HP', {
-      fontFamily: '"Press Start 2P"',
+    const label = createGameText(this, this.player.x, this.player.y - 10, '+HP', {
       fontSize: '5px',
       color: '#33ff66',
     }).setOrigin(0.5).setDepth(20);
@@ -791,20 +786,17 @@ export class ArenaScene extends Phaser.Scene {
     const cx = INTERNAL_WIDTH / 2;
     const cy = INTERNAL_HEIGHT / 2;
     this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
-    createReadableText(this, cx, cy - 18, 'YOU DIED', {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, cx, cy - 18, 'YOU DIED', {
       fontSize: '10px',
       color: '#ff4444',
       stroke: '#330000',
       strokeThickness: 5,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    createReadableText(this, cx, cy, `LIVES REMAINING: ${this.lives}`, {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, cx, cy, `LIVES REMAINING: ${this.lives}`, {
       fontSize: '6px',
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    createReadableText(this, cx, cy + 14, 'Retrying...', {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, cx, cy + 14, 'Retrying...', {
       fontSize: '5px',
       color: '#aaaaaa',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 interface PauseItem {
   label: string;
@@ -63,8 +63,7 @@ export class PauseScene extends Phaser.Scene {
     ];
 
     this.items.forEach((item, idx) => {
-      const text = createReadableText(this, 160, 62 + idx * 18, item.label.toUpperCase(), {
-          fontFamily: '"Press Start 2P"',
+      const text = createGameText(this, 160, 62 + idx * 18, item.label.toUpperCase(), {
           fontSize: '6px',
           color: '#aabbcc',
         })

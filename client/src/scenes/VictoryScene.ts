@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 export class VictoryScene extends Phaser.Scene {
   private confetti: { sprite: Phaser.GameObjects.Rectangle; speed: number; drift: number }[] = [];
@@ -19,8 +19,7 @@ export class VictoryScene extends Phaser.Scene {
     gfx.fillStyle(0x060b16, 1);
     gfx.fillRect(0, 0, 320, 180);
 
-    const title = createReadableText(this, 160, 26, 'VICTORY', {
-        fontFamily: '"Press Start 2P"',
+    const title = createGameText(this, 160, 26, 'VICTORY', {
         fontSize: '12px',
         color: '#ffffff',
         stroke: '#000033',
@@ -36,8 +35,7 @@ export class VictoryScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    createReadableText(this, 160, 44, 'The Watcher has been destroyed.', {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 44, 'The Watcher has been destroyed.', {
         fontSize: '4px',
         color: '#cccccc',
       })
@@ -46,33 +44,28 @@ export class VictoryScene extends Phaser.Scene {
     const state = GameState.get().getData();
     const inventoryCount = state.inventory.reduce((sum, slot) => sum + slot.qty, 0);
 
-    createReadableText(this, 160, 70, `FINAL SCORE: ${state.score}`, {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 70, `FINAL SCORE: ${state.score}`, {
         fontSize: '5px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
-    createReadableText(this, 160, 82, `COINS: ${state.coins}`, {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 82, `COINS: ${state.coins}`, {
         fontSize: '5px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
-    createReadableText(this, 160, 94, `DAMAGE: ${state.playerDamage.toFixed(1)}`, {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 94, `DAMAGE: ${state.playerDamage.toFixed(1)}`, {
         fontSize: '5px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
-    createReadableText(this, 160, 106, `INVENTORY: ${inventoryCount}`, {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 106, `INVENTORY: ${inventoryCount}`, {
         fontSize: '5px',
         color: '#ffdd44',
       })
       .setOrigin(0.5);
 
-    const button = createReadableText(this, 160, 138, '[ PLAY AGAIN ]', {
-        fontFamily: '"Press Start 2P"',
+    const button = createGameText(this, 160, 138, '[ PLAY AGAIN ]', {
         fontSize: '6px',
         color: '#00ffcc',
       })

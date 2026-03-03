@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from './TextFactory';
 
 export class AnalyzingOverlay {
   private scene: Phaser.Scene;
@@ -15,8 +15,7 @@ export class AnalyzingOverlay {
       .setDepth(30)
       .setVisible(false);
 
-    this.text = createReadableText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
-      fontFamily: '"Press Start 2P"',
+    this.text = createGameText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
       fontSize: '6px',
       color: '#ffee88',
       stroke: '#332200',

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { OptionsData } from '../config/types';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 interface OptionRow {
   key: keyof OptionsData;
@@ -43,8 +43,7 @@ export class OptionsScene extends Phaser.Scene {
       this.cameras.main.fadeIn(400, 0, 0, 0);
     }
 
-    createReadableText(this, 160, 24, 'OPTIONS', {
-        fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 24, 'OPTIONS', {
         fontSize: '7px',
         color: '#ffffff',
         stroke: '#000000',
@@ -60,16 +59,14 @@ export class OptionsScene extends Phaser.Scene {
     ];
 
     this.rows.forEach((row, idx) => {
-      row.text = createReadableText(this, 80, 52 + idx * 16, '', {
-          fontFamily: '"Press Start 2P"',
+      row.text = createGameText(this, 80, 52 + idx * 16, '', {
           fontSize: '5px',
           color: '#aabbcc',
         })
         .setOrigin(0, 0.5);
     });
 
-    const resetText = createReadableText(this, 160, 130, '[ RESET SAVE DATA ]', {
-        fontFamily: '"Press Start 2P"',
+    const resetText = createGameText(this, 160, 130, '[ RESET SAVE DATA ]', {
         fontSize: '5px',
         color: '#ff6666',
       })
@@ -77,8 +74,7 @@ export class OptionsScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     resetText.on('pointerdown', () => this.resetSave());
 
-    const backText = createReadableText(this, 160, 150, '[ BACK ]', {
-        fontFamily: '"Press Start 2P"',
+    const backText = createGameText(this, 160, 150, '[ BACK ]', {
         fontSize: '5px',
         color: '#cccccc',
       })
@@ -86,13 +82,10 @@ export class OptionsScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     backText.on('pointerdown', () => this.back());
 
-    this.toast = this.add
-      .text(160, 166, '', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5, 0.5);
+    this.toast = createGameText(this, 160, 166, '', {
+      fontSize: '4px',
+      color: '#ffffff',
+    }).setOrigin(0.5, 0.5);
 
     this.refresh();
 

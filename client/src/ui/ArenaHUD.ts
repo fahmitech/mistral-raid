@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
 import type { AIState, ArenaPhase } from '../types/arena';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from './TextFactory';
 
 export class ArenaHUD {
   private scene: Phaser.Scene;
@@ -14,16 +14,13 @@ export class ArenaHUD {
     this.scene = scene;
     this.playerBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
     this.bossBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
-    this.phaseText = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 10, 'PHASE 1', {
-      fontFamily: '"Press Start 2P"',
+    this.phaseText = createGameText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 10, 'PHASE 1', {
       fontSize: '5px',
       color: '#ffcc66',
-      stroke: '#000000',
       strokeThickness: 2,
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20);
 
-    this.stateText = createReadableText(scene, INTERNAL_WIDTH - 6, 6, 'LISTENING', {
-      fontFamily: '"Press Start 2P"',
+    this.stateText = createGameText(scene, INTERNAL_WIDTH - 6, 6, 'LISTENING', {
       fontSize: '4px',
       color: '#66ffcc',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(20);

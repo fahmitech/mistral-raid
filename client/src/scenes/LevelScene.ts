@@ -56,7 +56,7 @@ import { CoopState } from '../systems/CoopState';
 import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
 
 import { MusicLayer } from '../types/AudioTypes';
-import { createReadableText } from '../utils/createReadableText';
+import { createGameText } from '../ui/TextFactory';
 
 // Persists across scene.restart() calls so retries reuse the exact same map and enemy positions.
 interface EnemySpawnRecord { x: number; y: number; config: EnemyConfig; }
@@ -795,8 +795,7 @@ export class LevelScene extends Phaser.Scene {
   private createHUD(): void {
     const margin = 6;
     const rightX = INTERNAL_WIDTH - margin;
-    this.levelText = createReadableText(this, 6, 6, `LEVEL ${this.currentLevel}`, {
-        fontFamily: '"Press Start 2P"',
+    this.levelText = createGameText(this, 6, 6, `LEVEL ${this.currentLevel}`, {
         fontSize: '5px',
         color: '#ffcc00',
       })
@@ -805,24 +804,21 @@ export class LevelScene extends Phaser.Scene {
 
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
-    this.enemyCountText = createReadableText(this, 6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
-        fontFamily: '"Press Start 2P"',
+    this.enemyCountText = createGameText(this, 6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
         fontSize: '5px',
         color: '#ff8888',
       })
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.livesText = createReadableText(this, 6, 22, `LIVES: ${this.lives}`, {
-        fontFamily: '"Press Start 2P"',
+    this.livesText = createGameText(this, 6, 22, `LIVES: ${this.lives}`, {
         fontSize: '5px',
         color: '#44ffcc',
       })
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.coinText = createReadableText(this, 6, 30, 'COINS: 0', {
-        fontFamily: '"Press Start 2P"',
+    this.coinText = createGameText(this, 6, 30, 'COINS: 0', {
         fontSize: '5px',
         color: '#ffdd44',
       })
@@ -836,7 +832,6 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(19);
     this.scoreText = this.add
       .text(rightX, 6, 'SCORE: 0', {
-        fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#eecc55',
         stroke: '#000000',
@@ -853,7 +848,6 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(19);
     this.weaponText = this.add
       .text(rightX, INTERNAL_HEIGHT - 18, 'SWORD', {
-        fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffcc44',
         stroke: '#000000',
@@ -863,8 +857,7 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.hintText = createReadableText(this, 160, 155, '[E] Pick up', {
-        fontFamily: '"Press Start 2P"',
+    this.hintText = createGameText(this, 160, 155, '[E] Pick up', {
         fontSize: '5px',
         color: '#aaffaa',
       })
@@ -879,7 +872,8 @@ export class LevelScene extends Phaser.Scene {
     const abilityW = 56;
     const abilityH = 6;
     const gap = 8;
-    const labelStyle = { fontFamily: '"Press Start 2P"', fontSize: '6px', resolution: 1 } as const;
+
+    const labelStyle = { fontSize: '6px' } as const;
 
     const dashRect = {
       x: heartConfig.endX + 8,
@@ -905,15 +899,13 @@ export class LevelScene extends Phaser.Scene {
     this.drawAbilityBackground(this.dashBarBg, dashRect);
     this.drawAbilityBackground(this.shieldBarBg, shieldRect);
 
-    this.dashLabel = this.add
-      .text(dashRect.x, dashRect.y - 4, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
+    this.dashLabel = createGameText(this, dashRect.x, dashRect.y - 4, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
       .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(20)
       .setStroke('#000000', 1);
 
-    this.shieldLabel = this.add
-      .text(shieldRect.x, shieldRect.y - 4, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
+    this.shieldLabel = createGameText(this, shieldRect.x, shieldRect.y - 4, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
       .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(20)
@@ -925,7 +917,6 @@ export class LevelScene extends Phaser.Scene {
 
     this.telemetryHud = this.add
       .text(rightX, 18, '', {
-        fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#66ff99',
       })
@@ -2031,7 +2022,6 @@ export class LevelScene extends Phaser.Scene {
     }
     const text = this.add
       .text(160, 90, 'BOSS DEFEATED!', {
-        fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffdd44',
         stroke: '#663300',
@@ -2154,8 +2144,7 @@ export class LevelScene extends Phaser.Scene {
     if (this.anims.exists(`${this.boss.config.spriteKey}_idle`)) {
       this.boss.play(`${this.boss.config.spriteKey}_idle`);
     }
-    this.bossNameText = createReadableText(this, 160, 20, this.boss.config.name, {
-        fontFamily: '"Press Start 2P"',
+    this.bossNameText = createGameText(this, 160, 20, this.boss.config.name, {
         fontSize: '6px',
         color: '#ff6666',
         stroke: '#330000',
@@ -2199,8 +2188,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private showPhaseText(phase: number): void {
-    const text = createReadableText(this, 160, 70, `PHASE ${phase}!`, {
-        fontFamily: '"Press Start 2P"',
+    const text = createGameText(this, 160, 70, `PHASE ${phase}!`, {
         fontSize: '7px',
         color: '#ffffff',
         stroke: '#000000',
@@ -2398,28 +2386,24 @@ export class LevelScene extends Phaser.Scene {
 
     this.add.rectangle(160, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
 
-    this.add.text(160, 64, 'YOU DIED', {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 64, 'YOU DIED', {
       fontSize: '8px',
       color: '#ff4444',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const livesLabel = this.lives === 1 ? '1 LIFE REMAINING' : `${this.lives} LIVES REMAINING`;
-    this.add.text(160, 80, livesLabel, {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 80, livesLabel, {
       fontSize: '5px',
       color: '#44ffcc',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const killsLabel = `KILLS: ${totalKilled} / ${threshold}  (${remaining} TO GO)`;
-    this.add.text(160, 94, killsLabel, {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 94, killsLabel, {
       fontSize: '4px',
       color: '#ffcc44',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
-    this.add.text(160, 108, 'RESTARTING LEVEL...', {
-      fontFamily: '"Press Start 2P"',
+    createGameText(this, 160, 108, 'RESTARTING LEVEL...', {
       fontSize: '4px',
       color: '#888888',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
@@ -2476,7 +2460,6 @@ export class LevelScene extends Phaser.Scene {
   private showLevelIntro(): void {
     const title = this.add
       .text(160, 70, this.levelData.name, {
-        fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffffff',
         stroke: '#000000',
@@ -2489,7 +2472,6 @@ export class LevelScene extends Phaser.Scene {
 
     const subtitle = this.add
       .text(160, 84, this.levelData.subtitle, {
-        fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#aaaaaa',
       })
@@ -2540,8 +2522,7 @@ export class LevelScene extends Phaser.Scene {
     };
 
     // HUD badge
-    this.companionLabel = createReadableText(this, 160, 170, '★ AI Companion Powered by Mistral  [F9]', {
-        fontFamily: '"Press Start 2P"',
+    this.companionLabel = createGameText(this, 160, 170, '★ AI Companion Powered by Mistral  [F9]', {
         fontSize: '4px',
         color: '#8844cc',
       })
@@ -2706,7 +2687,6 @@ export class LevelScene extends Phaser.Scene {
 
     this.companionSpeakText = this.add
       .text(this.companion.x, this.companion.y - 14, speak, {
-        fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#cc88ff',
         stroke: '#110022',

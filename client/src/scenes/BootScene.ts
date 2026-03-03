@@ -19,7 +19,6 @@ export class BootScene extends Phaser.Scene {
     const bar = this.add.graphics();
     const loadingText = this.add
       .text(width / 2, barY - 16, 'LOADING...', {
-        fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffffff',
       })
