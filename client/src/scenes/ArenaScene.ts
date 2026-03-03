@@ -21,6 +21,7 @@ import { AnalyzingOverlay } from '../ui/AnalyzingOverlay';
 import { DevConsole } from '../ui/DevConsole';
 import { DirectorPanel } from '../ui/DirectorPanel';
 import type { AIState, ArenaPhase, BossResponse, ServerMessage } from '../types/arena';
+import { createReadableText } from '../utils/createReadableText';
 
 interface SimpleProjectile {
   obj: Phaser.GameObjects.Arc;
@@ -149,7 +150,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
-    this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
+    this.livesText = createReadableText(this, INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#ffdd44',
@@ -231,7 +232,7 @@ export class ArenaScene extends Phaser.Scene {
     this.micIndicatorBg = this.add.rectangle(56, y + 2, 104, 16, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.micIndicator = this.add.text(8, y - 4, '', {
+    this.micIndicator = createReadableText(this, 8, y - 4, '', {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#ff6677',
@@ -258,7 +259,7 @@ export class ArenaScene extends Phaser.Scene {
     this.wsDebugBg = this.add.rectangle(56, 10, 110, 14, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.wsDebugText = this.add.text(8, 4, 'WS: --', {
+    this.wsDebugText = createReadableText(this, 8, 4, 'WS: --', {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#99aadd',
@@ -790,17 +791,19 @@ export class ArenaScene extends Phaser.Scene {
     const cx = INTERNAL_WIDTH / 2;
     const cy = INTERNAL_HEIGHT / 2;
     this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
-    this.add.text(cx, cy - 18, 'YOU DIED', {
+    createReadableText(this, cx, cy - 18, 'YOU DIED', {
       fontFamily: '"Press Start 2P"',
       fontSize: '10px',
       color: '#ff4444',
+      stroke: '#330000',
+      strokeThickness: 5,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy, `LIVES REMAINING: ${this.lives}`, {
+    createReadableText(this, cx, cy, `LIVES REMAINING: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
       fontSize: '6px',
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy + 14, 'Retrying...', {
+    createReadableText(this, cx, cy + 14, 'Retrying...', {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#aaaaaa',

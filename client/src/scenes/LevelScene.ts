@@ -56,6 +56,7 @@ import { CoopState } from '../systems/CoopState';
 import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
 
 import { MusicLayer } from '../types/AudioTypes';
+import { createReadableText } from '../utils/createReadableText';
 
 // Persists across scene.restart() calls so retries reuse the exact same map and enemy positions.
 interface EnemySpawnRecord { x: number; y: number; config: EnemyConfig; }
@@ -794,8 +795,7 @@ export class LevelScene extends Phaser.Scene {
   private createHUD(): void {
     const margin = 6;
     const rightX = INTERNAL_WIDTH - margin;
-    this.levelText = this.add
-      .text(6, 6, `LEVEL ${this.currentLevel}`, {
+    this.levelText = createReadableText(this, 6, 6, `LEVEL ${this.currentLevel}`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffcc00',
@@ -805,8 +805,7 @@ export class LevelScene extends Phaser.Scene {
 
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
-    this.enemyCountText = this.add
-      .text(6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
+    this.enemyCountText = createReadableText(this, 6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ff8888',
@@ -814,8 +813,7 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.livesText = this.add
-      .text(6, 22, `LIVES: ${this.lives}`, {
+    this.livesText = createReadableText(this, 6, 22, `LIVES: ${this.lives}`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#44ffcc',
@@ -823,8 +821,7 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.coinText = this.add
-      .text(6, 30, 'COINS: 0', {
+    this.coinText = createReadableText(this, 6, 30, 'COINS: 0', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffdd44',
@@ -866,8 +863,7 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
 
-    this.hintText = this.add
-      .text(160, 155, '[E] Pick up', {
+    this.hintText = createReadableText(this, 160, 155, '[E] Pick up', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#aaffaa',
@@ -2158,16 +2154,21 @@ export class LevelScene extends Phaser.Scene {
     if (this.anims.exists(`${this.boss.config.spriteKey}_idle`)) {
       this.boss.play(`${this.boss.config.spriteKey}_idle`);
     }
-    this.bossNameText = this.add
-      .text(160, 20, this.boss.config.name, {
+    this.bossNameText = createReadableText(this, 160, 20, this.boss.config.name, {
         fontFamily: '"Press Start 2P"',
         fontSize: '6px',
         color: '#ff6666',
+        stroke: '#330000',
+        strokeThickness: 5,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
-      .setDepth(20);
-    this.time.delayedCall(3000, () => this.bossNameText?.destroy());
+      .setDepth(2000)
+      .setAlpha(0);
+    this.tweens.add({ targets: this.bossNameText, alpha: 1, duration: 400, ease: 'Power2' });
+    this.time.delayedCall(3000, () => {
+      this.tweens.add({ targets: this.bossNameText, alpha: 0, duration: 400, onComplete: () => this.bossNameText?.destroy() });
+    });
     this.shakeCamera(300, 0.01);
     this.showBossBar();
     this.activeAudioLayer = 'boss';
@@ -2198,15 +2199,16 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private showPhaseText(phase: number): void {
-    const text = this.add
-      .text(160, 70, `PHASE ${phase}!`, {
+    const text = createReadableText(this, 160, 70, `PHASE ${phase}!`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
-      .setDepth(20)
+      .setDepth(2000)
       .setAlpha(0);
     this.tweens.add({
       targets: text,
@@ -2538,8 +2540,7 @@ export class LevelScene extends Phaser.Scene {
     };
 
     // HUD badge
-    this.companionLabel = this.add
-      .text(160, 170, '★ AI Companion Powered by Mistral  [F9]', {
+    this.companionLabel = createReadableText(this, 160, 170, '★ AI Companion Powered by Mistral  [F9]', {
         fontFamily: '"Press Start 2P"',
         fontSize: '4px',
         color: '#8844cc',

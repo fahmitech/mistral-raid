@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { OptionsData } from '../config/types';
+import { createReadableText } from '../utils/createReadableText';
 
 interface OptionRow {
   key: keyof OptionsData;
@@ -42,11 +43,12 @@ export class OptionsScene extends Phaser.Scene {
       this.cameras.main.fadeIn(400, 0, 0, 0);
     }
 
-    this.add
-      .text(160, 24, 'OPTIONS', {
+    createReadableText(this, 160, 24, 'OPTIONS', {
         fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setOrigin(0.5);
 
@@ -58,8 +60,7 @@ export class OptionsScene extends Phaser.Scene {
     ];
 
     this.rows.forEach((row, idx) => {
-      row.text = this.add
-        .text(80, 52 + idx * 16, '', {
+      row.text = createReadableText(this, 80, 52 + idx * 16, '', {
           fontFamily: '"Press Start 2P"',
           fontSize: '5px',
           color: '#aabbcc',
@@ -67,8 +68,7 @@ export class OptionsScene extends Phaser.Scene {
         .setOrigin(0, 0.5);
     });
 
-    const resetText = this.add
-      .text(160, 130, '[ RESET SAVE DATA ]', {
+    const resetText = createReadableText(this, 160, 130, '[ RESET SAVE DATA ]', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ff6666',
@@ -77,8 +77,7 @@ export class OptionsScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     resetText.on('pointerdown', () => this.resetSave());
 
-    const backText = this.add
-      .text(160, 150, '[ BACK ]', {
+    const backText = createReadableText(this, 160, 150, '[ BACK ]', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#cccccc',

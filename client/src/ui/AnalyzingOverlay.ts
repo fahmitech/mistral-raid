@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+import { createReadableText } from '../utils/createReadableText';
 
 export class AnalyzingOverlay {
   private scene: Phaser.Scene;
@@ -14,10 +15,12 @@ export class AnalyzingOverlay {
       .setDepth(30)
       .setVisible(false);
 
-    this.text = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
+    this.text = createReadableText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
       fontFamily: '"Press Start 2P"',
       fontSize: '6px',
       color: '#ffee88',
+      stroke: '#332200',
+      strokeThickness: 4,
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(31).setVisible(false);
 
     this.spinner = scene.add.circle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 + 10, 6, 0xffee88, 0.8)

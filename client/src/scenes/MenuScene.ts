@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
+import { createReadableText } from '../utils/createReadableText';
 
 interface MenuItem {
   label: string;
@@ -235,12 +236,13 @@ export class MenuScene extends Phaser.Scene {
     const startY = 72;
     this.items.forEach((item, idx) => {
       const isCoopItem = item.label === 'AI Co-Op Mode';
-      const text = this.add
-        .text(160, startY + idx * 14, item.label, {
+      const text = createReadableText(this, 160, startY + idx * 14, item.label, {
           fontFamily: '"Press Start 2P"',
           fontSize: '7px',
           color: isCoopItem ? '#cc88ff' : '#aabbcc',
           resolution: 2,
+          stroke: '#000000',
+          strokeThickness: 3,
         })
         .setOrigin(0.5);
 
@@ -255,10 +257,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createControlsHint(): void {
-    this.add
-      .text(160, 172, '↑↓ Navigate   Enter Select', {
+    createReadableText(this, 160, 172, '↑↓ Navigate   Enter Select', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px', // Fixed from 4px to 8px
+        fontSize: '8px',
         color: '#cccccc',
         resolution: 2,
       })

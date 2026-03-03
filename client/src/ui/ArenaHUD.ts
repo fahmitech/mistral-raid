@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
 import type { AIState, ArenaPhase } from '../types/arena';
+import { createReadableText } from '../utils/createReadableText';
 
 export class ArenaHUD {
   private scene: Phaser.Scene;
@@ -21,7 +22,7 @@ export class ArenaHUD {
       strokeThickness: 2,
     }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20);
 
-    this.stateText = scene.add.text(INTERNAL_WIDTH - 6, 6, 'LISTENING', {
+    this.stateText = createReadableText(scene, INTERNAL_WIDTH - 6, 6, 'LISTENING', {
       fontFamily: '"Press Start 2P"',
       fontSize: '4px',
       color: '#66ffcc',

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+import { createReadableText } from '../utils/createReadableText';
 
 export class TauntText {
   private scene: Phaser.Scene;
@@ -9,16 +10,17 @@ export class TauntText {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.bg = scene.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, INTERNAL_WIDTH - 12, 18, 0x000000, 0.5)
+    this.bg = scene.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, INTERNAL_WIDTH - 12, 22, 0x000000, 0.6)
       .setScrollFactor(0)
       .setDepth(19)
       .setVisible(false);
-    this.text = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, '', {
+    this.text = createReadableText(scene, INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 32, '', {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#ff88aa',
       align: 'center',
       wordWrap: { width: INTERNAL_WIDTH - 20 },
+      lineSpacing: 4,
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(20).setVisible(false);
   }
 

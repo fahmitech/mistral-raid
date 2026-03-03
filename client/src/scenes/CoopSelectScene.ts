@@ -4,6 +4,7 @@ import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 import { CoopState, type CompanionPersonality } from '../systems/CoopState';
+import { createReadableText } from '../utils/createReadableText';
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -82,7 +83,7 @@ export class CoopSelectScene extends Phaser.Scene {
       resolution: 2,
     }).setOrigin(0.5);
 
-    this.add.text(160, 20, 'AI Companion Powered by Mistral', {
+    createReadableText(this, 160, 20, 'AI Companion Powered by Mistral', {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#ff7700',
@@ -90,25 +91,25 @@ export class CoopSelectScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // ── Hero section ───────────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 34, 'YOUR HERO:', {
+    createReadableText(this, ROW_START_X, 34, 'YOUR HERO:', {
       fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ffffff', resolution: 2,
     });
     this.createPortraitRow(56, this.heroSprites, this.heroBgs, false);
 
     // ── Companion section ──────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 88, 'AI COMPANION:', {
+    createReadableText(this, ROW_START_X, 88, 'AI COMPANION:', {
       fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#88ccff', resolution: 2,
     });
     this.createPortraitRow(110, this.companionSprites, this.companionBgs, true);
 
     // ── Personality section ────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 130, 'PERSONALITY:', {
+    createReadableText(this, ROW_START_X, 130, 'PERSONALITY:', {
       fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ffcc44', resolution: 2,
     });
     this.createPersonalityRow(142);
 
     // ── Desc text ─────────────────────────────────────────────────────────
-    this.personalityDescText = this.add.text(160, 156, PERSONALITIES[this.personalityIndex].desc, {
+    this.personalityDescText = createReadableText(this, 160, 156, PERSONALITIES[this.personalityIndex].desc, {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
       color: '#aabbcc',
@@ -116,16 +117,16 @@ export class CoopSelectScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     // ── Section indicator ─────────────────────────────────────────────────
-    this.sectionLabel = this.add.text(160, 165, '▲▼ Switch section   ◄► Change   ENTER Confirm', {
+    this.sectionLabel = createReadableText(this, 160, 165, '▲▼ Switch section   ◄► Change   ENTER Confirm', {
       fontFamily: '"Press Start 2P"', fontSize: '4px', color: '#667788', resolution: 2,
     }).setOrigin(0.5);
 
     // ── Back / Confirm buttons ─────────────────────────────────────────────
-    const backText = this.add.text(12, 173, '[ BACK ]', {
+    const backText = createReadableText(this, 12, 173, '[ BACK ]', {
       fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#888888', resolution: 2,
     }).setOrigin(0, 0.5);
 
-    const confirmText = this.add.text(308, 173, '[ START ]', {
+    const confirmText = createReadableText(this, 308, 173, '[ START ]', {
       fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#00ffcc', resolution: 2,
     }).setOrigin(1, 0.5);
 
@@ -216,7 +217,7 @@ export class CoopSelectScene extends Phaser.Scene {
       sprites.push(sprite);
 
       // Name label
-      this.add.text(cx, cy + BOX_SIZE / 2 + 3, cfg.label.substring(0, 4).toUpperCase(), {
+      createReadableText(this, cx, cy + BOX_SIZE / 2 + 3, cfg.label.substring(0, 4).toUpperCase(), {
         fontFamily: '"Press Start 2P"', fontSize: '4px', color: '#556677', resolution: 2,
       }).setOrigin(0.5, 0);
 
@@ -230,7 +231,7 @@ export class CoopSelectScene extends Phaser.Scene {
   private createPersonalityRow(rowY: number): void {
     PERSONALITIES.forEach((p, idx) => {
       const cx = ROW_START_X + idx * BOX_STEP + BOX_SIZE / 2;
-      const text = this.add.text(cx, rowY, p.label, {
+      const text = createReadableText(this, cx, rowY, p.label, {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#667788',
