@@ -107,11 +107,12 @@ export class ArenaScene extends Phaser.Scene {
 
     // Lighting — player spotlight with 4 torches (2 top, 2 bottom)
     this.lighting = new LightingSystem(this, 0.68);
+    const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);
     this.lighting.setTorches([
-      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 8 },          // top-left
-      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 8 },         // top-right
-      { x: 2 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },     // bottom-left
-      { x: 17 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },    // bottom-right
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 4 },          // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4 },         // top-right
+      { x: 2 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 },     // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 },    // bottom-right
     ]);
 
     const gs = GameState.get();
