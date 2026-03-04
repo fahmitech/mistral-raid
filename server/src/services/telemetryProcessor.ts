@@ -84,9 +84,10 @@ function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], 
   const long = longRaw.sampleCount ? longRaw : recent;
 
   const latest = (recentSamples[recentSamples.length - 1] ?? longSamples[longSamples.length - 1])?.sample;
-  const bossActive = typeof latest?.bossMaxHp === 'number' && latest.bossMaxHp > 0;
+  const bossMaxHp = typeof latest?.bossMaxHp === 'number' ? latest.bossMaxHp : 0;
+  const bossActive = bossMaxHp > 0;
   const bossHpPercent = bossActive && typeof latest?.bossHp === 'number'
-    ? Math.max(0, Math.min(100, (latest.bossHp / latest.bossMaxHp) * 100))
+    ? Math.max(0, Math.min(100, (latest.bossHp / bossMaxHp) * 100))
     : 0;
   const playerHpPercent = typeof latest?.maxHp === 'number' && latest.maxHp > 0
     ? Math.max(0, Math.min(100, (latest.hp / latest.maxHp) * 100))

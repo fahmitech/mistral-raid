@@ -1,5 +1,14 @@
 import { Mistral } from '@mistralai/mistralai';
-import type { BossResponse, MechanicConfig, Session, TelemetrySummary } from '../types.js';
+import type {
+  BossDirective,
+  BossResponse,
+  EnemyBehaviorDirective,
+  EnemyDirective,
+  LiveTelemetry,
+  MechanicConfig,
+  Session,
+  TelemetrySummary,
+} from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
 import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
@@ -84,6 +93,22 @@ DESIGN RULES:
 - Always generate 2-3 mechanics that COUNTER the player's habits
 - Keep it fair — always leave a way to survive`;
 
+const DIRECTIVE_SYSTEM_PROMPT = `You are THE ARCHITECT's real-time combat director.
+Return only JSON for a short-lived movement directive.
+
+Arena response:
+{"boss":{"movement_mode":"chase|circle|strafe|retreat|idle","attack_mode":"aimed_shot|burst|charge|spiral|ring|fan|suppress","speed_multiplier":0.5-2.0,"attack_cooldown_ms":400-3000,"circle_radius":80-200,"duration_ms":3000-10000}}
+
+Dungeon response:
+{"enemies":{"aggro_range_multiplier":0.5-2.5,"speed_multiplier":0.5-2.0,"patrol_to_aggro_ms":500-4000,"behavior_override":"melee|ranged|summoner|teleporter","duration_ms":5000-20000}}
+
+Rules:
+- If in_corner is true, prefer circle or retreat in arena
+- If recent_accuracy > 0.6, prefer circle or strafe in arena
+- If player_hp_pct < 0.3, reduce aggression
+- If boss_hp_pct < 0.3, increase aggression
+- No prose, no markdown, JSON only`;
+
 const FALLBACK_RESPONSE: BossResponse = {
   analysis: 'The player relies on simple movement patterns and needs pressure from multiple angles.',
   taunt: 'I have seen your rhythm. Now dance to mine.',
@@ -125,6 +150,11 @@ const VOICE_CASCADE: Array<{ model: string; timeout: number }> = [
   { model: 'ministral-8b-latest', timeout: 2500 },
   { model: 'mistral-small-latest', timeout: 3000 },
 ];
+
+interface DirectiveResponse {
+  boss?: BossDirective;
+  enemies?: EnemyDirective;
+}
 
 export async function handleAnalyze(session: Session, rawPayload: Record<string, unknown>): Promise<void> {
   if (session.turnState === 'THINKING' || session.turnState === 'AI_SPEAKING') return;
@@ -214,6 +244,47 @@ export async function generateBossReply(
   }
 
   return FALLBACK_RESPONSE;
+}
+
+export async function generateDirective(_session: Session, telemetry: LiveTelemetry): Promise<DirectiveResponse | null> {
+  const prompt = JSON.stringify({
+    context: telemetry.context,
+    player_hp_pct: Number(telemetry.player_hp_pct.toFixed(2)),
+    boss_hp_pct: telemetry.boss_hp_pct === undefined ? undefined : Number(telemetry.boss_hp_pct.toFixed(2)),
+    enemy_count: telemetry.enemy_count,
+    player_zone: telemetry.player_zone,
+    recent_dodge_bias: telemetry.recent_dodge_bias,
+    recent_accuracy: Number(telemetry.recent_accuracy.toFixed(2)),
+    avg_distance_from_boss: telemetry.avg_distance_from_boss === undefined
+      ? undefined
+      : Math.round(telemetry.avg_distance_from_boss),
+    in_corner: telemetry.in_corner,
+    elapsed_ms: Math.round(telemetry.elapsed_ms),
+    last_damage_source: telemetry.last_damage_source,
+  });
+
+  try {
+    const response = await getClient().chat.complete(
+      {
+        model: 'mistral-small-latest',
+        messages: [
+          { role: 'system', content: DIRECTIVE_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        responseFormat: { type: 'json_object' },
+        maxTokens: 200,
+      },
+      {
+        timeoutMs: 1500,
+      }
+    );
+    const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
+    const parsed = JSON.parse(content);
+    return validateAndClampDirective(parsed, telemetry.context);
+  } catch (err) {
+    console.warn('[mistral] Directive generation failed:', err);
+    return null;
+  }
 }
 
 function buildUserPrompt(playerSaid: string, t: TelemetrySummary): string {
@@ -355,6 +426,55 @@ function sanitizeMechanic(raw: unknown): MechanicConfig | null {
     default:
       return null;
   }
+}
+
+function validateAndClampDirective(raw: unknown, context: LiveTelemetry['context']): DirectiveResponse | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const validMovement: BossDirective['movement_mode'][] = ['chase', 'circle', 'strafe', 'retreat', 'idle'];
+  const validAttack: BossDirective['attack_mode'][] = ['aimed_shot', 'burst', 'charge', 'spiral', 'ring', 'fan', 'suppress'];
+  const validEnemyBehavior: EnemyBehaviorDirective[] = ['melee', 'ranged', 'summoner', 'teleporter', 'shielded', 'exploder', 'split'];
+
+  if (context === 'arena') {
+    const bossRaw = obj.boss;
+    if (!bossRaw || typeof bossRaw !== 'object') return null;
+    const boss = bossRaw as Record<string, unknown>;
+    const movementMode = pickEnum(boss.movement_mode, validMovement, 'chase');
+    const circleRadius = movementMode === 'circle'
+      ? clampNumber(boss.circle_radius, 80, 200, 120)
+      : undefined;
+
+    return {
+      boss: {
+        movement_mode: movementMode,
+        attack_mode: pickEnum(boss.attack_mode, validAttack, 'aimed_shot'),
+        speed_multiplier: clampNumber(boss.speed_multiplier, 0.5, 2, 1),
+        attack_cooldown_ms: clampNumber(boss.attack_cooldown_ms, 400, 3000, 1200),
+        circle_radius: circleRadius,
+        duration_ms: clampNumber(boss.duration_ms, 3000, 10000, 6000),
+      },
+    };
+  }
+
+  const enemyRaw = obj.enemies;
+  if (!enemyRaw || typeof enemyRaw !== 'object') return null;
+  const enemies = enemyRaw as Record<string, unknown>;
+  const behaviorOverride = typeof enemies.behavior_override === 'string'
+    && validEnemyBehavior.includes(enemies.behavior_override as EnemyBehaviorDirective)
+    ? enemies.behavior_override as EnemyBehaviorDirective
+    : undefined;
+
+  return {
+    enemies: {
+      aggro_range_multiplier: clampNumber(enemies.aggro_range_multiplier, 0.5, 2.5, 1),
+      speed_multiplier: clampNumber(enemies.speed_multiplier, 0.5, 2, 1),
+      patrol_to_aggro_ms: typeof enemies.patrol_to_aggro_ms === 'number'
+        ? clampNumber(enemies.patrol_to_aggro_ms, 500, 4000, 1800)
+        : undefined,
+      behavior_override: behaviorOverride,
+      duration_ms: clampNumber(enemies.duration_ms, 5000, 20000, 10000),
+    },
+  };
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {

@@ -51,6 +51,22 @@ export function attachWebSocketServer(httpServer: http.Server): void {
           case 'ANALYZE':
             void mistralService.handleAnalyze(session, msg.payload);
             break;
+          case 'LIVE_TELEMETRY':
+            void (async () => {
+              try {
+                const directive = await mistralService.generateDirective(session, msg.payload);
+                if (!directive) return;
+                if (msg.payload.context === 'arena' && directive.boss) {
+                  sendToClient(session, { type: 'BOSS_DIRECTIVE', payload: directive.boss });
+                }
+                if (msg.payload.context === 'dungeon' && directive.enemies) {
+                  sendToClient(session, { type: 'ENEMY_DIRECTIVE', payload: directive.enemies });
+                }
+              } catch (err) {
+                console.error('[ws] directive generation error:', err);
+              }
+            })();
+            break;
           case 'AI_ASSISTANT_QUERY':
             void (async () => {
               try {

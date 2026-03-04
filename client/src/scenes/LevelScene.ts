@@ -60,6 +60,7 @@ import { BuffManager } from '../systems/BuffManager';
 import { LevelHUDOverlay } from '../ui/LevelHUDOverlay';
 
 import { MusicLayer } from '../types/AudioTypes';
+import type { ServerMessage } from '../types/arena';
 
 // Persists across scene.restart() calls so retries reuse the exact same map and enemy positions.
 interface EnemySpawnRecord { x: number; y: number; config: EnemyConfig; }
@@ -147,7 +148,9 @@ export class LevelScene extends Phaser.Scene {
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private liveTelemetryTimer: Phaser.Time.TimerEvent | null = null;
   private telemetryActive = false;
+  private wsMessageUnsub: (() => void) | null = null;
 
   // ─── Audio debug (F4 overlay) ─────────────────────────────────────────────────
   private audioDebugText?: Phaser.GameObjects.Text;
@@ -460,6 +463,8 @@ export class LevelScene extends Phaser.Scene {
   private setupTelemetry(): void {
     const url = (import.meta as any).env?.VITE_WS_URL ?? 'ws://localhost:8787';
     wsClient.connect(url);
+    this.wsMessageUnsub?.();
+    this.wsMessageUnsub = wsClient.onMessage((msg) => this.handleServerMessage(msg));
     this.telemetry.startPhase(0);
     this.telemetryActive = true;
     this.lastTelemetrySentAt = 0;
@@ -467,6 +472,11 @@ export class LevelScene extends Phaser.Scene {
       delay: 150,
       loop: true,
       callback: () => this.sendTelemetry(),
+    });
+    this.liveTelemetryTimer = this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => this.sendLiveTelemetry(),
     });
   }
 
@@ -478,6 +488,40 @@ export class LevelScene extends Phaser.Scene {
     const raw = this.telemetry.getRawTelemetry(playerData.playerHP, playerData.playerMaxHP, bossHp);
     wsClient.send({ type: 'telemetry', payload: raw });
     this.lastTelemetrySentAt = this.time.now;
+  }
+
+  private sendLiveTelemetry(): void {
+    if (!this.telemetryActive) return;
+    if (!wsClient.isConnected) return;
+    if (!this.player || !this.enemies) return;
+
+    const state = GameState.get().getData();
+    const zone = this.telemetry.getCurrentZone(this.player.x, this.player.y);
+    const corners = new Set(['top_left', 'top_right', 'bot_left', 'bot_right']);
+
+    wsClient.send({
+      type: 'LIVE_TELEMETRY',
+      payload: {
+        context: 'dungeon',
+        player_hp_pct: state.playerMaxHP > 0 ? state.playerHP / state.playerMaxHP : 0,
+        enemy_count: this.enemies.countActive(),
+        player_zone: zone,
+        recent_dodge_bias: this.telemetry.getRecentDodgeBias(),
+        recent_accuracy: this.telemetry.getRecentAccuracy(10),
+        in_corner: corners.has(zone),
+        elapsed_ms: this.time.now,
+      },
+    });
+  }
+
+  private handleServerMessage(msg: ServerMessage): void {
+    if (msg.type !== 'ENEMY_DIRECTIVE') return;
+    if (!this.enemies) return;
+
+    (this.enemies.getChildren() as Enemy[]).forEach((enemy) => {
+      if (!enemy.active) return;
+      enemy.applyDirective(msg.payload, this.time.now);
+    });
   }
 
   private recordTelemetryHit(proj: Phaser.Physics.Arcade.Sprite): void {
@@ -519,6 +563,8 @@ export class LevelScene extends Phaser.Scene {
     this.minimapTimer = undefined;
     this.telemetryTimer?.remove(false);
     this.telemetryTimer = null;
+    this.liveTelemetryTimer?.remove(false);
+    this.liveTelemetryTimer = null;
     this.time.removeAllEvents();
 
     // Kill tweens created by this Scene.
@@ -586,6 +632,8 @@ export class LevelScene extends Phaser.Scene {
       this.companionDebugOverlayOpen = false;
     }
 
+    this.wsMessageUnsub?.();
+    this.wsMessageUnsub = null;
     wsClient.disconnect();
     this.telemetryActive = false;
   }

@@ -17,6 +17,7 @@ export class TelemetryTracker {
   private dashEvents: DashEvent[] = [];
   private shotsFired = 0;
   private shotsHit = 0;
+  private recentShotResults: boolean[] = [];
   private orbsDestroyed = 0;
   private damageTakenFrom = { melee: 0, projectile: 0, hazard: 0 };
   private recentHits: number[] = [];
@@ -39,6 +40,7 @@ export class TelemetryTracker {
     this.dashEvents = [];
     this.shotsFired = 0;
     this.shotsHit = 0;
+    this.recentShotResults = [];
     this.orbsDestroyed = 0;
     this.damageTakenFrom = { melee: 0, projectile: 0, hazard: 0 };
     this.recentHits = [];
@@ -94,11 +96,15 @@ export class TelemetryTracker {
   recordShotFired(): void {
     this.shotsFired += 1;
     this.recentMissStreak += 1;
+    this.recentShotResults.push(false);
+    if (this.recentShotResults.length > 20) this.recentShotResults.shift();
   }
 
   recordShotHit(): void {
     this.shotsHit += 1;
     this.recentMissStreak = 0;
+    const lastMissIndex = this.recentShotResults.lastIndexOf(false);
+    if (lastMissIndex !== -1) this.recentShotResults[lastMissIndex] = true;
   }
 
   recordOrbDestroyed(): void {
@@ -124,6 +130,27 @@ export class TelemetryTracker {
 
   setBossMaxHp(bossMaxHp: number): void {
     this.bossMaxHp = bossMaxHp;
+  }
+
+  getCurrentZone(x: number, y: number): string {
+    return this.computeZone(x, y);
+  }
+
+  getRecentAccuracy(lastN: number): number {
+    const recent = this.recentShotResults.slice(-lastN);
+    if (!recent.length) return 0;
+    return recent.filter(Boolean).length / recent.length;
+  }
+
+  getRecentDodgeBias(): { left: number; right: number; up: number; down: number } {
+    const cutoff = performance.now() - 15000;
+    const bias = { left: 0, right: 0, up: 0, down: 0 };
+    this.dashEvents
+      .filter((event) => event.time >= cutoff)
+      .forEach((event) => {
+        bias[event.dir] += 1;
+      });
+    return bias;
   }
 
   getRawTelemetry(playerHp: number, playerMaxHp: number, bossHp: number): RawTelemetry {

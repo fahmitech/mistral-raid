@@ -4,6 +4,62 @@ export type TurnState =
 
 export type AIState = 'listening' | 'thinking' | 'speaking';
 
+export type BossMovementMode =
+  | 'chase'
+  | 'circle'
+  | 'strafe'
+  | 'retreat'
+  | 'idle';
+
+export type BossAttackMode =
+  | 'aimed_shot'
+  | 'burst'
+  | 'charge'
+  | 'spiral'
+  | 'ring'
+  | 'fan'
+  | 'suppress';
+
+export type EnemyBehaviorDirective =
+  | 'melee'
+  | 'ranged'
+  | 'summoner'
+  | 'teleporter'
+  | 'shielded'
+  | 'exploder'
+  | 'split';
+
+export interface BossDirective {
+  movement_mode: BossMovementMode;
+  attack_mode: BossAttackMode;
+  speed_multiplier: number;
+  attack_cooldown_ms: number;
+  circle_radius?: number;
+  duration_ms: number;
+}
+
+export interface EnemyDirective {
+  aggro_range_multiplier: number;
+  speed_multiplier: number;
+  patrol_to_aggro_ms?: number;
+  behavior_override?: EnemyBehaviorDirective;
+  duration_ms: number;
+}
+
+export interface LiveTelemetry {
+  context: 'arena' | 'dungeon';
+  player_hp_pct: number;
+  boss_hp_pct?: number;
+  enemy_count?: number;
+  player_zone: string;
+  recent_dodge_bias: { left: number; right: number; up: number; down: number };
+  recent_accuracy: number;
+  avg_distance_from_boss?: number;
+  in_corner: boolean;
+  elapsed_ms: number;
+  last_damage_source?: 'melee' | 'projectile' | 'hazard';
+}
+
 export type ServerMessage =
   | { type: 'ai_state';           payload: { state: AIState } }
   | { type: 'captions_partial';   payload: { text: string } }
@@ -14,6 +70,8 @@ export type ServerMessage =
   | { type: 'AUDIO_READY';        payload: { audioBase64: string; format: 'mp3' } }
   | { type: 'mechanics_update';   payload: MechanicConfig }
   | { type: 'director_update';    payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'BOSS_DIRECTIVE';     payload: BossDirective }
+  | { type: 'ENEMY_DIRECTIVE';    payload: EnemyDirective }
   | { type: 'AI_ASSISTANT_REPLY'; payload: CompanionReply }
   | { type: 'error';              payload: { message: string; fallback: BossResponse } };
 
@@ -22,7 +80,8 @@ export type ClientMessage =
   | { type: 'barge_in';           payload: Record<string, never> }
   | { type: 'vad_state';          payload: { speaking: boolean } }
   | { type: 'ANALYZE';            payload: AnalyzePayload }
-  | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } };
+  | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } }
+  | { type: 'LIVE_TELEMETRY';     payload: LiveTelemetry };
 
 export interface CompanionContext {
   playerPos: { x: number; y: number };

@@ -59,6 +59,7 @@ export class ArenaScene extends Phaser.Scene {
   private devConsole!: DevConsole;
   private directorPanel!: DirectorPanel;
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private liveTelemetryTimer: Phaser.Time.TimerEvent | null = null;
   private introTauntTimer: Phaser.Time.TimerEvent | null = null;
   private introTauntSent = false;
   private introAudioPlayed = false;
@@ -78,6 +79,7 @@ export class ArenaScene extends Phaser.Scene {
   private wsDebugBg!: Phaser.GameObjects.Rectangle;
   private audioUnlockHandler: (() => void) | null = null;
   private toggleHandler: ((event: KeyboardEvent) => void) | null = null;
+  private lastDamageSource: 'melee' | 'projectile' | 'hazard' | undefined;
 
   private wsUnsub: (() => void) | null = null;
   private wsStatusUnsub: (() => void) | null = null;
@@ -519,6 +521,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (this.arenaPhase === 'PHASE_2') {
+      this.updateBossAI(time);
       this.mechanicInterpreter.update(time, delta);
     }
 
@@ -574,6 +577,12 @@ export class ArenaScene extends Phaser.Scene {
       delay: 150,
       loop: true,
       callback: () => this.sendTelemetry(),
+    });
+
+    this.liveTelemetryTimer = this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => this.sendLiveTelemetry(),
     });
   }
 
@@ -745,6 +754,9 @@ export class ArenaScene extends Phaser.Scene {
       case 'director_update':
         this.directorPanel.update(msg.payload);
         break;
+      case 'BOSS_DIRECTIVE':
+        this.boss.applyDirective(msg.payload, this.time.now);
+        break;
       case 'error':
         this.devConsole.setError(msg.payload.message);
         this.handleBossResponse(msg.payload.fallback);
@@ -771,6 +783,31 @@ export class ArenaScene extends Phaser.Scene {
     const playerData = GameState.get().getData();
     const raw = this.telemetry.getRawTelemetry(playerData.playerHP, playerData.playerMaxHP, this.bossHp);
     wsClient.send({ type: 'telemetry', payload: raw });
+  }
+
+  private sendLiveTelemetry(): void {
+    if (!wsClient.isConnected) return;
+    if (this.arenaPhase !== 'PHASE_1' && this.arenaPhase !== 'PHASE_2') return;
+
+    const playerData = GameState.get().getData();
+    const zone = this.telemetry.getCurrentZone(this.player.x, this.player.y);
+    const corners = new Set(['top_left', 'top_right', 'bot_left', 'bot_right']);
+
+    wsClient.send({
+      type: 'LIVE_TELEMETRY',
+      payload: {
+        context: 'arena',
+        player_hp_pct: playerData.playerMaxHP > 0 ? playerData.playerHP / playerData.playerMaxHP : 0,
+        boss_hp_pct: this.bossMaxHp > 0 ? this.bossHp / this.bossMaxHp : 0,
+        player_zone: zone,
+        recent_dodge_bias: this.telemetry.getRecentDodgeBias(),
+        recent_accuracy: this.telemetry.getRecentAccuracy(10),
+        avg_distance_from_boss: Phaser.Math.Distance.Between(this.player.x, this.player.y, this.boss.x, this.boss.y),
+        in_corner: corners.has(zone),
+        elapsed_ms: Math.max(0, this.time.now - this.phaseStartTime),
+        last_damage_source: this.lastDamageSource,
+      },
+    });
   }
 
   private handleInput(time: number): void {
@@ -947,6 +984,7 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
 
+    this.lastDamageSource = source;
     GameState.get().takeDamage(amount);
     this.player.setInvincible(INVINCIBLE_MS, now);
     this.telemetry.recordDamage(source, amount);
@@ -1072,6 +1110,7 @@ export class ArenaScene extends Phaser.Scene {
     micCapture.stop();
     bossVoicePlayer.stop();
     this.telemetryTimer?.remove(false);
+    this.liveTelemetryTimer?.remove(false);
     this.introTauntTimer?.remove(false);
     this.cancelTtsFallback();
     this.mechanicInterpreter.clear();
