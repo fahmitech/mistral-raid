@@ -345,68 +345,67 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildArenaEnvironment(): void {
-    const COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE);   // 20
-    const ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);  // 12
+    const TILE_COLS = Math.ceil(INTERNAL_WIDTH  / TILE_SIZE); // 20
+    const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE); // 12
 
-    // ── RenderTexture: pre-fill every cell with floor_1 (no-void guarantee) ──
-    const rt = this.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setDepth(0);
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        rt.draw('floor_1', col * TILE_SIZE, row * TILE_SIZE);
-      }
-    }
-
-    // ── Draw walls and varied floor tiles on top of the pre-fill ──────────
+    // ── Resolve tile keys with fallbacks ──────────────────────────────────
     const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
     const stainKeys = ['floor_stain_1', 'floor_stain_2'];
-    const wallKey    = this.textures.exists('wall_mid')     ? 'wall_mid'     : 'floor_1';
-    const wallTopKey = this.textures.exists('wall_top_mid') ? 'wall_top_mid' : wallKey;
-    const cornerTLKey = this.textures.exists('wall_corner_top_left')    ? 'wall_corner_top_left'    : wallTopKey;
-    const cornerTRKey = this.textures.exists('wall_corner_top_right')   ? 'wall_corner_top_right'   : wallTopKey;
-    const cornerBLKey = this.textures.exists('wall_corner_front_left')  ? 'wall_corner_front_left'  : wallKey;
-    const cornerBRKey = this.textures.exists('wall_corner_front_right') ? 'wall_corner_front_right' : wallKey;
+    const wallKey     = this.textures.exists('wall_mid')                 ? 'wall_mid'                 : 'floor_1';
+    const wallTopKey  = this.textures.exists('wall_top_mid')             ? 'wall_top_mid'             : wallKey;
+    const cornerTLKey = this.textures.exists('wall_corner_top_left')     ? 'wall_corner_top_left'     : wallTopKey;
+    const cornerTRKey = this.textures.exists('wall_corner_top_right')    ? 'wall_corner_top_right'    : wallTopKey;
+    const cornerBLKey = this.textures.exists('wall_corner_front_left')   ? 'wall_corner_front_left'   : wallKey;
+    const cornerBRKey = this.textures.exists('wall_corner_front_right')  ? 'wall_corner_front_right'  : wallKey;
 
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
+    // ── Full grid coverage using individual images (no RenderTexture) ─────
+    // Every cell is drawn as a plain add.image — 100% reliable, no RT batching issues.
+    for (let row = 0; row < TILE_ROWS; row++) {
+      for (let col = 0; col < TILE_COLS; col++) {
         const px = col * TILE_SIZE;
         const py = row * TILE_SIZE;
 
         const isTopHeader  = row === 0;
         const isTopWall    = row === 1;
-        const isBottomWall = row >= ROWS - 2;
+        const isBottomWall = row >= TILE_ROWS - 2;
         const isLeftWall   = col === 0;
-        const isRightWall  = col === COLS - 1;
+        const isRightWall  = col === TILE_COLS - 1;
 
+        let key: string;
         if (isTopHeader) {
-          if      (isLeftWall)  rt.draw(cornerTLKey, px, py);
-          else if (isRightWall) rt.draw(cornerTRKey, px, py);
-          else                  rt.draw(wallTopKey,  px, py);
+          if      (isLeftWall)  key = cornerTLKey;
+          else if (isRightWall) key = cornerTRKey;
+          else                  key = wallTopKey;
         } else if (isBottomWall) {
-          if      (isLeftWall)  rt.draw(cornerBLKey, px, py);
-          else if (isRightWall) rt.draw(cornerBRKey, px, py);
-          else                  rt.draw(wallKey,     px, py);
+          if      (isLeftWall)  key = cornerBLKey;
+          else if (isRightWall) key = cornerBRKey;
+          else                  key = wallKey;
         } else if (isLeftWall || isRightWall || isTopWall) {
-          rt.draw(wallKey, px, py);
+          key = wallKey;
         } else {
-          // Interior floor — randomised with occasional stains
-          let key = floorKeys[Math.floor(Math.random() * floorKeys.length)];
+          // Interior floor — varied tiles with occasional stains
           if (Math.random() < 0.06) {
             const sk = stainKeys[Math.floor(Math.random() * stainKeys.length)];
-            if (this.textures.exists(sk)) key = sk;
+            key = this.textures.exists(sk) ? sk : 'floor_1';
+          } else {
+            const fk = floorKeys[Math.floor(Math.random() * floorKeys.length)];
+            key = this.textures.exists(fk) ? fk : 'floor_1';
           }
-          rt.draw(this.textures.exists(key) ? key : 'floor_1', px, py);
         }
+
+        this.add.image(px, py, key).setOrigin(0, 0).setDepth(0);
       }
     }
 
-    // ── Decorative banners at top wall (2 left and right of center) ────
+    // ── Banners (2 on top wall) ────────────────────────────────────────────
     const bannerKeys = ['wall_banner_red', 'wall_banner_blue', 'wall_banner_green', 'wall_banner_yellow'];
-    const bannerKey = bannerKeys.find((k) => this.textures.exists(k));
+    const bannerKey  = bannerKeys.find((k) => this.textures.exists(k));
     const bannerCols = [5, 14];
     if (bannerKey) {
-      bannerCols.forEach((col) => rt.draw(bannerKey, col * TILE_SIZE, TILE_SIZE));
+      bannerCols.forEach((col) =>
+        this.add.image(col * TILE_SIZE, TILE_SIZE, bannerKey).setOrigin(0, 0).setDepth(1)
+      );
     } else {
-      // Fallback: colored rectangles as banners
       const bannerGfx = this.add.graphics().setDepth(1);
       bannerCols.forEach((col) => {
         bannerGfx.fillStyle(0x991111, 0.85);
@@ -414,11 +413,11 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
 
-    // ── Crates near 4 corners of the arena interior ───────────────────
+    // ── Crates near 4 corners of the arena interior ───────────────────────
     const crateKeys = ['chest_empty_open_anim_f0', 'chest_empty', 'chest_full', 'chest_full_open_anim_f0'];
-    const crateKey = crateKeys.find((k) => this.textures.exists(k));
+    const crateKey  = crateKeys.find((k) => this.textures.exists(k));
     const cratePositions: [number, number][] = [
-      [2, 2], [COLS - 3, 2], [2, ROWS - 3], [COLS - 3, ROWS - 3],
+      [2, 2], [TILE_COLS - 3, 2], [2, TILE_ROWS - 3], [TILE_COLS - 3, TILE_ROWS - 3],
     ];
     cratePositions.forEach(([col, row]) => {
       const cx = col * TILE_SIZE + 8;
@@ -434,43 +433,40 @@ export class ArenaScene extends Phaser.Scene {
       }
     });
 
-    // ── 4 torches — 2 on top wall, 2 on bottom wall ─────────────────────
+    // ── 4 torches — 2 on top wall, 2 on bottom wall ───────────────────────
     const torchPositions = [
-      { x: 2 * TILE_SIZE + 8,          y: TILE_SIZE + 8          }, // top-left
-      { x: 17 * TILE_SIZE + 8,         y: TILE_SIZE + 8          }, // top-right
-      { x: 2 * TILE_SIZE + 8,          y: 10 * TILE_SIZE + 8     }, // bottom-left
-      { x: 17 * TILE_SIZE + 8,         y: 10 * TILE_SIZE + 8     }, // bottom-right
+      { x: 2  * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-right
+      { x: 2  * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-right
     ];
     torchPositions.forEach(({ x, y }) => {
       const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
       if (this.anims.exists('torch')) torch.play('torch');
     });
 
-    // ── Ambient embers — 6 per torch for atmosphere ───────────────────
+    // ── Ambient embers — 6 per torch ──────────────────────────────────────
+    this.arenaEmbers = [];
     torchPositions.forEach(({ x, y }) => {
       for (let i = 0; i < 6; i++) {
-        const size = Phaser.Math.FloatBetween(1, 2);
+        const size  = Phaser.Math.FloatBetween(1, 2);
         const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
         const sprite = this.add
           .ellipse(
             x + Phaser.Math.Between(-8, 8),
             y + Phaser.Math.Between(-4, 10),
-            size, size, color, Phaser.Math.FloatBetween(0.1, 0.4)
+            size, size, color, Phaser.Math.FloatBetween(0.1, 0.4),
           )
           .setDepth(3);
-        this.arenaEmbers.push({
-          sprite,
-          speed: Phaser.Math.FloatBetween(0.1, 0.35),
-          drift: Phaser.Math.FloatBetween(0.1, 0.4),
-        });
+        this.arenaEmbers.push({ sprite, speed: Phaser.Math.FloatBetween(0.1, 0.35), drift: Phaser.Math.FloatBetween(0.1, 0.4) });
       }
     });
 
-    // ── Vignette — subtle darkening at all 4 edges ────────────────────
+    // ── Vignette — dark edges, keeps focus on interior ────────────────────
     const vfx = this.add.graphics().setDepth(4);
     vfx.fillStyle(0x000000, 0.45);
     vfx.fillRect(0, 0, INTERNAL_WIDTH, TILE_SIZE * 2);
-    vfx.fillRect(0, INTERNAL_HEIGHT - TILE_SIZE, INTERNAL_WIDTH, TILE_SIZE);
+    vfx.fillRect(0, INTERNAL_HEIGHT - TILE_SIZE * 2, INTERNAL_WIDTH, TILE_SIZE * 2);
     vfx.fillRect(0, 0, TILE_SIZE, INTERNAL_HEIGHT);
     vfx.fillRect(INTERNAL_WIDTH - TILE_SIZE, 0, TILE_SIZE, INTERNAL_HEIGHT);
   }

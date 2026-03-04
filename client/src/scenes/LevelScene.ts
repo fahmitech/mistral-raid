@@ -2120,10 +2120,26 @@ export class LevelScene extends Phaser.Scene {
       const room = rooms[i % rooms.length];
       const type = types[i % types.length];
       const base = ENEMY_CONFIGS[type];
-      const diff = DifficultyManager.get().getSettings();
+      const diffMgr  = DifficultyManager.get();
+      const diff     = diffMgr.getSettings();
+
+      // Easy mode: normal enemies die in 1 hit, strong enemies in 2 hits.
+      // "Strong" = base HP >= 7 (BigZombie 14, IceZombie 8, MaskedOrc 16, BigDemon 22).
+      let enemyHp: number;
+      if (diffMgr.getDifficulty() === 'easy') {
+        const gs     = GameState.get();
+        const state  = gs.getData();
+        const pDmg   = Math.max(1, Math.round(
+          gs.getEffectiveWeaponDamage(state.playerDamage, state.equippedWeapon) * diff.playerDamageMult
+        ));
+        enemyHp = base.hp >= 7 ? pDmg * 2 : pDmg;
+      } else {
+        enemyHp = Math.round(base.hp * this.levelData.enemyHPMult * diff.enemyHpMult);
+      }
+
       const config: EnemyConfig = {
         ...base,
-        hp: Math.round(base.hp * this.levelData.enemyHPMult * diff.enemyHpMult),
+        hp: enemyHp,
         speed: base.speed * this.levelData.enemySpdMult * diff.enemySpeedMult,
       };
       const rx = Phaser.Math.Between(room.x + 1, room.x + room.w - 2);
