@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CHARACTER_CONFIGS } from '../config/characters';
+import { COMPANION_GUIDES, type CompanionGuide } from '../config/companionGuides';
 import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
@@ -73,6 +74,10 @@ export class CoopSelectScene extends Phaser.Scene {
         image: this.resolvePortraitUrl(cfg.spriteKey) ?? null,
       };
     });
+    const companionOptions = COMPANION_GUIDES.map((guide) => ({
+      label: guide.label,
+      image: this.createCompanionPreview(guide),
+    }));
     const personalityOptions = PERSONALITIES.map((p) => ({
       key: p.key,
       label: p.label,
@@ -81,7 +86,8 @@ export class CoopSelectScene extends Phaser.Scene {
     }));
     this.overlay = new CoopSelectOverlay(parent, {
       heroes: heroOptions,
-      companions: heroOptions,
+      companions: companionOptions,
+      companionDetails: COMPANION_GUIDES,
       personalities: personalityOptions,
       onSelect: (section, index) => this.handleOverlaySelect(section, index),
       onBack: () => this.back(),
@@ -100,10 +106,10 @@ export class CoopSelectScene extends Phaser.Scene {
     this.createBackground();
 
     // ── Hero section ───────────────────────────────────────────────────────
-    this.createPortraitRow(56, this.heroSprites, this.heroBgs, false);
+    this.createPortraitRow(56, this.heroSprites, this.heroBgs, this.getHeroSpriteKeys(), false);
 
     // ── Companion section ──────────────────────────────────────────────────
-    this.createPortraitRow(110, this.companionSprites, this.companionBgs, true);
+    this.createPortraitRow(110, this.companionSprites, this.companionBgs, COMPANION_GUIDES.map((guide) => guide.spriteKey), true);
 
     // ── Keyboard ──────────────────────────────────────────────────────────
     this.input.keyboard?.on('keydown-LEFT',  () => this.shiftFocus(-1));
@@ -143,10 +149,10 @@ export class CoopSelectScene extends Phaser.Scene {
     rowCenterY: number,
     sprites: Phaser.GameObjects.Sprite[],
     bgs: Phaser.GameObjects.Graphics[],
+    spriteKeys: string[],
     isCompanion: boolean
   ): void {
-    CHARACTER_ORDER.forEach((type, idx) => {
-      const cfg = CHARACTER_CONFIGS[type];
+    spriteKeys.forEach((spriteKey, idx) => {
       const cx = ROW_START_X + idx * BOX_STEP + BOX_SIZE / 2;
       const cy = rowCenterY;
 
@@ -155,9 +161,9 @@ export class CoopSelectScene extends Phaser.Scene {
       bg.fillRoundedRect(cx - BOX_SIZE / 2, cy - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE, 3);
       bgs.push(bg);
 
-      const portraitKey = this.resolvePortraitKey(cfg.spriteKey);
+      const portraitKey = this.resolvePortraitKey(spriteKey);
       const sprite = this.add.sprite(cx, cy, portraitKey);
-      const animKey = `${cfg.spriteKey}_idle`;
+      const animKey = `${spriteKey}_idle`;
       if (this.anims.exists(animKey)) sprite.play(animKey);
       sprite.setScale(0.9);
       sprites.push(sprite);
@@ -191,6 +197,10 @@ export class CoopSelectScene extends Phaser.Scene {
     return undefined;
   }
 
+  private getHeroSpriteKeys(): string[] {
+    return CHARACTER_ORDER.map((type) => CHARACTER_CONFIGS[type].spriteKey);
+  }
+
   private getPersonalityIcon(key: string): string {
     const map: Record<string, string> = {
       aggressive: '⚔️',
@@ -199,6 +209,23 @@ export class CoopSelectScene extends Phaser.Scene {
       balanced: '⚖️',
     };
     return map[key] ?? '★';
+  }
+
+  private createCompanionPreview(guide: CompanionGuide): string | null {
+    const art = guide.pixelArt;
+    if (!art || art.frames.length === 0) return null;
+    const frame = art.frames[0];
+    const size = frame.length;
+    let rects = '';
+    frame.forEach((row, y) => {
+      row.split('').forEach((symbol, x) => {
+        const color = art.palette[symbol];
+        if (!color || color === 'transparent') return;
+        rects += `<rect x=\"${x}\" y=\"${y}\" width=\"1\" height=\"1\" fill=\"${color}\" />`;
+      });
+    });
+    const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ${size} ${size}\">${rects}</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }
 
   private shiftFocus(dir: number): void {
@@ -235,11 +262,17 @@ export class CoopSelectScene extends Phaser.Scene {
       personalityIndex: this.personalityIndex,
       focused: this.focused as CoopSection,
       description: PERSONALITIES[this.personalityIndex].desc,
+      companionDetail: COMPANION_GUIDES[this.companionIndex] ?? COMPANION_GUIDES[0],
     };
     this.overlay?.render(overlayState);
   }
 
   private handleOverlaySelect(section: CoopSection, index: number): void {
+    const prevHero = this.heroIndex;
+    const prevCompanion = this.companionIndex;
+    const prevPersonality = this.personalityIndex;
+    const prevFocus = this.focused;
+
     switch (section) {
       case 'hero':
         this.heroIndex = Phaser.Math.Wrap(index, 0, this.heroSprites.length);
@@ -252,6 +285,16 @@ export class CoopSelectScene extends Phaser.Scene {
         break;
     }
     this.focused = section;
+
+    if (
+      prevHero === this.heroIndex &&
+      prevCompanion === this.companionIndex &&
+      prevPersonality === this.personalityIndex &&
+      prevFocus === section
+    ) {
+      return;
+    }
+
     AudioManager.playSFX(this, 'menu_hover');
     this.refreshAll();
   }
@@ -288,13 +331,13 @@ export class CoopSelectScene extends Phaser.Scene {
     AudioManager.playSFX(this, 'ui_click');
 
     const heroCfg = CHARACTER_CONFIGS[CHARACTER_ORDER[this.heroIndex]];
-    const companionCfg = CHARACTER_CONFIGS[CHARACTER_ORDER[this.companionIndex]];
+    const companionGuide = COMPANION_GUIDES[this.companionIndex] ?? COMPANION_GUIDES[0];
 
     // Configure coop state before launching LevelScene
     CoopState.set({
       isCoopMode: true,
       companionPersonality: PERSONALITIES[this.personalityIndex].key,
-      companionSpriteKey: companionCfg.spriteKey,
+      companionSpriteKey: companionGuide.spriteKey,
       voiceEnabled: false,
     });
 

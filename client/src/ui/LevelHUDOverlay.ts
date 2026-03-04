@@ -45,13 +45,13 @@ export class LevelHUDOverlay {
 
     this.container.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:18px;">
-        <div style="display:flex;flex-direction:column;gap:4px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
           <div data-stat="level" data-style="pixel"></div>
           <div data-stat="kills" data-style="pixel"></div>
           <div data-stat="lives" data-style="pixel"></div>
           <div data-stat="coins" data-style="pixel"></div>
         </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <div style="
           min-width:160px;
           background:rgba(5,10,22,0.75);
@@ -75,7 +75,7 @@ export class LevelHUDOverlay {
           margin-top:4px;
           padding:4px 8px;
           font-family:'Press Start 2P', monospace;
-          font-size:8px;
+          font-size:15px;
           color:#c084fc;
           background:rgba(10,4,24,0.75);
           border:2px solid rgba(32,16,52,0.9);
@@ -95,24 +95,24 @@ export class LevelHUDOverlay {
           box-shadow:0 4px 14px rgba(0,0,0,0.4);
           display:none;
         ">[E] Pick up</div>
-        <div style="display:flex;gap:12px;">
+        <div style="display:flex;justify-content:center;gap:48px;margin-top:-35px;">
           <span data-dash style="
             font-family:'Press Start 2P', monospace;
             color:#7dd3fc;
             letter-spacing:0;
-            padding:4px 10px;
-            background:rgba(4,10,18,0.7);
-            border:2px solid rgba(12,26,46,0.8);
-            box-shadow:0 2px 8px rgba(0,0,0,0.6);
+            font-size:10px;
+            text-align:center;
+            min-width:180px;
+            display:block;
           ">DASH [SPACE]</span>
           <span data-shield style="
             font-family:'Press Start 2P', monospace;
             color:#c4b5fd;
             letter-spacing:0;
-            padding:4px 10px;
-            background:rgba(4,10,18,0.7);
-            border:2px solid rgba(12,26,46,0.8);
-            box-shadow:0 2px 8px rgba(0,0,0,0.6);
+            font-size:10px;
+            text-align:center;
+            min-width:200px;
+            display:block;
           ">SHIELD [SHIFT]</span>
         </div>
       </div>
@@ -123,9 +123,10 @@ export class LevelHUDOverlay {
     const applyPixelStyle = (el: HTMLElement | null) => {
       if (!el) return;
       el.style.fontFamily = "'Press Start 2P', monospace";
-      el.style.fontSize = '9px';
+      el.style.fontSize = '12px';
       el.style.letterSpacing = '0';
       el.style.color = '#fef3c7';
+      el.style.textShadow = '0 1px 0 rgba(0,0,0,0.6)';
     };
 
     this.levelEl = this.container.querySelector('[data-stat="level"]') as HTMLSpanElement;
@@ -148,7 +149,7 @@ export class LevelHUDOverlay {
     this.livesEl.textContent = `LIVES ${stats.lives}`;
     this.coinsEl.textContent = `COINS ${stats.coins}`;
     this.scoreEl.textContent = `SCORE: ${stats.score}`;
-    this.weaponEl.textContent = `WEAPON: ${stats.weaponLabel}`;
+    this.weaponEl.textContent = `WEAPON [I]: ${stats.weaponLabel}`;
   }
 
   setHintVisible(visible: boolean): void {

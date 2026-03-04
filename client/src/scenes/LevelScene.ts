@@ -142,7 +142,7 @@ export class LevelScene extends Phaser.Scene {
   private companionFallbackActive = false;
   private companionRequestCount = 0;
   private companionDebugOverlayOpen = false;
-  private companionSpeakText?: Phaser.GameObjects.Text;
+  private companionSpeakBubble?: Phaser.GameObjects.Container;
   private companionSpeakTimer?: Phaser.Time.TimerEvent;
 
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
@@ -622,8 +622,8 @@ export class LevelScene extends Phaser.Scene {
     this.companionDecisionTimer = undefined;
     this.companionSpeakTimer?.remove(false);
     this.companionSpeakTimer = undefined;
-    this.companionSpeakText?.destroy();
-    this.companionSpeakText = undefined;
+    this.companionSpeakBubble?.destroy();
+    this.companionSpeakBubble = undefined;
     this.companion?.destroyCompanion();
     this.companion = undefined;
     safeClearGroup(this.companionProjectiles);
@@ -2366,31 +2366,35 @@ export class LevelScene extends Phaser.Scene {
     this.add.rectangle(160, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
 
     this.add.text(160, 64, 'YOU DIED', {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '16px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '12px',
       color: '#ff5555',
-      fontStyle: 'bold',
+      stroke: '#0b0f1d',
+      strokeThickness: 2,
+      resolution: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const livesLabel = this.lives === 1 ? '1 LIFE REMAINING' : `${this.lives} LIVES REMAINING`;
     this.add.text(160, 80, livesLabel, {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '10px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '9px',
       color: '#8ef6ff',
-      fontStyle: 'bold',
+      resolution: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const killsLabel = `KILLS: ${totalKilled} / ${threshold}  (${remaining} TO GO)`;
     this.add.text(160, 94, killsLabel, {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '9px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '8px',
       color: '#ffd76a',
+      resolution: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     this.add.text(160, 108, 'RESTARTING LEVEL...', {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '9px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '8px',
       color: '#94a3b8',
+      resolution: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     this.time.delayedCall(2500, () => {
@@ -2470,24 +2474,52 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private showLevelIntro(): void {
+    const introBg = this.add
+      .rectangle(160, 78, 220, 50, 0x040a14, 0.85)
+      .setStrokeStyle(2, 0x0f1c2f, 0.9)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setDepth(19);
+
+    const titleStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '18px',
+      color: '#fef3c7',
+      fontStyle: 'bold',
+      stroke: '#0f172a',
+      strokeThickness: 4,
+      shadow: {
+        color: '#000000',
+        blur: 8,
+        fill: false,
+        offsetX: 0,
+        offsetY: 0,
+      },
+    };
     const title = this.add
-      .text(160, 70, this.levelData.name, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3,
-      })
+      .text(160, 66, this.levelData.name, titleStyle)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setAlpha(0)
       .setDepth(20);
 
     const subtitle = this.add
-      .text(160, 84, this.levelData.subtitle, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: '#aaaaaa',
+      .text(160, 90, this.levelData.subtitle.toUpperCase(), {
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+        fontSize: '12px',
+        color: '#d5e0ff',
+        fontStyle: '600',
+        letterSpacing: 2,
+        stroke: '#0b1020',
+        strokeThickness: 2,
+        shadow: {
+          offsetX: 0,
+          offsetY: 0,
+          color: '#000000',
+          blur: 6,
+          fill: false,
+        },
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -2495,7 +2527,7 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(20);
 
     this.tweens.add({
-      targets: [title, subtitle],
+      targets: [introBg, title, subtitle],
       alpha: 1,
       duration: 500,
       yoyo: true,
@@ -2534,8 +2566,6 @@ export class LevelScene extends Phaser.Scene {
     this.companion.onShoot = (x, y, vx, vy, damage) => {
       this.fireCompanionProjectile(x, y, vx, vy, damage);
     };
-
-    this.hudOverlay?.setCompanionBadge('★ AI Companion Powered by Mistral  [F9]');
 
     // Decision loop — call Mistral every 500ms
     this.companionDecisionTimer = this.time.addEvent({
@@ -2689,28 +2719,51 @@ export class LevelScene extends Phaser.Scene {
   private showCompanionSpeak(speak: string | null): void {
     if (!speak || !this.companion) return;
 
-    this.companionSpeakText?.destroy();
+    this.companionSpeakBubble?.destroy();
+    this.companionSpeakBubble = undefined;
     this.companionSpeakTimer?.remove(false);
 
-    this.companionSpeakText = this.add
-      .text(this.companion.x, this.companion.y - 34, speak, {
+    const tailHeight = 5;
+    const paddingX = 6;
+    const paddingY = 4;
+    const wrapWidth = 120;
+
+    const text = this.add
+      .text(0, 0, speak.toUpperCase(), {
         fontFamily: '"Press Start 2P", monospace',
-        fontSize: '9px',
-        color: '#7dd3fc',
-        stroke: '#04121f',
-        strokeThickness: 2,
-        backgroundColor: 'rgba(6, 12, 24, 0.9)',
-        padding: { x: 8, y: 4 },
-        wordWrap: { width: 140 },
+        fontSize: '8px',
+        color: '#020617',
         align: 'center',
-        resolution: 2,
+        wordWrap: { width: wrapWidth },
+        lineSpacing: 1,
+        resolution: 3,
       })
-      .setOrigin(0.5, 1)
-      .setDepth(25);
+      .setOrigin(0.5, 0.5);
+
+    const bubbleWidth = Math.min(wrapWidth, text.displayWidth) + paddingX * 2;
+    const bubbleHeight = text.displayHeight + paddingY * 2;
+    const rectX = -bubbleWidth / 2;
+    const rectY = -bubbleHeight - tailHeight;
+
+    const bubbleGfx = this.add.graphics();
+    bubbleGfx.lineStyle(2, 0x111111, 1);
+    bubbleGfx.fillStyle(0xffffff, 1);
+    bubbleGfx.fillRoundedRect(rectX, rectY, bubbleWidth, bubbleHeight, 6);
+    bubbleGfx.strokeRoundedRect(rectX, rectY, bubbleWidth, bubbleHeight, 6);
+    const tailY = rectY + bubbleHeight;
+    bubbleGfx.fillTriangle(-8, tailY, 8, tailY, 0, tailY + tailHeight);
+    bubbleGfx.strokeTriangle(-8, tailY, 8, tailY, 0, tailY + tailHeight);
+
+    text.setPosition(0, rectY + bubbleHeight / 2);
+
+    const container = this.add.container(this.companion.x, this.companion.y - 42);
+    container.setDepth(25);
+    container.add([bubbleGfx, text]);
+    this.companionSpeakBubble = container;
 
     this.companionSpeakTimer = this.time.delayedCall(2800, () => {
-      this.companionSpeakText?.destroy();
-      this.companionSpeakText = undefined;
+      this.companionSpeakBubble?.destroy();
+      this.companionSpeakBubble = undefined;
     });
   }
 }

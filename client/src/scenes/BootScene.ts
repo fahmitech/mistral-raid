@@ -3,6 +3,7 @@ import { FRAME_LIST } from '../utils/assetManifest';
 import { CHARACTER_CONFIGS } from '../config/characters';
 import { ENEMY_CONFIGS } from '../config/enemies';
 import { BOSS_CONFIGS } from '../config/bosses';
+import { COMPANION_GUIDES } from '../config/companionGuides';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -68,6 +69,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.aliasMissingFrames();
+    this.createCompanionTextures();
     this.createAnimations();
     this.createWeaponAssets();
     this.scene.start('MenuScene');
@@ -130,6 +132,38 @@ export class BootScene extends Phaser.Scene {
         repeat: -1,
       });
     }
+  }
+
+  private createCompanionTextures(): void {
+    COMPANION_GUIDES.forEach((guide) => {
+      const art = guide.pixelArt;
+      if (!art) return;
+      art.frames.forEach((frame, frameIdx) => {
+        const textureKey = `${guide.spriteKey}_idle_anim_f${frameIdx}`;
+        if (this.textures.exists(textureKey)) return;
+        const size = frame.length;
+        const canvas = this.textures.createCanvas(textureKey, size, size);
+        const ctx = canvas.context;
+        frame.forEach((row, y) => {
+          row.split('').forEach((symbol, x) => {
+            const color = art.palette[symbol] ?? 'transparent';
+            if (color === 'transparent') return;
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, 1, 1);
+          });
+        });
+        canvas.refresh();
+      });
+      const frameKeys = art.frames.map((_, idx) => `${guide.spriteKey}_idle_anim_f${idx}`);
+      if (!this.anims.exists(`${guide.spriteKey}_idle`)) {
+        this.anims.create({
+          key: `${guide.spriteKey}_idle`,
+          frames: frameKeys.map((key) => ({ key })),
+          frameRate: 4,
+          repeat: -1,
+        });
+      }
+    });
   }
 
   private resolveFrames(key: string, action: 'idle' | 'run'): string[] {

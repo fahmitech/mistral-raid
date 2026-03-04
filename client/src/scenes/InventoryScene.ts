@@ -174,15 +174,15 @@ export class InventoryUI {
         <div style="display:flex;flex-wrap:wrap;gap:12px;">
           <!-- Left -->
           <div style="flex:1 1 260px;min-width:240px;">
-            <div style="margin-bottom:12px;">
-              <div style="font-size:14px;color:#facc15;text-transform:uppercase;letter-spacing:1px;">
+            <div style="margin-bottom:16px;margin-top:6px;">
+              <div style="font-size:18px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
                 Inventory
               </div>
-              <div style="font-size:8px;color:rgba(148,163,184,0.95);text-transform:uppercase;letter-spacing:2px;">
+              <div style="font-size:11px;color:rgba(148,163,184,0.95);text-transform:uppercase;letter-spacing:3px;margin-top:6px;">
                 Select Your Arsenal
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
               ${WEAPONS.map((w) => {
                 const frameUrl = getIconSrc(w.frameKey);
                 const active = w.type === this.selectedId;
@@ -205,9 +205,17 @@ export class InventoryUI {
                   ${
                     frameUrl
                       ? `<img src="${frameUrl}" alt="${w.name}" style="width:38px;height:38px;image-rendering:pixelated;" />`
-                      : `<div style="font-size:9px;color:${active ? "#ffffff" : "#94a3b8"};">${w.name}</div>`
+                      : `<div style="font-family:'Press Start 2P', monospace;font-size:10px;color:${active ? "#ffffff" : "#94a3b8"};margin-bottom:4px;">${w.name}</div>`
                   }
-                  <span style="font-size:7px;color:${active ? "#f5faff" : "#7487b3"};text-transform:uppercase;">${w.name}</span>
+                  <span style="
+                    font-family:'Press Start 2P', monospace;
+                    font-size:10px;
+                    color:${active ? "#f5faff" : "#7487b3"};
+                    text-transform:uppercase;
+                    letter-spacing:0;
+                    display:block;
+                    margin-top:4px;
+                  ">${w.name}</span>
                 </button>
                 `;
               }).join("")}
@@ -227,7 +235,13 @@ export class InventoryUI {
               return `
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
                 <div>
-                  <div style="font-size:11px;text-transform:uppercase;margin-bottom:4px;">
+                  <div style="
+                    font-family:'Press Start 2P', monospace;
+                    font-size:14px;
+                    text-transform:uppercase;
+                    margin-bottom:6px;
+                    letter-spacing:0;
+                  ">
                     ${weapon.name}
                   </div>
                   <div style="font-size:8px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">

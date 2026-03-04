@@ -52,6 +52,9 @@ export class AssistantChat {
         () => this.contextFn()
       );
     }).catch(() => { /* voice unavailable */ });
+
+    // Start with the panel open.
+    this.toggle();
   }
 
   toggle(): void {
@@ -205,11 +208,15 @@ export class AssistantChat {
       align-items: center;
       flex-shrink: 0;
     `;
-    header.textContent = 'AI DUNGEON COMPANION';
+    const title = document.createElement('span');
+    title.textContent = 'AI DUNGEON COMPANION';
+    header.appendChild(title);
 
-    const hintLabel = document.createElement('span');
-    hintLabel.textContent = '[H] close';
-    hintLabel.style.cssText = 'font-size:8px;color:#555;';
+    const hintLabel = document.createElement('button');
+    hintLabel.textContent = '[H] CLOSE';
+    hintLabel.style.cssText =
+      'font-size:7px;color:#c4d7ff;background:rgba(8,8,24,0.85);border:1px solid #556;letter-spacing:0.1em;padding:3px 6px;cursor:pointer;font-family:inherit;';
+    hintLabel.addEventListener('click', () => this.toggle());
     header.appendChild(hintLabel);
     panel.appendChild(header);
 

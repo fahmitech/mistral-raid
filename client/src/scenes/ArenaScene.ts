@@ -1073,21 +1073,24 @@ export class ArenaScene extends Phaser.Scene {
     const cy = INTERNAL_HEIGHT / 2;
     this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
     this.add.text(cx, cy - 20, 'YOU DIED', {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '20px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '16px',
       color: '#ff5555',
-      fontStyle: 'bold',
+      stroke: '#0b0f1d',
+      strokeThickness: 2,
+      resolution: 2,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
     this.add.text(cx, cy + 4, `LIVES REMAINING: ${this.lives}`, {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '11px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '10px',
       color: '#8ef6ff',
-      fontStyle: 'bold',
+      resolution: 2,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
     this.add.text(cx, cy + 20, 'Retrying...', {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '11px',
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '10px',
       color: '#94a3b8',
+      resolution: 2,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
 
     this.time.delayedCall(2500, () => {
