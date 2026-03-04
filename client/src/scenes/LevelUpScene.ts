@@ -74,7 +74,7 @@ export class LevelUpScene extends Phaser.Scene {
         buff.name,
         {
           fontFamily: '"Press Start 2P"',
-          fontSize: '6px',
+          fontSize: '8px',
           color: isSelected ? '#000000' : '#ffffff',
         }
       ).setOrigin(0.5).setDepth(3);
@@ -87,7 +87,7 @@ export class LevelUpScene extends Phaser.Scene {
       'UP/DOWN or W/S to move | ENTER to select',
       {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
+        fontSize: '6px',
         color: '#aaaaaa',
       }
     ).setOrigin(0.5).setDepth(2);

@@ -107,7 +107,7 @@ export class CreditsScene extends Phaser.Scene {
       this.add
         .text(160, idx * 12, line, {
           fontFamily: '"Press Start 2P"',
-          fontSize: idx === 0 ? '8px' : '5px',
+          fontSize: idx === 0 ? '8px' : '7px',
           color: '#ffffff',
         })
         .setOrigin(0.5)

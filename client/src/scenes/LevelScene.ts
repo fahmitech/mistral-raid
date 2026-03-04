@@ -2473,7 +2473,7 @@ export class LevelScene extends Phaser.Scene {
     const title = this.add
       .text(160, 70, this.levelData.name, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
+        fontSize: '8px',
         color: '#ffffff',
         stroke: '#000000',
         strokeThickness: 3,
@@ -2486,7 +2486,7 @@ export class LevelScene extends Phaser.Scene {
     const subtitle = this.add
       .text(160, 84, this.levelData.subtitle, {
         fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
+        fontSize: '8px',
         color: '#aaaaaa',
       })
       .setOrigin(0.5)
