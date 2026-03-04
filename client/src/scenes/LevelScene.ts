@@ -54,6 +54,7 @@ import { wsClient } from '../network/WebSocketClient';
 import { AICompanion, type CompanionDecision } from '../entities/AICompanion';
 import { CoopState } from '../systems/CoopState';
 import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
+import { DifficultyManager } from '../systems/DifficultyManager';
 
 import { MusicLayer } from '../types/AudioTypes';
 
@@ -2119,10 +2120,11 @@ export class LevelScene extends Phaser.Scene {
       const room = rooms[i % rooms.length];
       const type = types[i % types.length];
       const base = ENEMY_CONFIGS[type];
+      const diff = DifficultyManager.get().getSettings();
       const config: EnemyConfig = {
         ...base,
-        hp: Math.round(base.hp * this.levelData.enemyHPMult),
-        speed: base.speed * this.levelData.enemySpdMult,
+        hp: Math.round(base.hp * this.levelData.enemyHPMult * diff.enemyHpMult),
+        speed: base.speed * this.levelData.enemySpdMult * diff.enemySpeedMult,
       };
       const rx = Phaser.Math.Between(room.x + 1, room.x + room.w - 2);
       const ry = Phaser.Math.Between(room.y + 1, room.y + room.h - 2);

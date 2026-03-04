@@ -12,6 +12,7 @@ import { VictoryScene } from './scenes/VictoryScene';
 import { AudioDebugOverlay } from './systems/AudioDebugOverlay';
 import { ArenaScene } from './scenes/ArenaScene';
 import { CoopSelectScene } from './scenes/CoopSelectScene';
+import { DifficultySelectScene } from './scenes/DifficultySelectScene';
 import { AICompanionDebugOverlay } from './systems/AICompanionDebugOverlay';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH, ZOOM } from './config/constants';
 
@@ -42,6 +43,7 @@ scale: {
     MenuScene,
     PlayerSelectScene,
     CoopSelectScene,
+    DifficultySelectScene,
     LevelScene,
     PauseScene,
     InventoryScene,

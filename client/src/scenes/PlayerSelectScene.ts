@@ -299,7 +299,7 @@ export class PlayerSelectScene extends Phaser.Scene {
     state.setCharacter(type);
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('LevelScene', { level: 1 });
+      this.scene.start('DifficultySelectScene', { fromScene: 'PlayerSelectScene' });
     });
   }
 

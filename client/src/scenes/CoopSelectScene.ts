@@ -354,7 +354,7 @@ export class CoopSelectScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('LevelScene', { level: 1 });
+      this.scene.start('DifficultySelectScene', { fromScene: 'CoopSelectScene' });
     });
   }
 
