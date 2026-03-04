@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { INTERNAL_HEIGHT, INTERNAL_WIDTH, DASH_COOLDOWN_MS, DASH_DISTANCE, DASH_INVINCIBLE_MS, INVINCIBLE_MS } from '../config/constants';
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH, DASH_COOLDOWN_MS, DASH_DISTANCE, DASH_INVINCIBLE_MS, INVINCIBLE_MS, TILE_SIZE } from '../config/constants';
+import { LightingSystem } from '../systems/LightingSystem';
 import { Player } from '../entities/Player';
 import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
@@ -84,15 +85,25 @@ export class ArenaScene extends Phaser.Scene {
   private livesText?: Phaser.GameObjects.Text;
   private arenaDefeated = false;
 
+  private lighting!: LightingSystem;
+  private arenaEmbers: { sprite: Phaser.GameObjects.Ellipse; speed: number; drift: number }[] = [];
+
   constructor() {
     super('ArenaScene');
   }
 
   create(): void {
     CoopState.reset(); // Arena Demo is always solo — no AI companion
-    this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x101018, 1);
+    this.buildArenaEnvironment();
     this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();
+
+    // Lighting — player spotlight over dungeon fog
+    this.lighting = new LightingSystem(this, 0.72);
+    this.lighting.setTorches([
+      { x: 48, y: 24 }, { x: 112, y: 24 }, { x: 208, y: 24 }, { x: 272, y: 24 },
+      { x: 8, y: 88 }, { x: 312, y: 88 },
+    ]);
 
     const gs = GameState.get();
     const state = gs.getData();
@@ -287,6 +298,103 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private buildArenaEnvironment(): void {
+    const COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE);   // 20
+    const ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);  // ~12
+
+    const rt = this.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setDepth(0);
+
+    const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
+    const stainKeys = ['floor_stain_1', 'floor_stain_2'];
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const px = col * TILE_SIZE;
+        const py = row * TILE_SIZE;
+
+        if (row === 0) {
+          // Top wall header
+          if (this.textures.exists('wall_top_mid')) {
+            rt.draw('wall_top_mid', px, py);
+          }
+        } else if (row === 1) {
+          // Wall mid row
+          if (this.textures.exists('wall_mid')) {
+            rt.draw('wall_mid', px, py);
+          }
+        } else if (col === 0 || col === COLS - 1) {
+          // Side walls
+          if (this.textures.exists('wall_mid')) {
+            rt.draw('wall_mid', px, py);
+          }
+        } else {
+          // Inner floor — occasional stain or edge tile
+          const isEdge = row === 2 || row === ROWS - 1;
+          let key: string;
+          if (isEdge && Math.random() < 0.25 && this.textures.exists('floor_edge_1')) {
+            key = 'floor_edge_1';
+          } else if (Math.random() < 0.08 && stainKeys.some((k) => this.textures.exists(k))) {
+            key = stainKeys[Math.random() < 0.5 ? 0 : 1];
+            if (!this.textures.exists(key)) key = floorKeys[0];
+          } else {
+            key = floorKeys[Math.floor(Math.random() * floorKeys.length)];
+            if (!this.textures.exists(key)) key = 'floor_1';
+          }
+          rt.draw(key, px, py);
+        }
+      }
+    }
+
+    // Torches on top wall row (row 1) — x positions matching LightingSystem torches
+    const torchPositions = [48, 112, 208, 272];
+    torchPositions.forEach((tx) => {
+      const torch = this.add.sprite(tx, 28, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
+      if (this.anims.exists('torch')) {
+        torch.play('torch');
+      }
+    });
+
+    // Side torches at mid-height
+    [{ x: 14, y: 90 }, { x: INTERNAL_WIDTH - 14, y: 90 }].forEach(({ x, y }) => {
+      const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
+      if (this.anims.exists('torch')) {
+        torch.play('torch');
+      }
+    });
+
+    // Ambient embers near torch positions
+    const emberSources = [
+      { x: 48, y: 28 }, { x: 112, y: 28 }, { x: 208, y: 28 }, { x: 272, y: 28 },
+      { x: 14, y: 90 }, { x: INTERNAL_WIDTH - 14, y: 90 },
+    ];
+    for (let i = 0; i < 30; i++) {
+      const src = emberSources[i % emberSources.length];
+      const size = Phaser.Math.FloatBetween(1, 2);
+      const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
+      const alpha = Phaser.Math.FloatBetween(0.15, 0.45);
+      const sprite = this.add
+        .ellipse(
+          src.x + Phaser.Math.Between(-12, 12),
+          src.y + Phaser.Math.Between(0, 20),
+          size, size, color, alpha
+        )
+        .setDepth(3);
+      this.arenaEmbers.push({
+        sprite,
+        speed: Phaser.Math.FloatBetween(0.1, 0.4),
+        drift: Phaser.Math.FloatBetween(0.1, 0.4),
+      });
+    }
+
+    // Vignette — darken edges to focus attention center-screen
+    const vfx = this.add.graphics().setDepth(4);
+    vfx.fillStyle(0x000000, 0.35);
+    vfx.fillRect(0, 0, INTERNAL_WIDTH, 20);
+    vfx.fillRect(0, INTERNAL_HEIGHT - 16, INTERNAL_WIDTH, 16);
+    vfx.fillRect(0, 0, 18, INTERNAL_HEIGHT);
+    vfx.fillRect(INTERNAL_WIDTH - 18, 0, 18, INTERNAL_HEIGHT);
+  }
+
   private updateMicIndicator(): void {
     let label = 'MIC: OFF';
     let color = '#ff6677';
@@ -302,6 +410,18 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.lighting.update(this.player.x, this.player.y);
+
+    // Drift embers upward
+    this.arenaEmbers.forEach((p) => {
+      p.sprite.y -= p.speed;
+      p.sprite.x += Math.sin(p.sprite.y * 0.04) * p.drift;
+      if (p.sprite.y < -4) {
+        p.sprite.y = INTERNAL_HEIGHT + 4;
+        p.sprite.x = Phaser.Math.Between(0, INTERNAL_WIDTH);
+      }
+    });
+
     this.handleInput(time);
     this.player.updateBlink(time);
     this.player.updateWeaponPosition();
@@ -815,6 +935,9 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.lighting?.destroy();
+    this.arenaEmbers.forEach((p) => p.sprite.destroy());
+    this.arenaEmbers = [];
     this.wsUnsub?.();
     this.wsStatusUnsub?.();
     wsClient.disconnect();

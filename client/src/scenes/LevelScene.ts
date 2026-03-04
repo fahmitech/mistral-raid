@@ -346,6 +346,10 @@ export class LevelScene extends Phaser.Scene {
         enemies, boss, treasures, GameState.get()
       );
     });
+
+    if (this.currentLevel === 4) {
+      this.setupSuspenseMode();
+    }
   }
 
   update(time: number, delta: number): void {
@@ -2086,12 +2090,20 @@ export class LevelScene extends Phaser.Scene {
   /** Spawn exactly the enemies defined for the current level and return them for checkpoint saving. */
   private spawnLevelEnemies(): Enemy[] {
     if (this.currentLevel === 1) {
-      // Level 1 — 7 basic enemies (Goblin + Imp)
-      return this.spawnEnemiesCustom(7, [EnemyType.Goblin, EnemyType.Imp]);
+      // Level 1 — 8 basic enemies (kill 5 to progress)
+      return this.spawnEnemiesCustom(8, [EnemyType.Goblin, EnemyType.Imp]);
     }
     if (this.currentLevel === 2) {
-      // Level 2 — 3 elite enemies, completely different types from Level 1
-      return this.spawnEnemiesCustom(3, [EnemyType.Chort, EnemyType.BigZombie, EnemyType.Skelet]);
+      // Level 2 — 10 mixed enemies (kill 5 to progress)
+      return this.spawnEnemiesCustom(10, [EnemyType.Chort, EnemyType.BigZombie, EnemyType.Skelet]);
+    }
+    if (this.currentLevel === 3) {
+      // Level 3 — 14 elite enemies (kill 7 to progress)
+      return this.spawnEnemiesCustom(14, [EnemyType.Chort, EnemyType.BigZombie, EnemyType.Skelet, EnemyType.IceZombie]);
+    }
+    if (this.currentLevel === 4) {
+      // Level 4 — 14 heavy enemies (kill 7 to progress → Arena)
+      return this.spawnEnemiesCustom(14, [EnemyType.Skelet, EnemyType.MaskedOrc, EnemyType.BigZombie, EnemyType.BigDemon]);
     }
     return [];
   }
@@ -2436,8 +2448,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private getKillThreshold(): number {
-    if (this.currentLevel === 1) return 7;
-    if (this.currentLevel === 2) return 3;
+    if (this.currentLevel === 1) return 5;
+    if (this.currentLevel === 2) return 5;
+    if (this.currentLevel === 3) return 7;
+    if (this.currentLevel === 4) return 7;
     return 0;
   }
 
@@ -2455,20 +2469,47 @@ export class LevelScene extends Phaser.Scene {
     if (this.levelCompleting) return;
     this.levelCompleting = true;
 
-    if (this.currentLevel === 1) {
-      this.currentLevel = 2;
+    AudioManager.playMusic(this, 'none');
+
+    if (this.currentLevel < 4) {
+      const next = this.currentLevel + 1;
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.restart({ level: 2, lives: this.lives });
+        this.scene.restart({ level: next, lives: this.lives });
       });
-    } else if (this.currentLevel === 2) {
-      // All Level 2 enemies defeated — launch the final boss arena.
+    } else {
+      // Level 4 complete → launch the final boss arena.
       GameState.get().setLives(this.lives);
       this.cameras.main.fadeOut(800, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('ArenaScene');
       });
     }
+  }
+
+  private setupSuspenseMode(): void {
+    // Subtle red pulse overlay for Level 4 atmosphere
+    const redOverlay = this.add
+      .rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0xff0000, 0)
+      .setScrollFactor(0)
+      .setDepth(15);
+
+    this.time.addEvent({
+      delay: 2200,
+      loop: true,
+      callback: () => {
+        this.tweens.add({
+          targets: redOverlay,
+          alpha: 0.05,
+          duration: 300,
+          yoyo: true,
+          ease: 'Sine.easeInOut',
+        });
+      },
+    });
+
+    // Brief camera shake to signal danger
+    this.shakeCamera(180, 0.004);
   }
 
   private showLevelIntro(): void {
