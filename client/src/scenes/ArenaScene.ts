@@ -88,6 +88,12 @@ export class ArenaScene extends Phaser.Scene {
   private lighting!: LightingSystem;
   private arenaEmbers: { sprite: Phaser.GameObjects.Ellipse; speed: number; drift: number }[] = [];
 
+  private bossGlow!: Phaser.GameObjects.Arc;
+  private shieldGlow!: Phaser.GameObjects.Arc;
+  private readonly ARENA_CX = INTERNAL_WIDTH / 2;
+  private readonly ARENA_CY = INTERNAL_HEIGHT / 2;
+  private readonly ARENA_RADIUS = 68;
+
   constructor() {
     super('ArenaScene');
   }
@@ -98,11 +104,13 @@ export class ArenaScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();
 
-    // Lighting — player spotlight over dungeon fog
-    this.lighting = new LightingSystem(this, 0.72);
+    // Lighting — player spotlight with 4 cardinal torches matching arena layout
+    this.lighting = new LightingSystem(this, 0.68);
     this.lighting.setTorches([
-      { x: 48, y: 24 }, { x: 112, y: 24 }, { x: 208, y: 24 }, { x: 272, y: 24 },
-      { x: 8, y: 88 }, { x: 312, y: 88 },
+      { x: 160, y: 35  }, // North
+      { x: 160, y: 145 }, // South
+      { x: 215, y: 90  }, // East
+      { x: 105, y: 90  }, // West
     ]);
 
     const gs = GameState.get();
@@ -141,6 +149,21 @@ export class ArenaScene extends Phaser.Scene {
     this.bossHp = bossConfig.hp;
     this.bossMaxHp = bossConfig.hp;
 
+    // ── Cinematic boss intro ──────────────────────────────────────────
+    this.cameras.main.fadeIn(500, 0, 0, 0);
+    this.boss.setAlpha(0);
+    this.time.delayedCall(500, () => {
+      this.tweens.add({
+        targets: this.boss,
+        alpha: 1,
+        duration: 700,
+        ease: 'Power2.easeIn',
+        onComplete: () => {
+          this.cameras.main.shake(220, 0.007);
+        },
+      });
+    });
+
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = {
       W: this.input.keyboard!.addKey('W'),
@@ -160,6 +183,26 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
+
+    // Boss red atmosphere glow (pulsing, ADD blend, depth below lighting)
+    this.bossGlow = this.add
+      .arc(this.boss.x, this.boss.y, 26, 0, 360, false, 0xcc1122, 0)
+      .setDepth(5)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: this.bossGlow,
+      alpha: 0.18,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Shield glow around player (only visible when shield active)
+    this.shieldGlow = this.add
+      .arc(this.player.x, this.player.y, 12, 0, 360, false, 0x33aaff, 0)
+      .setDepth(19)
+      .setBlendMode(Phaser.BlendModes.ADD);
     this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
       fontSize: '5px',
@@ -299,100 +342,95 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildArenaEnvironment(): void {
-    const COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE);   // 20
-    const ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);  // ~12
+    const CX = this.ARENA_CX;
+    const CY = this.ARENA_CY;
+    const FLOOR_R = 70; // inner floor circle radius (tiles)
+    const WALL_R  = 84; // outer wall ring radius (tiles)
 
-    const rt = this.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setDepth(0);
+    // 1. Dark void fill — everything outside the arena is pitch black
+    const bg = this.add.graphics().setDepth(0);
+    bg.fillStyle(0x07060e, 1);
+    bg.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
 
+    // 2. Floor + wall tiles rendered into a single RenderTexture
+    const rt = this.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setDepth(1);
     const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
     const stainKeys = ['floor_stain_1', 'floor_stain_2'];
+    const COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE);
+    const ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);
 
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
+        const tx = col * TILE_SIZE + TILE_SIZE / 2;
+        const ty = row * TILE_SIZE + TILE_SIZE / 2;
+        const dist = Math.sqrt((tx - CX) ** 2 + (ty - CY) ** 2);
         const px = col * TILE_SIZE;
         const py = row * TILE_SIZE;
 
-        if (row === 0) {
-          // Top wall header
-          if (this.textures.exists('wall_top_mid')) {
-            rt.draw('wall_top_mid', px, py);
-          }
-        } else if (row === 1) {
-          // Wall mid row
-          if (this.textures.exists('wall_mid')) {
-            rt.draw('wall_mid', px, py);
-          }
-        } else if (col === 0 || col === COLS - 1) {
-          // Side walls
-          if (this.textures.exists('wall_mid')) {
-            rt.draw('wall_mid', px, py);
-          }
-        } else {
-          // Inner floor — occasional stain or edge tile
-          const isEdge = row === 2 || row === ROWS - 1;
+        if (dist < FLOOR_R) {
+          // Floor tile — with occasional battle stains
           let key: string;
-          if (isEdge && Math.random() < 0.25 && this.textures.exists('floor_edge_1')) {
-            key = 'floor_edge_1';
-          } else if (Math.random() < 0.08 && stainKeys.some((k) => this.textures.exists(k))) {
-            key = stainKeys[Math.random() < 0.5 ? 0 : 1];
+          if (Math.random() < 0.06) {
+            key = stainKeys[Math.floor(Math.random() * stainKeys.length)];
             if (!this.textures.exists(key)) key = floorKeys[0];
           } else {
             key = floorKeys[Math.floor(Math.random() * floorKeys.length)];
-            if (!this.textures.exists(key)) key = 'floor_1';
           }
-          rt.draw(key, px, py);
+          if (this.textures.exists(key)) rt.draw(key, px, py);
+        } else if (dist < WALL_R) {
+          // Stone wall ring encircling the arena
+          if (this.textures.exists('wall_mid')) rt.draw('wall_mid', px, py);
+          else if (this.textures.exists('wall_top_mid')) rt.draw('wall_top_mid', px, py);
         }
       }
     }
 
-    // Torches on top wall row (row 1) — x positions matching LightingSystem torches
-    const torchPositions = [48, 112, 208, 272];
-    torchPositions.forEach((tx) => {
-      const torch = this.add.sprite(tx, 28, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
-      if (this.anims.exists('torch')) {
-        torch.play('torch');
-      }
-    });
+    // 3. Decorative ring stroke — sharpen the inner wall boundary
+    const ringGfx = this.add.graphics().setDepth(2);
+    ringGfx.lineStyle(2, 0x44667a, 0.85);
+    ringGfx.strokeCircle(CX, CY, FLOOR_R + 1);
+    ringGfx.lineStyle(1, 0x223344, 0.55);
+    ringGfx.strokeCircle(CX, CY, FLOOR_R - 4);
 
-    // Side torches at mid-height
-    [{ x: 14, y: 90 }, { x: INTERNAL_WIDTH - 14, y: 90 }].forEach(({ x, y }) => {
-      const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
-      if (this.anims.exists('torch')) {
-        torch.play('torch');
-      }
-    });
-
-    // Ambient embers near torch positions
-    const emberSources = [
-      { x: 48, y: 28 }, { x: 112, y: 28 }, { x: 208, y: 28 }, { x: 272, y: 28 },
-      { x: 14, y: 90 }, { x: INTERNAL_WIDTH - 14, y: 90 },
+    // 4. Torches at N / S / E / W — radius 55 keeps them clearly inside floor zone
+    const TORCH_R = 55;
+    const torchPositions = [
+      { x: CX,           y: CY - TORCH_R }, // North
+      { x: CX,           y: CY + TORCH_R }, // South
+      { x: CX + TORCH_R, y: CY           }, // East
+      { x: CX - TORCH_R, y: CY           }, // West
     ];
-    for (let i = 0; i < 30; i++) {
-      const src = emberSources[i % emberSources.length];
-      const size = Phaser.Math.FloatBetween(1, 2);
-      const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
-      const alpha = Phaser.Math.FloatBetween(0.15, 0.45);
-      const sprite = this.add
-        .ellipse(
-          src.x + Phaser.Math.Between(-12, 12),
-          src.y + Phaser.Math.Between(0, 20),
-          size, size, color, alpha
-        )
-        .setDepth(3);
-      this.arenaEmbers.push({
-        sprite,
-        speed: Phaser.Math.FloatBetween(0.1, 0.4),
-        drift: Phaser.Math.FloatBetween(0.1, 0.4),
-      });
-    }
+    torchPositions.forEach(({ x, y }) => {
+      const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(3);
+      if (this.anims.exists('torch')) torch.play('torch');
+    });
 
-    // Vignette — darken edges to focus attention center-screen
-    const vfx = this.add.graphics().setDepth(4);
-    vfx.fillStyle(0x000000, 0.35);
-    vfx.fillRect(0, 0, INTERNAL_WIDTH, 20);
-    vfx.fillRect(0, INTERNAL_HEIGHT - 16, INTERNAL_WIDTH, 16);
-    vfx.fillRect(0, 0, 18, INTERNAL_HEIGHT);
-    vfx.fillRect(INTERNAL_WIDTH - 18, 0, 18, INTERNAL_HEIGHT);
+    // 5. Ambient embers — 8 per torch (32 total) for atmosphere
+    torchPositions.forEach(({ x, y }) => {
+      for (let i = 0; i < 8; i++) {
+        const size = Phaser.Math.FloatBetween(1, 2);
+        const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
+        const sprite = this.add
+          .ellipse(
+            x + Phaser.Math.Between(-10, 10),
+            y + Phaser.Math.Between(-4, 12),
+            size, size, color, Phaser.Math.FloatBetween(0.1, 0.4)
+          )
+          .setDepth(4);
+        this.arenaEmbers.push({
+          sprite,
+          speed: Phaser.Math.FloatBetween(0.1, 0.35),
+          drift: Phaser.Math.FloatBetween(0.1, 0.4),
+        });
+      }
+    });
+
+    // 6. Outer edge softener — thin dark rings at the wall boundary
+    const vigGfx = this.add.graphics().setDepth(2);
+    for (let r = FLOOR_R + 6; r <= WALL_R + 4; r += 3) {
+      vigGfx.lineStyle(4, 0x000000, Math.min(0.6, (r - FLOOR_R) / (WALL_R - FLOOR_R) * 0.7));
+      vigGfx.strokeCircle(CX, CY, r);
+    }
   }
 
   private updateMicIndicator(): void {
@@ -411,6 +449,17 @@ export class ArenaScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.lighting.update(this.player.x, this.player.y);
+
+    // Boss red glow tracks boss position
+    this.bossGlow.setPosition(this.boss.x, this.boss.y);
+
+    // Shield glow — visible only while shield is active
+    const shieldOn = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
+    this.shieldGlow.setPosition(this.player.x, this.player.y);
+    this.shieldGlow.setAlpha(shieldOn ? 0.45 : 0);
+
+    // Enforce circular arena bounds — no entity exits the ring
+    this.enforceCircleBounds();
 
     // Drift embers upward
     this.arenaEmbers.forEach((p) => {
@@ -843,10 +892,19 @@ export class ArenaScene extends Phaser.Scene {
     const now = this.time.now;
     if (this.player.isInvincible(now)) return;
 
+    // Shield blocks ALL incoming damage for its full duration
+    if (this.player.isShieldActive(now) || GameState.get().getData().hasShield) {
+      this.spawnShieldBlockEffect();
+      return;
+    }
+
     GameState.get().takeDamage(amount);
     this.player.setInvincible(INVINCIBLE_MS, now);
     this.telemetry.recordDamage(source, amount);
     AudioManager.playSFX(this, 'enemy_hit');
+    if (this.options.screenShake) {
+      this.cameras.main.shake(80, 0.004);
+    }
   }
 
   private usePotion(): void {
@@ -901,6 +959,41 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  /** Clamp player and boss to the circular arena boundary. */
+  private enforceCircleBounds(): void {
+    const clamp = (entity: Phaser.Physics.Arcade.Sprite): void => {
+      if (!entity?.active) return;
+      const dx = entity.x - this.ARENA_CX;
+      const dy = entity.y - this.ARENA_CY;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > this.ARENA_RADIUS) {
+        entity.setPosition(
+          this.ARENA_CX + (dx / d) * this.ARENA_RADIUS,
+          this.ARENA_CY + (dy / d) * this.ARENA_RADIUS
+        );
+      }
+    };
+    clamp(this.player);
+    clamp(this.boss);
+  }
+
+  /** Visual burst when shield absorbs a hit. */
+  private spawnShieldBlockEffect(): void {
+    const ring = this.add
+      .arc(this.player.x, this.player.y, 8, 0, 360, false, 0x44aaff, 0.9)
+      .setDepth(20)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: ring,
+      scaleX: 2.5,
+      scaleY: 2.5,
+      alpha: 0,
+      duration: 320,
+      ease: 'Power2.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
   private showArenaRetryOverlay(): void {
     const gs = GameState.get();
     gs.setHP(gs.getData().playerMaxHP);
@@ -936,6 +1029,8 @@ export class ArenaScene extends Phaser.Scene {
 
   shutdown(): void {
     this.lighting?.destroy();
+    this.bossGlow?.destroy();
+    this.shieldGlow?.destroy();
     this.arenaEmbers.forEach((p) => p.sprite.destroy());
     this.arenaEmbers = [];
     this.wsUnsub?.();
