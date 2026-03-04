@@ -102,15 +102,16 @@ export class ArenaScene extends Phaser.Scene {
     this.buildArenaEnvironment();
     // Combat zone: between wall rows (y 32-160) and wall cols (x 16-304)
     this.physics.world.setBounds(TILE_SIZE, TILE_SIZE * 2, INTERNAL_WIDTH - TILE_SIZE * 2, TILE_SIZE * 8);
+    this.cameras.main.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();
 
-    // Lighting — player spotlight with 4 torches at arena corners
+    // Lighting — player spotlight with 4 torches (2 top, 2 bottom)
     this.lighting = new LightingSystem(this, 0.68);
     this.lighting.setTorches([
-      { x: 3 * TILE_SIZE + 8, y: TILE_SIZE + 8 },          // top-left
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 8 },          // top-left
       { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 8 },         // top-right
-      { x: 3 * TILE_SIZE + 8, y: 9 * TILE_SIZE + 8 },      // bottom-left
-      { x: 17 * TILE_SIZE + 8, y: 9 * TILE_SIZE + 8 },     // bottom-right
+      { x: 2 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },     // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },    // bottom-right
     ]);
 
     const gs = GameState.get();
@@ -347,39 +348,61 @@ export class ArenaScene extends Phaser.Scene {
     const COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE);   // 20
     const ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);  // 12
 
-    // ── Full-coverage RenderTexture: wall border + stone floor ────────
+    // ── RenderTexture: pre-fill every cell with floor_1 (no-void guarantee) ──
     const rt = this.add.renderTexture(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT).setDepth(0);
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        rt.draw('floor_1', col * TILE_SIZE, row * TILE_SIZE);
+      }
+    }
+
+    // ── Draw walls and varied floor tiles on top of the pre-fill ──────────
     const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
     const stainKeys = ['floor_stain_1', 'floor_stain_2'];
+    const wallKey    = this.textures.exists('wall_mid')     ? 'wall_mid'     : 'floor_1';
+    const wallTopKey = this.textures.exists('wall_top_mid') ? 'wall_top_mid' : wallKey;
+    const cornerTLKey = this.textures.exists('wall_corner_top_left')    ? 'wall_corner_top_left'    : wallTopKey;
+    const cornerTRKey = this.textures.exists('wall_corner_top_right')   ? 'wall_corner_top_right'   : wallTopKey;
+    const cornerBLKey = this.textures.exists('wall_corner_front_left')  ? 'wall_corner_front_left'  : wallKey;
+    const cornerBRKey = this.textures.exists('wall_corner_front_right') ? 'wall_corner_front_right' : wallKey;
 
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
         const px = col * TILE_SIZE;
         const py = row * TILE_SIZE;
 
-        const isTopHeader = row === 0;
-        const isWall = row === 1 || row >= ROWS - 2 || col === 0 || col === COLS - 1;
+        const isTopHeader  = row === 0;
+        const isTopWall    = row === 1;
+        const isBottomWall = row >= ROWS - 2;
+        const isLeftWall   = col === 0;
+        const isRightWall  = col === COLS - 1;
 
         if (isTopHeader) {
-          if (this.textures.exists('wall_top_mid')) rt.draw('wall_top_mid', px, py);
-        } else if (isWall) {
-          if (this.textures.exists('wall_mid')) rt.draw('wall_mid', px, py);
+          if      (isLeftWall)  rt.draw(cornerTLKey, px, py);
+          else if (isRightWall) rt.draw(cornerTRKey, px, py);
+          else                  rt.draw(wallTopKey,  px, py);
+        } else if (isBottomWall) {
+          if      (isLeftWall)  rt.draw(cornerBLKey, px, py);
+          else if (isRightWall) rt.draw(cornerBRKey, px, py);
+          else                  rt.draw(wallKey,     px, py);
+        } else if (isLeftWall || isRightWall || isTopWall) {
+          rt.draw(wallKey, px, py);
         } else {
-          // Uniform stone floor with occasional battle stains
+          // Interior floor — randomised with occasional stains
           let key = floorKeys[Math.floor(Math.random() * floorKeys.length)];
-          if (Math.random() < 0.05) {
+          if (Math.random() < 0.06) {
             const sk = stainKeys[Math.floor(Math.random() * stainKeys.length)];
             if (this.textures.exists(sk)) key = sk;
           }
-          if (this.textures.exists(key)) rt.draw(key, px, py);
+          rt.draw(this.textures.exists(key) ? key : 'floor_1', px, py);
         }
       }
     }
 
-    // ── Decorative banners at top wall (3 evenly spaced) ─────────────
+    // ── Decorative banners at top wall (2 left and right of center) ────
     const bannerKeys = ['wall_banner_red', 'wall_banner_blue', 'wall_banner_green', 'wall_banner_yellow'];
     const bannerKey = bannerKeys.find((k) => this.textures.exists(k));
-    const bannerCols = [3, 10, 17];
+    const bannerCols = [5, 14];
     if (bannerKey) {
       bannerCols.forEach((col) => rt.draw(bannerKey, col * TILE_SIZE, TILE_SIZE));
     } else {
@@ -391,29 +414,32 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
 
-    // ── Crates (left and right, mid-height) ───────────────────────────
+    // ── Crates near 4 corners of the arena interior ───────────────────
     const crateKeys = ['chest_empty_open_anim_f0', 'chest_empty', 'chest_full', 'chest_full_open_anim_f0'];
     const crateKey = crateKeys.find((k) => this.textures.exists(k));
-    const crateRow = 5;
-    [[1, crateRow], [COLS - 2, crateRow]].forEach(([col, row]) => {
+    const cratePositions: [number, number][] = [
+      [2, 2], [COLS - 3, 2], [2, ROWS - 3], [COLS - 3, ROWS - 3],
+    ];
+    cratePositions.forEach(([col, row]) => {
+      const cx = col * TILE_SIZE + 8;
+      const cy = row * TILE_SIZE + 8;
       if (crateKey) {
-        this.add.sprite(col * TILE_SIZE + 8, row * TILE_SIZE + 8, crateKey).setDepth(2);
+        this.add.sprite(cx, cy, crateKey).setDepth(2);
       } else {
-        // Fallback: small dark box
         const cg = this.add.graphics().setDepth(2);
         cg.fillStyle(0x554433, 1);
-        cg.fillRect(col * TILE_SIZE + 2, row * TILE_SIZE + 2, 12, 12);
+        cg.fillRect(cx - 6, cy - 6, 12, 12);
         cg.lineStyle(1, 0x776655, 1);
-        cg.strokeRect(col * TILE_SIZE + 2, row * TILE_SIZE + 2, 12, 12);
+        cg.strokeRect(cx - 6, cy - 6, 12, 12);
       }
     });
 
-    // ── 4 torches — top-left, top-right, bottom-left, bottom-right ───
+    // ── 4 torches — 2 on top wall, 2 on bottom wall ─────────────────────
     const torchPositions = [
-      { x: 3 * TILE_SIZE + 8,          y: TILE_SIZE + 8          }, // top-left
+      { x: 2 * TILE_SIZE + 8,          y: TILE_SIZE + 8          }, // top-left
       { x: 17 * TILE_SIZE + 8,         y: TILE_SIZE + 8          }, // top-right
-      { x: 3 * TILE_SIZE + 8,          y: 9 * TILE_SIZE + 8      }, // bottom-left
-      { x: 17 * TILE_SIZE + 8,         y: 9 * TILE_SIZE + 8      }, // bottom-right
+      { x: 2 * TILE_SIZE + 8,          y: 10 * TILE_SIZE + 8     }, // bottom-left
+      { x: 17 * TILE_SIZE + 8,         y: 10 * TILE_SIZE + 8     }, // bottom-right
     ];
     torchPositions.forEach(({ x, y }) => {
       const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
