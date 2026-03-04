@@ -13,19 +13,32 @@ export class ArenaHUD {
     this.scene = scene;
     this.playerBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
     this.bossBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
-    this.phaseText = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 10, 'PHASE 1', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#ffcc66',
-      stroke: '#000000',
-      strokeThickness: 2,
-    }).setOrigin(0.5, 1).setScrollFactor(0).setDepth(20);
+    const pixelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: '9px',
+      color: '#fef3c7',
+      align: 'center',
+      resolution: 2,
+    };
+    const sansStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '9px',
+      color: '#d5e0ff',
+      resolution: 2,
+    };
 
-    this.stateText = scene.add.text(INTERNAL_WIDTH - 6, 6, 'LISTENING', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '4px',
-      color: '#66ffcc',
-    }).setOrigin(1, 0).setScrollFactor(0).setDepth(20);
+    this.phaseText = scene.add
+      .text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 12, 'PHASE 1', pixelStyle)
+      .setOrigin(0.5, 1)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setLineSpacing(4);
+
+    this.stateText = scene.add
+      .text(INTERNAL_WIDTH - 8, 12, 'LISTENING', sansStyle)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(20);
   }
 
   update(playerHp: number, playerMax: number, bossHp: number, bossMax: number, phase: ArenaPhase, aiState: AIState): void {

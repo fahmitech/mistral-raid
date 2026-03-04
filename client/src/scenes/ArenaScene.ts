@@ -209,7 +209,7 @@ export class ArenaScene extends Phaser.Scene {
       .setBlendMode(Phaser.BlendModes.ADD);
     this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#ffdd44',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
     this.createMicIndicator();
@@ -286,26 +286,26 @@ export class ArenaScene extends Phaser.Scene {
 
   private createMicIndicator(): void {
     const y = INTERNAL_HEIGHT - 22;
-    this.micIndicatorBg = this.add.rectangle(56, y + 2, 104, 16, 0x000000, 0.45)
+    this.micIndicatorBg = this.add.rectangle(70, y + 2, 130, 18, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
     this.micIndicator = this.add.text(8, y - 4, '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#ff6677',
     }).setScrollFactor(0).setDepth(22);
     this.updateMicIndicator();
   }
 
   private createTranscriptOverlay(): void {
-    const y = INTERNAL_HEIGHT - 46;
-    this.transcriptBg = this.add.rectangle(INTERNAL_WIDTH / 2, y, INTERNAL_WIDTH - 12, 16, 0x000000, 0.45)
+    const y = INTERNAL_HEIGHT - 50;
+    this.transcriptBg = this.add.rectangle(INTERNAL_WIDTH / 2, y, INTERNAL_WIDTH - 12, 22, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21)
       .setVisible(false);
-    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 6, '', {
+    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 8, '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#cceeff',
       align: 'center',
       wordWrap: { width: INTERNAL_WIDTH - 20 },
@@ -313,12 +313,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createWsDebugOverlay(): void {
-    this.wsDebugBg = this.add.rectangle(56, 10, 110, 14, 0x000000, 0.45)
+    this.wsDebugBg = this.add.rectangle(70, 16, 130, 18, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.wsDebugText = this.add.text(8, 4, 'WS: --', {
+    this.wsDebugText = this.add.text(8, 8, 'WS: --', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#99aadd',
     }).setScrollFactor(0).setDepth(22);
   }
@@ -442,7 +442,7 @@ export class ArenaScene extends Phaser.Scene {
       { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-right
     ];
     torchPositions.forEach(({ x, y }) => {
-      const torch = this.add.sprite(x, y, 'wall_fountain_mid_blue_anim_f0').setDepth(2);
+      const torch = this.add.sprite(x, y, 'torch_1').setDepth(2);
       if (this.anims.exists('torch')) torch.play('torch');
     });
 
@@ -982,7 +982,7 @@ export class ArenaScene extends Phaser.Scene {
   private spawnHealEffect(): void {
     const label = this.add.text(this.player.x, this.player.y - 10, '+HP', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#33ff66',
     }).setOrigin(0.5).setDepth(20);
     this.tweens.add({
@@ -1034,20 +1034,22 @@ export class ArenaScene extends Phaser.Scene {
     const cx = INTERNAL_WIDTH / 2;
     const cy = INTERNAL_HEIGHT / 2;
     this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
-    this.add.text(cx, cy - 18, 'YOU DIED', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '10px',
-      color: '#ff4444',
+    this.add.text(cx, cy - 20, 'YOU DIED', {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '20px',
+      color: '#ff5555',
+      fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy, `LIVES REMAINING: ${this.lives}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffffff',
+    this.add.text(cx, cy + 4, `LIVES REMAINING: ${this.lives}`, {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '11px',
+      color: '#8ef6ff',
+      fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy + 14, 'Retrying...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#aaaaaa',
+    this.add.text(cx, cy + 20, 'Retrying...', {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '11px',
+      color: '#94a3b8',
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
 
     this.time.delayedCall(2500, () => {

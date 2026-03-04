@@ -14,9 +14,9 @@ export class AnalyzingOverlay {
       .setDepth(30)
       .setVisible(false);
 
-    this.text = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
+    this.text = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 14, 'BOSS IS ANALYZING...', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
+      fontSize: '8px',
       color: '#ffee88',
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(31).setVisible(false);
 

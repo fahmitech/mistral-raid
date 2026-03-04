@@ -61,27 +61,45 @@ scale: {
   audio: { disableWebAudio: false },
 };
 
-const game = new Phaser.Game(config);
+// Wait for fonts to load before starting the game
+let game: Phaser.Game;
 
+const startGame = () => {
+  game = new Phaser.Game(config);
 
-const updateIntegerZoom = () => {
-  const maxZoom = game.scale.getMaxZoom();
-  
-  const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
-  
-  if (game.scale.zoom !== nextZoom) {
-    game.scale.setZoom(nextZoom);
-  }
+  const updateIntegerZoom = () => {
+    const maxZoom = game.scale.getMaxZoom();
+    const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
+    if (game.scale.zoom !== nextZoom) {
+      game.scale.setZoom(nextZoom);
+    }
+  };
+
+  window.addEventListener('resize', updateIntegerZoom);
+  updateIntegerZoom();
+
+  setTimeout(() => {
+    if (game.canvas) {
+      game.canvas.style.imageRendering = 'pixelated';
+    }
+  }, 0);
 };
 
-window.addEventListener('resize', updateIntegerZoom);
-updateIntegerZoom();
-
-setTimeout(() => {
-  if (game.canvas) {
-    game.canvas.style.imageRendering = 'pixelated';
+// Preload critical font before starting game
+const preloadFonts = async () => {
+  try {
+    // Force the font to load by using FontFace API
+    const font = new FontFace('Press Start 2P', 'url(/fonts/PressStart2P-Regular.ttf)');
+    await font.load();
+    document.fonts.add(font);
+  } catch (e) {
+    console.warn('Font preload failed, using document.fonts.ready fallback');
   }
-}, 0);
+  // Wait for all fonts to be ready
+  await document.fonts.ready;
+};
+
+preloadFonts().then(startGame);
 
 const ensureErrorOverlay = (): HTMLPreElement => {
   const existing = document.getElementById('error-overlay');

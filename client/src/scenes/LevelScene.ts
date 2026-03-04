@@ -57,6 +57,7 @@ import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
 import { DifficultyManager } from '../systems/DifficultyManager';
 import { CritSystem } from '../systems/CritSystem';
 import { BuffManager } from '../systems/BuffManager';
+import { LevelHUDOverlay } from '../ui/LevelHUDOverlay';
 
 import { MusicLayer } from '../types/AudioTypes';
 
@@ -85,28 +86,17 @@ export class LevelScene extends Phaser.Scene {
   private keys!: { [key: string]: Phaser.Input.Keyboard.Key };
 
   private lastShotAt = 0;
-  private hintText?: Phaser.GameObjects.Text;
-  private weaponText?: Phaser.GameObjects.Text;
-  private levelText?: Phaser.GameObjects.Text;
-  private enemyCountText?: Phaser.GameObjects.Text;
-  private livesText?: Phaser.GameObjects.Text;
-  private coinText?: Phaser.GameObjects.Text;
-  private scoreText?: Phaser.GameObjects.Text;
-  private scoreBg?: Phaser.GameObjects.Rectangle;
-  private weaponBg?: Phaser.GameObjects.Rectangle;
+  private hudOverlay?: LevelHUDOverlay;
   private dashBar?: Phaser.GameObjects.Graphics;
   private dashBarBg?: Phaser.GameObjects.Graphics;
   private dashCooldownRect = { x: 0, y: 0, width: 0, height: 0 };
   private shieldBarRect = { x: 0, y: 0, width: 0, height: 0 };
   private shieldBarBg?: Phaser.GameObjects.Graphics;
-  private dashLabel?: Phaser.GameObjects.Text;
-  private shieldLabel?: Phaser.GameObjects.Text;
   private shieldIndicator?: Phaser.GameObjects.Graphics;
   private leftSeparator?: Phaser.GameObjects.Graphics;
   private rightSeparator?: Phaser.GameObjects.Graphics;
   private heartSprites: Phaser.GameObjects.Image[] = [];
   private lastHP = -1;
-  private telemetryHud?: Phaser.GameObjects.Text;
   private lastTelemetrySentAt = 0;
 
   private boss?: BossEntity;
@@ -153,7 +143,6 @@ export class LevelScene extends Phaser.Scene {
   private companionDebugOverlayOpen = false;
   private companionSpeakText?: Phaser.GameObjects.Text;
   private companionSpeakTimer?: Phaser.Time.TimerEvent;
-  private companionLabel?: Phaser.GameObjects.Text;
 
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
@@ -550,8 +539,8 @@ export class LevelScene extends Phaser.Scene {
     this.debugMarker = undefined;
     this.audioDebugText?.destroy();
     this.audioDebugText = undefined;
-    this.telemetryHud?.destroy();
-    this.telemetryHud = undefined;
+    this.hudOverlay?.destroy();
+    this.hudOverlay = undefined;
 
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
@@ -589,8 +578,6 @@ export class LevelScene extends Phaser.Scene {
     this.companionSpeakTimer = undefined;
     this.companionSpeakText?.destroy();
     this.companionSpeakText = undefined;
-    this.companionLabel?.destroy();
-    this.companionLabel = undefined;
     this.companion?.destroyCompanion();
     this.companion = undefined;
     safeClearGroup(this.companionProjectiles);
@@ -690,7 +677,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     for (const torch of this.maze.torchSpawns) {
-      const sprite = this.add.sprite(torch.x * TILE_SIZE + 8, torch.y * TILE_SIZE + 8, 'wall_fountain_mid_blue_anim_f0');
+      const sprite = this.add.sprite(torch.x * TILE_SIZE + 8, torch.y * TILE_SIZE + 8, 'torch_1');
       sprite.setDepth(2);
       if (this.anims.exists('torch')) {
         sprite.play('torch');
@@ -799,108 +786,43 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createHUD(): void {
-    const margin = 6;
-    const rightX = INTERNAL_WIDTH - margin;
-    this.levelText = this.add
-      .text(6, 6, `LEVEL ${this.currentLevel}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffcc00',
-      })
-      .setScrollFactor(0)
-      .setDepth(20);
-
+    const parent = this.game.canvas?.parentElement;
+    if (!parent) throw new Error('LevelScene: canvas parentElement missing');
+    this.hudOverlay = new LevelHUDOverlay(parent);
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
-    this.enemyCountText = this.add
-      .text(6, 14, `KILLS: ${initKills} / ${initThreshold}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ff8888',
-      })
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.livesText = this.add
-      .text(6, 22, `LIVES: ${this.lives}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#44ffcc',
-      })
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.coinText = this.add
-      .text(6, 30, 'COINS: 0', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffdd44',
-      })
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.scoreBg = this.add
-      .rectangle(rightX, 5, 96, 11, 0x000000, 0.35)
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(19);
-    this.scoreText = this.add
-      .text(rightX, 6, 'SCORE: 0', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#eecc55',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.weaponBg = this.add
-      .rectangle(rightX, INTERNAL_HEIGHT - 19, 70, 11, 0x000000, 0.35)
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(19);
-    this.weaponText = this.add
-      .text(rightX, INTERNAL_HEIGHT - 18, 'SWORD', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffcc44',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(20);
-
-    this.hintText = this.add
-      .text(160, 155, '[E] Pick up', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#aaffaa',
-      })
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(20)
-      .setVisible(false);
+    this.hudOverlay.updateStats({
+      level: this.currentLevel,
+      kills: initKills,
+      killThreshold: initThreshold,
+      lives: this.lives,
+      coins: GameState.get().getData().coins,
+      score: GameState.get().getData().score,
+      weaponLabel: WEAPON_LABELS[this.currentWeaponType] ?? 'SWORD',
+    });
+    this.hudOverlay.setHintVisible(false);
+    this.hudOverlay.setDashCharges(GameState.get().getDashCharges());
+    this.hudOverlay.setShieldReady(true);
+    this.hudOverlay.setCompanionBadge(null);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.hudOverlay?.destroy());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.hudOverlay?.destroy());
 
     // Hearts + dash/shield bars
     const heartConfig = this.createHearts();
 
-    const abilityW = 56;
-    const abilityH = 6;
-    const gap = 8;
-    const labelStyle = { fontFamily: '"Press Start 2P"', fontSize: '6px', resolution: 1 } as const;
+    const abilityW = 70;
+    const abilityH = 8;
+    const gap = 10;
 
     const dashRect = {
       x: heartConfig.endX + 8,
-      y: INTERNAL_HEIGHT - 14,
+      y: INTERNAL_HEIGHT - 18,
       width: abilityW,
       height: abilityH,
     };
     const shieldRect = {
-      x: Math.round(dashRect.x + abilityW + gap + 14),
-      y: INTERNAL_HEIGHT - 14,
+      x: Math.round(dashRect.x + abilityW + gap + 18),
+      y: INTERNAL_HEIGHT - 18,
       width: abilityW,
       height: abilityH,
     };
@@ -916,34 +838,9 @@ export class LevelScene extends Phaser.Scene {
     this.drawAbilityBackground(this.dashBarBg, dashRect);
     this.drawAbilityBackground(this.shieldBarBg, shieldRect);
 
-    this.dashLabel = this.add
-      .text(dashRect.x, dashRect.y - 4, 'DASH [SPACE]', { ...labelStyle, color: '#00e5ff' })
-      .setOrigin(0, 1)
-      .setScrollFactor(0)
-      .setDepth(20)
-      .setStroke('#000000', 1);
-
-    this.shieldLabel = this.add
-      .text(shieldRect.x, shieldRect.y - 4, 'SHIELD [SHIFT]', { ...labelStyle, color: '#7c4dff' })
-      .setOrigin(0, 1)
-      .setScrollFactor(0)
-      .setDepth(20)
-      .setStroke('#000000', 1);
-
     this.leftSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
     this.rightSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
     this.drawSeparators(heartConfig);
-
-    this.telemetryHud = this.add
-      .text(rightX, 18, '', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#66ff99',
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(20);
-
     this.updateDashChargesDisplay();
 
     // ── Clickable zones over dash and shield bars ──────────────────────────
@@ -995,10 +892,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateDashChargesDisplay(): void {
-    if (this.dashLabel) {
-      this.dashLabel.setColor('#00e5ff');
-      this.dashLabel.setAlpha(0.95);
-    }
+    this.hudOverlay?.setDashCharges(GameState.get().getDashCharges());
   }
 
   private drawAbilityBackground(
@@ -1029,16 +923,8 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private flashDashWarning(): void {
-    if (!this.dashLabel) return;
-    this.dashLabel.setColor('#ff6b6b');
-    this.tweens.add({
-      targets: this.dashLabel,
-      alpha: { from: 1, to: 0.4 },
-      yoyo: true,
-      repeat: 1,
-      duration: 160,
-    });
-    this.time.delayedCall(260, () => this.updateDashChargesDisplay());
+    this.hudOverlay?.flashDashWarning();
+    this.time.delayedCall(280, () => this.updateDashChargesDisplay());
   }
 
   private pulseDashIcon(): void {
@@ -1056,27 +942,16 @@ export class LevelScene extends Phaser.Scene {
     if (state.equippedWeapon !== this.currentWeaponType) {
       this.applyEquippedWeapon();
     }
-    if (this.levelText) this.levelText.setText(`LEVEL ${this.currentLevel}`);
-    if (this.enemyCountText) {
-      const totalKilled = this.checkpointEnemiesKilled + this.enemiesKilledThisLevel;
-      this.enemyCountText.setText(`KILLS: ${totalKilled} / ${this.getKillThreshold()}`);
-    }
-    if (this.livesText) this.livesText.setText(`LIVES: ${this.lives}`);
-    if (this.coinText) this.coinText.setText(`COINS: ${state.coins}`);
-    if (this.scoreText) this.scoreText.setText(`SCORE: ${state.score}`);
-    if (this.weaponText) {
-      this.weaponText.setText(WEAPON_LABELS[state.equippedWeapon] ?? 'SWORD');
-    }
-
-    // Keep the HUD backplates snug to their labels (helps avoid clipping on integer-zoom + shake).
-    if (this.scoreBg && this.scoreText) {
-      const w = Math.min(140, Math.max(68, Math.ceil(this.scoreText.width) + 10));
-      this.scoreBg.width = w;
-    }
-    if (this.weaponBg && this.weaponText) {
-      const w = Math.min(120, Math.max(54, Math.ceil(this.weaponText.width) + 10));
-      this.weaponBg.width = w;
-    }
+    const totalKilled = this.checkpointEnemiesKilled + this.enemiesKilledThisLevel;
+    this.hudOverlay?.updateStats({
+      level: this.currentLevel,
+      kills: totalKilled,
+      killThreshold: this.getKillThreshold(),
+      lives: this.lives,
+      coins: state.coins,
+      score: state.score,
+      weaponLabel: WEAPON_LABELS[state.equippedWeapon] ?? 'SWORD',
+    });
 
     if (state.playerHP !== this.lastHP) {
       this.lastHP = state.playerHP;
@@ -1117,6 +992,7 @@ export class LevelScene extends Phaser.Scene {
       this.shieldIndicator.clear();
       const shieldActive = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
       if (shieldActive) {
+        this.hudOverlay?.setShieldReady(true);
         // Pulsing full bar while shield is active
         const pulse = 0.7 + Math.sin(time / 150) * 0.3;
         this.shieldIndicator.fillStyle(0x7c4dff, pulse);
@@ -1126,6 +1002,7 @@ export class LevelScene extends Phaser.Scene {
       } else {
         const shieldRemaining = Math.max(0, this.player.shieldCooldownUntil - time);
         const pct = shieldRemaining > 0 ? 1 - shieldRemaining / SHIELD_COOLDOWN_MS : 1;
+        this.hudOverlay?.setShieldReady(pct >= 1);
         // Background (empty)
         this.shieldIndicator.fillStyle(0x1a0a3a, 0.5);
         this.shieldIndicator.fillRoundedRect(sx, sy, sw, sh, 2);
@@ -1143,19 +1020,15 @@ export class LevelScene extends Phaser.Scene {
       }
     }
 
-    if (this.telemetryHud) {
-      const connected = wsClient.isConnected;
-      const since = this.lastTelemetrySentAt > 0 ? time - this.lastTelemetrySentAt : Infinity;
-      const sinceText = Number.isFinite(since) ? `${(since / 1000).toFixed(1)}s` : '--';
-      const status = this.telemetryActive ? 'ON' : 'OFF';
-      const ws = connected ? 'OK' : 'OFF';
-      this.telemetryHud.setText(`TLM:${status} WS:${ws} ${sinceText}`);
-
-      let color = '#66ff99';
-      if (!connected) color = '#ff6666';
-      else if (since > 1000) color = '#ffcc66';
-      this.telemetryHud.setColor(color);
-    }
+    const connected = wsClient.isConnected;
+    const since = this.lastTelemetrySentAt > 0 ? time - this.lastTelemetrySentAt : Infinity;
+    const sinceText = Number.isFinite(since) ? `${(since / 1000).toFixed(1)}s` : '--';
+    const status = this.telemetryActive ? 'ON' : 'OFF';
+    const ws = connected ? 'OK' : 'OFF';
+    let color = '#66ff99';
+    if (!connected) color = '#ff6666';
+    else if (since > 1000) color = '#ffcc66';
+    this.hudOverlay?.setTelemetry(`TLM:${status} WS:${ws} ${sinceText}`, color);
   }
 
   private applyFogVisibility(): void {
@@ -1699,9 +1572,7 @@ export class LevelScene extends Phaser.Scene {
 
   private updatePickupHint(): void {
     const item = this.getInteractiveItem();
-    if (this.hintText) {
-      this.hintText.setVisible(!!item);
-    }
+    this.hudOverlay?.setHintVisible(!!item);
   }
 
   private checkAutoCollect(): void {
@@ -2447,29 +2318,31 @@ export class LevelScene extends Phaser.Scene {
     this.add.rectangle(160, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
 
     this.add.text(160, 64, 'YOU DIED', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '8px',
-      color: '#ff4444',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '16px',
+      color: '#ff5555',
+      fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const livesLabel = this.lives === 1 ? '1 LIFE REMAINING' : `${this.lives} LIVES REMAINING`;
     this.add.text(160, 80, livesLabel, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#44ffcc',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '10px',
+      color: '#8ef6ff',
+      fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const killsLabel = `KILLS: ${totalKilled} / ${threshold}  (${remaining} TO GO)`;
     this.add.text(160, 94, killsLabel, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '4px',
-      color: '#ffcc44',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '9px',
+      color: '#ffd76a',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     this.add.text(160, 108, 'RESTARTING LEVEL...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '4px',
-      color: '#888888',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '9px',
+      color: '#94a3b8',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     this.time.delayedCall(2500, () => {
@@ -2614,16 +2487,7 @@ export class LevelScene extends Phaser.Scene {
       this.fireCompanionProjectile(x, y, vx, vy, damage);
     };
 
-    // HUD badge
-    this.companionLabel = this.add
-      .text(160, 170, '★ AI Companion Powered by Mistral  [F9]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#8844cc',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(20);
+    this.hudOverlay?.setCompanionBadge('★ AI Companion Powered by Mistral  [F9]');
 
     // Decision loop — call Mistral every 500ms
     this.companionDecisionTimer = this.time.addEvent({
@@ -2781,14 +2645,17 @@ export class LevelScene extends Phaser.Scene {
     this.companionSpeakTimer?.remove(false);
 
     this.companionSpeakText = this.add
-      .text(this.companion.x, this.companion.y - 14, speak, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#cc88ff',
-        stroke: '#110022',
+      .text(this.companion.x, this.companion.y - 34, speak, {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '9px',
+        color: '#7dd3fc',
+        stroke: '#04121f',
         strokeThickness: 2,
-        backgroundColor: 'rgba(10,0,20,0.7)',
-        padding: { x: 3, y: 2 },
+        backgroundColor: 'rgba(6, 12, 24, 0.9)',
+        padding: { x: 8, y: 4 },
+        wordWrap: { width: 140 },
+        align: 'center',
+        resolution: 2,
       })
       .setOrigin(0.5, 1)
       .setDepth(25);

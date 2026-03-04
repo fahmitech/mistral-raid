@@ -39,13 +39,12 @@ export class PlayerSelectScene extends Phaser.Scene {
 
     this.add
       .text(160, 8, 'CHOOSE YOUR HERO', {
-        fontFamily: '"Press Start 2P"',
+        fontFamily: '"Pixel Operator 8", "Press Start 2P"',
         fontSize: '8px',
         color: '#ffffff',
         stroke: '#8833cc',
         strokeThickness: 2,
-        resolution: 1,
-      })
+              })
       .setOrigin(0.5);
 
     this.createTopSelection();
@@ -115,8 +114,7 @@ export class PlayerSelectScene extends Phaser.Scene {
           fontFamily: '"Press Start 2P"',
           fontSize: '8px',
           color: '#667788',
-          resolution: 1,
-        })
+                  })
         .setOrigin(0.5, 0);
 
       this.portraitSprites.push(sprite);
@@ -147,8 +145,7 @@ export class PlayerSelectScene extends Phaser.Scene {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#00ffcc',
-        resolution: 1,
-      })
+              })
       .setOrigin(0, 0);
 
     // Description
@@ -157,8 +154,7 @@ export class PlayerSelectScene extends Phaser.Scene {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#aabbcc',
-        resolution: 1,
-        lineSpacing: 2,
+                lineSpacing: 2,
         wordWrap: { width: 170, useAdvancedWrap: true },
       })
       .setOrigin(0, 0);
@@ -174,8 +170,7 @@ export class PlayerSelectScene extends Phaser.Scene {
           fontFamily: '"Press Start 2P"',
           fontSize: '8px',
           color: '#8899aa',
-          resolution: 1,
-        })
+                  })
         .setOrigin(0, 0.5);
       this.statLabels.push(text);
     });
@@ -197,8 +192,7 @@ export class PlayerSelectScene extends Phaser.Scene {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#999999',
-        resolution: 1,
-      })
+              })
       .setOrigin(0, 0.5);
 
     this.confirmText = this.add
@@ -206,8 +200,7 @@ export class PlayerSelectScene extends Phaser.Scene {
         fontFamily: '"Press Start 2P"',
         fontSize: '8px',
         color: '#00ffcc',
-        resolution: 1,
-      })
+              })
       .setOrigin(1, 0.5);
   }
 

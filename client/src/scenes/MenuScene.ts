@@ -133,22 +133,20 @@ export class MenuScene extends Phaser.Scene {
     const title = this.add
       .text(160, 26, 'MISTRAL RAID', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '16px', // 16px is a multiple of 8
+        fontSize: '16px',
         color: '#ffffff',
         stroke: '#cc33ff',
         strokeThickness: 4,
-        resolution: 2, // Forces internal high-res render to prevent blur
       })
       .setOrigin(0.5);
 
     const subtitle = this.add
       .text(160, 46, 'THE WATCHER', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px', // Fixed from 7px to 8px
+        fontSize: '8px',
         color: '#00ccff',
         stroke: '#001122',
         strokeThickness: 2,
-        resolution: 2,
       })
       .setOrigin(0.5);
 
@@ -238,9 +236,8 @@ export class MenuScene extends Phaser.Scene {
       const text = this.add
         .text(160, startY + idx * 14, item.label, {
           fontFamily: '"Press Start 2P"',
-          fontSize: '7px',
+          fontSize: '8px',
           color: isCoopItem ? '#cc88ff' : '#aabbcc',
-          resolution: 2,
         })
         .setOrigin(0.5);
 
@@ -258,9 +255,8 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(160, 172, '↑↓ Navigate   Enter Select', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '8px', // Fixed from 4px to 8px
+        fontSize: '8px',
         color: '#cccccc',
-        resolution: 2,
       })
       .setOrigin(0.5, 1);
   }

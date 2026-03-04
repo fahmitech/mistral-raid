@@ -64,8 +64,8 @@ export class DifficultySelectScene extends Phaser.Scene {
 
     this.add
       .text(160, 18, 'SELECT DIFFICULTY', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
+        fontFamily: '"Pixel Operator 8", "Press Start 2P"',
+        fontSize: '8px',
         color: '#ffffff',
       })
       .setOrigin(0.5);
@@ -77,11 +77,11 @@ export class DifficultySelectScene extends Phaser.Scene {
 
     // Difficulty rows
     OPTIONS.forEach((opt, idx) => {
-      const y = 60 + idx * 36;
+      const y = 56 + idx * 40;
 
       opt.textObj = this.add
         .text(160, y, opt.label, {
-          fontFamily: '"Press Start 2P"',
+          fontFamily: '"Pixel Operator 8", "Press Start 2P"',
           fontSize: '8px',
           color: opt.color,
         })
@@ -89,12 +89,12 @@ export class DifficultySelectScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
 
       opt.descObj = this.add
-        .text(160, y + 13, opt.desc, {
+        .text(160, y + 14, opt.desc, {
           fontFamily: '"Press Start 2P"',
-          fontSize: '4px',
+          fontSize: '8px',
           color: '#778899',
           align: 'center',
-          wordWrap: { width: 260 },
+          wordWrap: { width: 280 },
         })
         .setOrigin(0.5);
 
@@ -113,18 +113,18 @@ export class DifficultySelectScene extends Phaser.Scene {
 
     // Buttons row
     const backText = this.add
-      .text(60, 158, '[ BACK ]', {
+      .text(60, 166, '[ BACK ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
+        fontSize: '8px',
         color: '#778899',
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
     const confirmText = this.add
-      .text(250, 158, '[ CONFIRM ]', {
+      .text(250, 166, '[ CONFIRM ]', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
+        fontSize: '8px',
         color: '#00ffcc',
       })
       .setOrigin(0.5)

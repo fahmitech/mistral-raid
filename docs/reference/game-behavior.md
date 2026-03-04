@@ -47,7 +47,7 @@ The shipped game runs the **dungeon crawler** (LevelScene). The arena boss fight
 - **Floor:** checkerboard of `floor_1`/`floor_2` on rows 2–9, cols 1–18
 - **Walls:** top trim, main wall face, side columns, bottom wall
 - **Decorations:** banners at cols 3,7,12,16 (red/blue)
-- **Decorations:** fountains at cols 5,10,14 (animated 3 frames @ 8 FPS)
+- **Decorations:** torches at cols 5,10,14 (`torch_1` through `torch_8`, 8 FPS flame loop)
 - **Decorations:** skulls at (2,9), (17,3), (9,8)
 - **Decorations:** crates at (2,3) and (17,9)
 

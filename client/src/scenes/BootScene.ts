@@ -20,7 +20,7 @@ export class BootScene extends Phaser.Scene {
     const loadingText = this.add
       .text(width / 2, barY - 16, 'LOADING...', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
+        fontSize: '8px',
         color: '#ffffff',
       })
       .setOrigin(0.5, 0.5);
@@ -112,9 +112,16 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    const torchFrames = ['wall_fountain_mid_blue_anim_f0', 'wall_fountain_mid_blue_anim_f1', 'wall_fountain_mid_blue_anim_f2'].filter(
-      (k) => this.textures.exists(k)
-    );
+    const torchFrames = [
+      'torch_1',
+      'torch_2',
+      'torch_3',
+      'torch_4',
+      'torch_5',
+      'torch_6',
+      'torch_7',
+      'torch_8',
+    ].filter((k) => this.textures.exists(k));
     if (torchFrames.length) {
       this.anims.create({
         key: 'torch',
