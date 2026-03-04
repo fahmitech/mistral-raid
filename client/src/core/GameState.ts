@@ -251,6 +251,7 @@ export class GameState {
       hasShield: false,
       isMultiShot: false,
       dashCharges: DASH_MAX_CHARGES,
+      activeBuffs: [],
     };
   }
 
@@ -263,6 +264,15 @@ export class GameState {
     this.damageBoostTimer = null;
     this.shieldTimer = null;
     this.multishotTimer = null;
+  }
+
+  // NEW: Buff system methods
+  getActiveBuffs(): string[] {
+    return [...this.data.activeBuffs];
+  }
+
+  resetBuffs(): void {
+    this.data.activeBuffs = [];
   }
 }
 

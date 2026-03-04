@@ -171,6 +171,7 @@ export interface GameStateData {
   hasShield: boolean;
   isMultiShot: boolean;
   dashCharges: number;
+  activeBuffs: string[]; // Buff ID array (BuffType strings)
 }
 
 export interface SaveData {

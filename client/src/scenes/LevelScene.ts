@@ -55,6 +55,8 @@ import { AICompanion, type CompanionDecision } from '../entities/AICompanion';
 import { CoopState } from '../systems/CoopState';
 import type { CompanionDebugData } from '../systems/AICompanionDebugOverlay';
 import { DifficultyManager } from '../systems/DifficultyManager';
+import { CritSystem } from '../systems/CritSystem';
+import { BuffManager } from '../systems/BuffManager';
 
 import { MusicLayer } from '../types/AudioTypes';
 
@@ -1473,8 +1475,13 @@ export class LevelScene extends Phaser.Scene {
         proj.setTint(config.muzzleFlashColor);
       }
 
-      const { damage, crit } = this.computeProjectileDamage(damageBase, config);
+      const { damage, isCrit } = CritSystem.calculateDamage(
+        damageBase,
+        this.player.critChance,
+        this.player.critMultiplier
+      );
       proj.setData('damage', damage);
+      proj.setData('isCrit', isCrit);
       proj.setData('knockback', config.knockback);
       proj.setData('weaponType', weaponType);
       proj.setData('pierce', config.pierce ?? 0);
@@ -1498,8 +1505,11 @@ export class LevelScene extends Phaser.Scene {
         });
       }
 
-      if (crit) {
-        this.spawnHitParticles(proj.x, proj.y, 0xfff6a6);
+      if (isCrit) {
+        // Crit projectiles appear yellow
+        if (!hasTexture) {
+          proj.setTint(0xffff00);
+        }
       }
     });
 
@@ -1788,6 +1798,16 @@ export class LevelScene extends Phaser.Scene {
     const damage = (proj.getData('damage') as number) ?? 1;
     const knockback = (proj.getData('knockback') as number) ?? 0;
     const weaponType = (proj.getData('weaponType') as ItemType) ?? ItemType.WeaponSword;
+    const isCrit = (proj.getData('isCrit') as boolean) ?? false;
+
+    // NEW: Update hit counter for dynamic crit progression
+    CritSystem.updateHitCounter(this.player);
+
+    // NEW: Spawn crit effect if this was a critical hit
+    if (isCrit) {
+      CritSystem.spawnCritEffect(this, enemy.x, enemy.y);
+    }
+
     this.processEnemyDamage(enemy, damage, weaponType, knockback, proj.x, proj.y);
     this.recordTelemetryHit(proj);
     this.shakeCamera(45, this.weaponConfig?.shakeIntensity ?? 0.003);
@@ -2490,11 +2510,9 @@ export class LevelScene extends Phaser.Scene {
     AudioManager.playMusic(this, 'none');
 
     if (this.currentLevel < 4) {
-      const next = this.currentLevel + 1;
-      this.cameras.main.fadeOut(600, 0, 0, 0);
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.restart({ level: next, lives: this.lives });
-      });
+      // NEW: Launch LevelUpScene instead of directly restarting
+      this.scene.pause();
+      this.scene.launch('LevelUpScene', { level: this.currentLevel, player: this.player });
     } else {
       // Level 4 complete → launch the final boss arena.
       GameState.get().setLives(this.lives);

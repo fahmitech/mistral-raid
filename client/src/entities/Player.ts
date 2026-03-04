@@ -22,6 +22,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private currentWeaponType: ItemType = ItemType.WeaponSword;
   private sceneRef: Phaser.Scene;
 
+  // NEW: Player stats for buff system
+  baseDamage: number = 1;
+  critChance: number = 0.05;
+  critMultiplier: number = 1.75;
+  maxHp: number = 6;
+  attackSpeed: number = 1.0;
+  hitCounter: number = 0;  // Track consecutive hits for dynamic crit gain
+
   constructor(
     scene: Phaser.Scene,
     x: number,

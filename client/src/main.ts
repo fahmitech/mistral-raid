@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { PlayerSelectScene } from './scenes/PlayerSelectScene';
 import { LevelScene } from './scenes/LevelScene';
+import { LevelUpScene } from './scenes/LevelUpScene';
 import { PauseScene } from './scenes/PauseScene';
 import { InventoryScene } from './scenes/InventoryScene';
 import { OptionsScene } from './scenes/OptionsScene';
@@ -45,6 +46,7 @@ scale: {
     CoopSelectScene,
     DifficultySelectScene,
     LevelScene,
+    LevelUpScene,
     PauseScene,
     InventoryScene,
     OptionsScene,

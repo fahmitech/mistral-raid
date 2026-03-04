@@ -1,0 +1,60 @@
+{
+  "totalApiCalls": 12,
+  "totalEstimatedCredits": 50,
+  "sounds": {
+    "low_rumble": {
+      "name": "low_rumble",
+      "prompt": "Deep ominous low frequency subterranean rumble, dungeon boss room atmosphere, 2 seconds",
+      "promptHash": "4ec1c5bb68f7",
+      "type": "sfx",
+      "generatedAt": "2026-03-02T02:43:25.230Z",
+      "durationSecs": 2.5,
+      "estimatedCredits": 2
+    },
+    "suspense_build": {
+      "name": "suspense_build",
+      "prompt": "Building suspense sting, approaching boss danger in dungeon, ominous low strings rumble, 3 seconds",
+      "promptHash": "357dfa701101",
+      "type": "sfx",
+      "generatedAt": "2026-03-02T02:43:25.228Z",
+      "durationSecs": 3.5,
+      "estimatedCredits": 3
+    },
+    "global_presence": {
+      "name": "global_presence",
+      "prompt": "Extremely subtle dungeon presence atmosphere, barely audible low frequency hum, deep stone resonance, no melody, subliminal, 20 seconds",
+      "promptHash": "94f60349e999",
+      "type": "sfx",
+      "generatedAt": "2026-03-02T02:43:26.692Z",
+      "durationSecs": 20,
+      "estimatedCredits": 16
+    },
+    "elemental_magic": {
+      "name": "elemental_magic",
+      "prompt": "Magical elemental spell cast, arcane crackle and energy release, dungeon fantasy, 0.35 seconds",
+      "promptHash": "cbf5dbce3937",
+      "type": "sfx",
+      "generatedAt": "2026-03-04T02:48:43.937Z",
+      "durationSecs": 0.5,
+      "estimatedCredits": 1
+    },
+    "heartbeat_low_hp": {
+      "name": "heartbeat_low_hp",
+      "prompt": "Ominous slow single heartbeat thump, low health warning pulse, dungeon horror tension, 0.8 seconds",
+      "promptHash": "32109103ead5",
+      "type": "sfx",
+      "generatedAt": "2026-03-02T02:36:44.768Z",
+      "durationSecs": 1,
+      "estimatedCredits": 1
+    },
+    "boss_intro": {
+      "name": "boss_intro",
+      "prompt": "Cinematic boss encounter intro dramatic orchestral impact hit, dungeon fantasy, powerful swell, 2 seconds",
+      "promptHash": "8e725da96bbc",
+      "type": "sfx",
+      "generatedAt": "2026-03-02T02:43:25.409Z",
+      "durationSecs": 2.5,
+      "estimatedCredits": 2
+    }
+  }
+}
