@@ -27,6 +27,8 @@ A complete, polished top-down dungeon crawler built in Phaser 3:
 - **Save/load** via localStorage (auto-saves on boss kill and floor transitions)
 - **Minimap**, fog-of-war lighting, loot drops, chest interactions, score tracking
 - All game scenes: Boot, Menu, Player Select, Level, Pause, Inventory, Options, Credits, Game Over, Victory
+- **Level-up upgrade system** — every level offers three stackable upgrade choices for strategic build customization
+- **Dynamic critical hit system** — crit chance increases every 10 successful hits, capped at 40%, with visual effects, screen shake, and enhanced damage feedback
 
 ### 2. The AI Boss Fight (THE ARCHITECT)
 
@@ -89,12 +91,13 @@ A second Mistral-powered system — the dungeon companion — runs throughout th
 
 ### 5. AI Co-Op Mode
 
-A dedicated co-op mode lets Mistral literally play the game alongside the human player:
+A dedicated co-op mode lets Mistral literally play the game alongside the human player — a true AI-native cooperative experience instead of a traditional multiplayer mode:
 
 - Select "AI Co-Op Mode" from the main menu, pick a companion personality
-- **4 personalities:** Aggressive (max damage), Tactical (target weakest first), Protector (keep player alive), Balanced
-- Every 800ms, the server sends Mistral the current combat context and receives a `CompanionDecision`: movement direction, attack target, whether to dash, whether to shield the player, and a spoken line
-- The AI companion is a full second player entity — it moves, attacks, dashes, and can speak taunts during the fight
+- **4 personalities:** Aggressive (max damage), Tactical (target weakest first), Protector (keep player alive), Balanced — each influencing companion behavior distinctly
+- Every 500ms, the server sends Mistral the current combat context (player HP, nearby enemies, boss state) and receives a `CompanionDecision`: movement direction, attack target, whether to dash, whether to shield the player, and a spoken line
+- The AI adapts in real time — if the player is low HP, a Protector companion repositions to intercept; if enemies cluster, an Aggressive companion prioritizes burst damage
+- The AI companion is a full second player entity — it moves, attacks, dashes, provides contextual hints, and can speak taunts during the fight
 - ElevenLabs TTS voices the companion's lines when voice mode is enabled
 
 ### 6. Adaptive Audio System
@@ -156,6 +159,47 @@ Server → Client:  BOSS_RESPONSE (taunt + mechanics + analysis)
                   AI_ASSISTANT_REPLY (dungeon companion response)
                   COOP_DECISION (AI companion move/attack/speak)
 ```
+
+---
+
+## Keyboard Controls
+
+### Menus & Navigation
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Navigate menu options |
+| `←` / `→` | Navigate character / section selection |
+| `Enter` | Confirm selection |
+| `Esc` | Back / return to previous screen |
+
+### Dungeon — Movement & Combat
+
+| Key | Action |
+|-----|--------|
+| `W` `A` `S` `D` or `↑` `↓` `←` `→` | Move |
+| `Left Click` | Fire weapon toward cursor |
+| `Space` | Dash (invulnerability frames) |
+| `Shift` or `Right Click` | Shield / Parry |
+| `Q` | Swap weapon |
+| `R` | Use potion |
+| `E` | Interact (doors, stairs, chests) |
+
+### UI & Panels
+
+| Key | Action |
+|-----|--------|
+| `I` | Open / close inventory |
+| `Esc` | Pause menu |
+| `H` | Toggle AI Companion chat panel |
+
+### Boss Arena
+
+| Key | Action |
+|-----|--------|
+| `T` *(hold)* | Push-to-talk — speak to the boss; release to send |
+| `I` | Open / close inventory |
+| `Esc` | Return to main menu |
 
 ---
 
