@@ -3,14 +3,12 @@ import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
 import type { AIState, ArenaPhase } from '../types/arena';
 
 export class ArenaHUD {
-  private scene: Phaser.Scene;
   private playerBar: Phaser.GameObjects.Graphics;
   private bossBar: Phaser.GameObjects.Graphics;
   private phaseText: Phaser.GameObjects.Text;
   private stateText: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
-    this.scene = scene;
     this.playerBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
     this.bossBar = scene.add.graphics().setScrollFactor(0).setDepth(20);
     const pixelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
@@ -24,6 +22,9 @@ export class ArenaHUD {
       fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
       fontSize: '9px',
       color: '#d5e0ff',
+      stroke: '#000000',
+      strokeThickness: 1,
+      shadow: { color: '#000000', blur: 4, fill: true, offsetX: 1, offsetY: 1 },
       resolution: 2,
     };
 
