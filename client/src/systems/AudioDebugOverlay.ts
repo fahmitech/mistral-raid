@@ -8,7 +8,7 @@ const PANEL_W = 312;
 const PANEL_H = 200; // expanded to fit credit stats section
 const FONT = '"Press Start 2P"';
 
-const SERVER_URL = 'http://localhost:8787';
+const SERVER_URL = (import.meta as any).env?.VITE_SERVER_URL ?? 'http://localhost:8787';
 
 interface AudioStats {
   totalApiCalls:         number;
