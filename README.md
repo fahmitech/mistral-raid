@@ -8,6 +8,8 @@ A dungeon crawler where the final boss runs on Mistral AI. It transcribes your v
 
 ## Demo
 
+**[Play Live → bosstalks.live](https://bosstalks.live)**
+
 [![Mistral Raid Demo](https://img.youtube.com/vi/eJLfJQi96Yo/maxresdefault.jpg)](https://www.youtube.com/watch?v=eJLfJQi96Yo)
 
 ---
