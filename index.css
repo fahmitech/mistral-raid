@@ -18,3 +18,8 @@
 .preview-animation-hammer { animation: hammer-smash 0.8s infinite ease-in; }
 .preview-animation-katana { animation: fireball-fly 1s infinite ease-out; }
 /* Add bomb animation similarly */
+
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}

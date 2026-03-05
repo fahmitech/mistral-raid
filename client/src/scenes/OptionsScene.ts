@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import { SaveSystem } from '../systems/SaveSystem';
 import { AudioManager } from '../systems/AudioManager';
 import { OptionsData } from '../config/types';
+import { OptionsOverlay } from '../ui/OptionsOverlay';
 
 interface OptionRow {
   key: keyof OptionsData;
   label: string;
-  text?: Phaser.GameObjects.Text;
 }
 
 export class OptionsScene extends Phaser.Scene {
@@ -14,7 +14,9 @@ export class OptionsScene extends Phaser.Scene {
   private rows: OptionRow[] = [];
   private selectedIndex = 0;
   private fromPause = false;
-  private toast?: Phaser.GameObjects.Text;
+  private overlay?: OptionsOverlay;
+  private toastMessage = '';
+  private toastTimer?: Phaser.Time.TimerEvent;
 
   constructor() {
     super('OptionsScene');
@@ -42,14 +44,6 @@ export class OptionsScene extends Phaser.Scene {
       this.cameras.main.fadeIn(400, 0, 0, 0);
     }
 
-    this.add
-      .text(160, 24, 'OPTIONS', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '7px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-
     this.rows = [
       { key: 'soundOn', label: 'Sound' },
       { key: 'musicOn', label: 'Music' },
@@ -57,43 +51,27 @@ export class OptionsScene extends Phaser.Scene {
       { key: 'fullscreen', label: 'Fullscreen' },
     ];
 
-    this.rows.forEach((row, idx) => {
-      row.text = this.add
-        .text(80, 52 + idx * 16, '', {
-          fontFamily: '"Press Start 2P"',
-          fontSize: '5px',
-          color: '#aabbcc',
-        })
-        .setOrigin(0, 0.5);
+    const parent = this.game.canvas?.parentElement;
+    if (!parent) throw new Error('OptionsScene: canvas parent missing');
+    parent.querySelectorAll<HTMLDivElement>('[data-options-overlay="true"]').forEach((node) => node.remove());
+    this.overlay = new OptionsOverlay(parent, {
+      rows: this.rows.map((row) => row.label.toUpperCase()),
+      onSelect: (idx) => {
+        if (this.selectedIndex !== idx) {
+          this.selectedIndex = idx;
+          this.refresh();
+          AudioManager.playSFX(this, 'menu_hover');
+        }
+      },
+      onToggle: (idx) => {
+        this.selectedIndex = idx;
+        this.toggle();
+      },
+      onReset: () => this.resetSave(),
+      onBack: () => this.back(),
     });
-
-    const resetText = this.add
-      .text(160, 130, '[ RESET SAVE DATA ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ff6666',
-      })
-      .setOrigin(0.5, 0.5)
-      .setInteractive({ useHandCursor: true });
-    resetText.on('pointerdown', () => this.resetSave());
-
-    const backText = this.add
-      .text(160, 150, '[ BACK ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#cccccc',
-      })
-      .setOrigin(0.5, 0.5)
-      .setInteractive({ useHandCursor: true });
-    backText.on('pointerdown', () => this.back());
-
-    this.toast = this.add
-      .text(160, 166, '', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5, 0.5);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardownOverlay());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.teardownOverlay());
 
     this.refresh();
 
@@ -101,33 +79,6 @@ export class OptionsScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-DOWN', () => this.move(1));
     this.input.keyboard?.on('keydown-ENTER', () => this.toggle());
     this.input.keyboard?.on('keydown-ESC', () => this.back());
-
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      this.rows.forEach((row, idx) => {
-        if (row.text && row.text.getBounds().contains(pointer.x, pointer.y)) {
-          if (this.selectedIndex !== idx) {
-            this.selectedIndex = idx;
-            this.refresh();
-            AudioManager.playSFX(this, 'menu_hover');
-          }
-        }
-      });
-    });
-
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.rows.forEach((row, idx) => {
-        if (row.text && row.text.getBounds().contains(pointer.x, pointer.y)) {
-          this.selectedIndex = idx;
-          this.toggle();
-        }
-      });
-      if (resetText.getBounds().contains(pointer.x, pointer.y)) {
-        AudioManager.playSFX(this, 'ui_click');
-      }
-      if (backText.getBounds().contains(pointer.x, pointer.y)) {
-        AudioManager.playSFX(this, 'menu_hover');
-      }
-    });
   }
 
   private move(dir: number): void {
@@ -153,20 +104,21 @@ export class OptionsScene extends Phaser.Scene {
   }
 
   private refresh(): void {
-    this.rows.forEach((row, idx) => {
-      if (!row.text) return;
-      const value = this.options[row.key] ? 'ON' : 'OFF';
-      row.text.setText(`${row.label.toUpperCase()}: ${value}`);
-      row.text.setColor(idx === this.selectedIndex ? '#ffdd00' : '#aabbcc');
+    const rows = this.rows.map((row) => ({
+      label: row.label,
+      value: this.options[row.key] ? 'ON' : 'OFF',
+    }));
+    this.overlay?.render({
+      rows,
+      selectedIndex: this.selectedIndex,
+      toast: this.toastMessage || undefined,
     });
   }
 
   private resetSave(): void {
     AudioManager.playSFX(this, 'ui_click');
     SaveSystem.deleteSave();
-    if (!this.toast) return;
-    this.toast.setText('Save data cleared.');
-    this.time.delayedCall(1200, () => this.toast?.setText(''));
+    this.setToast('Save data cleared.');
   }
 
   private back(): void {
@@ -178,5 +130,22 @@ export class OptionsScene extends Phaser.Scene {
       this.cameras.main.fadeOut(280, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'));
     }
+  }
+
+  private setToast(message: string): void {
+    this.toastMessage = message;
+    this.refresh();
+    this.toastTimer?.remove();
+    this.toastTimer = this.time.delayedCall(1400, () => {
+      this.toastMessage = '';
+      this.refresh();
+    });
+  }
+
+  private teardownOverlay(): void {
+    this.overlay?.destroy();
+    this.overlay = undefined;
+    this.toastTimer?.remove();
+    this.toastTimer = undefined;
   }
 }

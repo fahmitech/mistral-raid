@@ -33,12 +33,12 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-scale: {
-  mode: Phaser.Scale.FIT,
-  autoCenter: Phaser.Scale.CENTER_BOTH,
-  width: INTERNAL_WIDTH,
-  height: INTERNAL_HEIGHT,
-},
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: INTERNAL_WIDTH,
+    height: INTERNAL_HEIGHT,
+  },
   scene:[
     BootScene,
     MenuScene,

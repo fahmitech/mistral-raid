@@ -834,9 +834,10 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private createHUD(): void {
-    const parent = this.game.canvas?.parentElement;
-    if (!parent) throw new Error('LevelScene: canvas parentElement missing');
-    this.hudOverlay = new LevelHUDOverlay(parent);
+    const canvas = this.game.canvas;
+    const parent = canvas?.parentElement;
+    if (!parent || !canvas) throw new Error('LevelScene: canvas parentElement missing');
+    this.hudOverlay = new LevelHUDOverlay(parent, canvas);
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
     this.hudOverlay.updateStats({

@@ -1,3 +1,5 @@
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+
 export interface LevelHUDStats {
   level: number;
   kills: number;
@@ -10,6 +12,8 @@ export interface LevelHUDStats {
 
 export class LevelHUDOverlay {
   private container: HTMLDivElement;
+  private stage: HTMLDivElement;
+  private content: HTMLDivElement;
   private levelEl: HTMLSpanElement;
   private killsEl: HTMLSpanElement;
   private livesEl: HTMLSpanElement;
@@ -23,8 +27,13 @@ export class LevelHUDOverlay {
   private companionEl: HTMLDivElement;
   private dashResetTimer: number | null = null;
   private lastDashCharges = 0;
+  private resizeObserver: ResizeObserver;
+  private canvas: HTMLCanvasElement;
+  private parent: HTMLElement;
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, canvas: HTMLCanvasElement) {
+    this.parent = parent;
+    this.canvas = canvas;
     parent.querySelectorAll<HTMLDivElement>('[data-level-hud="true"]').forEach((node) => node.remove());
 
     this.container = document.createElement('div');
@@ -32,18 +41,34 @@ export class LevelHUDOverlay {
     this.container.style.position = 'absolute';
     this.container.style.inset = '0';
     this.container.style.pointerEvents = 'none';
-    this.container.style.display = 'flex';
-    this.container.style.flexDirection = 'column';
-    this.container.style.justifyContent = 'space-between';
-    this.container.style.padding = '8px 10px';
-    this.container.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial';
-    this.container.style.fontSize = '9px';
-    this.container.style.color = '#d5e0ff';
-    this.container.style.textTransform = 'uppercase';
-    this.container.style.letterSpacing = '0.04em';
     this.container.style.zIndex = '40';
 
-    this.container.innerHTML = `
+    this.stage = document.createElement('div');
+    Object.assign(this.stage.style, {
+      position: 'absolute',
+      width: `${INTERNAL_WIDTH}px`,
+      height: `${INTERNAL_HEIGHT}px`,
+      transformOrigin: 'top left',
+      pointerEvents: 'none',
+    });
+
+    this.content = document.createElement('div');
+    Object.assign(this.content.style, {
+      position: 'absolute',
+      inset: '0',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      padding: '8px 10px',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+      fontSize: '9px',
+      color: '#d5e0ff',
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+      pointerEvents: 'none',
+    });
+
+    this.content.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:18px;">
         <div style="display:flex;flex-direction:column;gap:6px;">
           <div data-stat="level" data-style="pixel"></div>
@@ -54,21 +79,21 @@ export class LevelHUDOverlay {
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         <div style="
           min-width:160px;
-          background:rgba(5,10,22,0.75);
-          border:2px solid rgba(9,14,28,0.9);
-            padding:4px 8px;
-            font-family:'Press Start 2P', monospace;
-            color:#fee2b3;
-            letter-spacing:0;
-          " data-stat="score"></div>
-          <div style="
-            min-width:160px;
-            background:rgba(5,10,22,0.7);
-            border:2px solid rgba(9,14,28,0.9);
-            padding:4px 8px;
-            font-family:'Press Start 2P', monospace;
+          padding:4px 8px;
+          font-family:'Press Start 2P', monospace;
+          color:#fee2b3;
+          letter-spacing:0;
+          background:transparent;
+          border:none;
+        " data-stat="score"></div>
+        <div style="
+          min-width:160px;
+          padding:4px 8px;
+          font-family:'Press Start 2P', monospace;
           color:#fef08a;
           letter-spacing:0;
+          background:transparent;
+          border:none;
         " data-stat="weapon"></div>
         <span data-stat="telemetry" style="margin-top:6px;color:#bef264;"></span>
         <div data-companion style="
@@ -77,8 +102,6 @@ export class LevelHUDOverlay {
           font-family:'Press Start 2P', monospace;
           font-size:15px;
           color:#c084fc;
-          background:rgba(10,4,24,0.75);
-          border:2px solid rgba(32,16,52,0.9);
           letter-spacing:0;
           display:none;
         "></div>
@@ -90,12 +113,9 @@ export class LevelHUDOverlay {
           color:#bbf7d0;
           letter-spacing:0;
           padding:6px 10px;
-          background:rgba(8,16,31,0.75);
-          border:2px solid rgba(24,40,68,0.7);
-          box-shadow:0 4px 14px rgba(0,0,0,0.4);
           display:none;
         ">[E] Pick up</div>
-        <div style="display:flex;justify-content:center;gap:48px;margin-top:-35px;">
+        <div style="display:flex;justify-content:center;gap:48px;margin-top:-12px;">
           <span data-dash style="
             font-family:'Press Start 2P', monospace;
             color:#7dd3fc;
@@ -118,7 +138,13 @@ export class LevelHUDOverlay {
       </div>
     `;
 
+    this.stage.appendChild(this.content);
+    this.container.appendChild(this.stage);
     parent.appendChild(this.container);
+
+    this.resizeObserver = new ResizeObserver(() => this.updateStage());
+    this.resizeObserver.observe(this.canvas);
+    this.updateStage();
 
     const applyPixelStyle = (el: HTMLElement | null) => {
       if (!el) return;
@@ -129,18 +155,18 @@ export class LevelHUDOverlay {
       el.style.textShadow = '0 1px 0 rgba(0,0,0,0.6)';
     };
 
-    this.levelEl = this.container.querySelector('[data-stat="level"]') as HTMLSpanElement;
-    this.killsEl = this.container.querySelector('[data-stat="kills"]') as HTMLSpanElement;
-    this.livesEl = this.container.querySelector('[data-stat="lives"]') as HTMLSpanElement;
-    this.coinsEl = this.container.querySelector('[data-stat="coins"]') as HTMLSpanElement;
+    this.levelEl = this.content.querySelector('[data-stat="level"]') as HTMLSpanElement;
+    this.killsEl = this.content.querySelector('[data-stat="kills"]') as HTMLSpanElement;
+    this.livesEl = this.content.querySelector('[data-stat="lives"]') as HTMLSpanElement;
+    this.coinsEl = this.content.querySelector('[data-stat="coins"]') as HTMLSpanElement;
     [this.levelEl, this.killsEl, this.livesEl, this.coinsEl].forEach(applyPixelStyle);
-    this.scoreEl = this.container.querySelector('[data-stat="score"]') as HTMLSpanElement;
-    this.weaponEl = this.container.querySelector('[data-stat="weapon"]') as HTMLSpanElement;
-    this.hintEl = this.container.querySelector('[data-hint]') as HTMLDivElement;
-    this.dashEl = this.container.querySelector('[data-dash]') as HTMLSpanElement;
-    this.shieldEl = this.container.querySelector('[data-shield]') as HTMLSpanElement;
-    this.telemetryEl = this.container.querySelector('[data-stat="telemetry"]') as HTMLSpanElement;
-    this.companionEl = this.container.querySelector('[data-companion]') as HTMLDivElement;
+    this.scoreEl = this.content.querySelector('[data-stat="score"]') as HTMLSpanElement;
+    this.weaponEl = this.content.querySelector('[data-stat="weapon"]') as HTMLSpanElement;
+    this.hintEl = this.content.querySelector('[data-hint]') as HTMLDivElement;
+    this.dashEl = this.content.querySelector('[data-dash]') as HTMLSpanElement;
+    this.shieldEl = this.content.querySelector('[data-shield]') as HTMLSpanElement;
+    this.telemetryEl = this.content.querySelector('[data-stat="telemetry"]') as HTMLSpanElement;
+    this.companionEl = this.content.querySelector('[data-companion]') as HTMLDivElement;
   }
 
   updateStats(stats: LevelHUDStats): void {
@@ -206,6 +232,19 @@ export class LevelHUDOverlay {
       window.clearTimeout(this.dashResetTimer);
       this.dashResetTimer = null;
     }
+    this.resizeObserver.disconnect();
     this.container.remove();
+  }
+
+  private updateStage(): void {
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const parentRect = this.parent.getBoundingClientRect();
+    const left = canvasRect.left - parentRect.left;
+    const top = canvasRect.top - parentRect.top;
+    this.stage.style.left = `${left}px`;
+    this.stage.style.top = `${top}px`;
+    this.stage.style.width = `${canvasRect.width}px`;
+    this.stage.style.height = `${canvasRect.height}px`;
+    this.stage.style.transform = 'none';
   }
 }
