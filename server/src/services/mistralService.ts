@@ -137,14 +137,14 @@ const FALLBACK_RESPONSE: BossResponse = {
 
 const MODEL_CASCADE: Array<{ model: string; timeout: number }> = DEMO_MODE
   ? [
-      { model: 'mistral-large-latest', timeout: 6000 },
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ]
+    { model: 'mistral-large-latest', timeout: 6000 },
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ]
   : [
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ];
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ];
 
 const VOICE_CASCADE: Array<{ model: string; timeout: number }> = [
   { model: 'ministral-8b-latest', timeout: 2500 },
@@ -195,6 +195,12 @@ export async function generateBossReply(
     sampleCount: 0,
     timestamp: Date.now(),
     bossActive: false,
+    loreInteractionCount: 0,
+    avgTimeReadingLore: 0,
+    avgLoreLingerTime: 0,
+    skippedMandatoryLore: 0,
+    retreatDistance: 0,
+    wallBias: 0,
     longTerm: {
       avgAccuracy: 0,
       cornerPercentage: 0,
@@ -312,6 +318,14 @@ Live combat telemetry:
  - Long-term corner time: ${long.cornerPercentage.toFixed(1)}%
  - Long-term dash rate: ${long.dashPerMin.toFixed(1)}/min
  - Long-term dominant zone: ${long.dominantZone}
+
+Story / psychology telemetry:
+- Lore interactions: ${t.loreInteractionCount}
+- Avg lore read time: ${t.avgTimeReadingLore.toFixed(1)}s
+- Avg lore linger time: ${t.avgLoreLingerTime.toFixed(1)}s
+- Skipped mandatory lore: ${t.skippedMandatoryLore}
+- Retreat distance: ${Math.round(t.retreatDistance)}px
+- Wall bias: ${t.wallBias.toFixed(1)}%
 
 Respond with a JSON BossResponse object only.
   `.trim();
@@ -512,6 +526,12 @@ function coerceTelemetrySummary(rawPayload: Record<string, unknown>, fallback: T
     sampleCount: 0,
     timestamp: Date.now(),
     bossActive: false,
+    loreInteractionCount: 0,
+    avgTimeReadingLore: 0,
+    avgLoreLingerTime: 0,
+    skippedMandatoryLore: 0,
+    retreatDistance: 0,
+    wallBias: 0,
     longTerm: {
       avgAccuracy: accuracy,
       cornerPercentage: corner,

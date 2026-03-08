@@ -1,4 +1,4 @@
-#!/bin/bash
+l#!/bin/bash
 
 echo "🔍 Mistral Raid Pre-Demo Verification"
 echo "======================================"

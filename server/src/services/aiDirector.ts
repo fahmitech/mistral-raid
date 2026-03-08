@@ -86,7 +86,9 @@ function buildDirectorPrompt(t: TelemetrySummary): string {
     `Player HP: ${t.playerHpPercent.toFixed(0)}% | Corner time: ${t.cornerPercentageLast10s.toFixed(0)}% | ` +
     `Hits taken: ${t.recentHitsTaken} | Dashes: ${t.totalDashCount} | ` +
     `Long Acc: ${(long.avgAccuracy * 100).toFixed(0)}% | Long Corner: ${long.cornerPercentage.toFixed(0)}% | ` +
-    `Long Dash/min: ${long.dashPerMin.toFixed(1)} | Long Zone: ${long.dominantZone}`;
+    `Long Dash/min: ${long.dashPerMin.toFixed(1)} | Long Zone: ${long.dominantZone} | ` +
+    `Lore: ${t.loreInteractionCount} read, ${t.skippedMandatoryLore} skipped | ` +
+    `Wall bias: ${t.wallBias.toFixed(0)}% | Retreat: ${Math.round(t.retreatDistance)}px`;
 }
 
 function clampInt(value: number, min: number, max: number): number {

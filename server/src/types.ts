@@ -47,6 +47,13 @@ export interface RawTelemetry {
   dashCount: number;
   playerZone: string;             // e.g. "bot_left"
   notableEvent?: string;
+  // Story-aware telemetry
+  loreInteractionCount?: number;
+  timeSpentReadingLore?: number;     // seconds total
+  loreLingerTime?: number;           // avg seconds near lore before interacting
+  skippedMandatoryLore?: number;
+  retreatDistance?: number;          // px moved backward
+  wallBias?: number;                 // 0-100 %
 }
 
 export interface TelemetrySummary {
@@ -60,6 +67,13 @@ export interface TelemetrySummary {
   sampleCount: number;
   timestamp: number;
   bossActive: boolean;
+  // Story-aware aggregates
+  loreInteractionCount: number;
+  avgTimeReadingLore: number;        // seconds
+  avgLoreLingerTime: number;         // seconds
+  skippedMandatoryLore: number;
+  retreatDistance: number;           // cumulative px
+  wallBias: number;                  // 0-100 %
   longTerm: {
     avgAccuracy: number;
     cornerPercentage: number;
@@ -165,24 +179,24 @@ export interface CompanionReply {
 }
 
 export type ClientToServerMessage =
-  | { type: 'telemetry';          payload: RawTelemetry }
-  | { type: 'barge_in';           payload: Record<string, never> }
-  | { type: 'vad_state';          payload: { speaking: boolean } }
-  | { type: 'ANALYZE';            payload: Record<string, unknown> }
+  | { type: 'telemetry'; payload: RawTelemetry }
+  | { type: 'barge_in'; payload: Record<string, never> }
+  | { type: 'vad_state'; payload: { speaking: boolean } }
+  | { type: 'ANALYZE'; payload: Record<string, unknown> }
   | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } }
-  | { type: 'LIVE_TELEMETRY';     payload: LiveTelemetry };
+  | { type: 'LIVE_TELEMETRY'; payload: LiveTelemetry };
 
 export type ServerToClientMessage =
-  | { type: 'ai_state';           payload: { state: 'listening' | 'thinking' | 'speaking' } }
-  | { type: 'captions_partial';   payload: { text: string } }
-  | { type: 'captions_final';     payload: { text: string } }
-  | { type: 'BOSS_RESPONSE';      payload: BossResponse }
-  | { type: 'AUDIO_CHUNK';        payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_DONE';         payload: { format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_READY';        payload: { audioBase64: string; format: 'mp3' } }
-  | { type: 'mechanics_update';   payload: MechanicConfig }
-  | { type: 'director_update';    payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
-  | { type: 'BOSS_DIRECTIVE';     payload: BossDirective }
-  | { type: 'ENEMY_DIRECTIVE';    payload: EnemyDirective }
+  | { type: 'ai_state'; payload: { state: 'listening' | 'thinking' | 'speaking' } }
+  | { type: 'captions_partial'; payload: { text: string } }
+  | { type: 'captions_final'; payload: { text: string } }
+  | { type: 'BOSS_RESPONSE'; payload: BossResponse }
+  | { type: 'AUDIO_CHUNK'; payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_DONE'; payload: { format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_READY'; payload: { audioBase64: string; format: 'mp3' } }
+  | { type: 'mechanics_update'; payload: MechanicConfig }
+  | { type: 'director_update'; payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'BOSS_DIRECTIVE'; payload: BossDirective }
+  | { type: 'ENEMY_DIRECTIVE'; payload: EnemyDirective }
   | { type: 'AI_ASSISTANT_REPLY'; payload: CompanionReply }
-  | { type: 'error';              payload: { message: string; fallback: BossResponse } };
+  | { type: 'error'; payload: { message: string; fallback: BossResponse } };
