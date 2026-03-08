@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { InfernalTorch } from '../objects/InfernalTorch';
 import { AudioManager } from '../systems/AudioManager';
 import { MenuOverlay, MenuOverlayItem } from '../ui/MenuOverlay';
 
@@ -39,8 +40,8 @@ export class MenuScene extends Phaser.Scene {
   private selectedIndex = 0;
 
   // Visual objects
-  private torchFlameL: Phaser.GameObjects.Sprite[] = [];
-  private torchFlameR: Phaser.GameObjects.Sprite[] = [];
+  private torchFlameL: InfernalTorch[] = [];
+  private torchFlameR: InfernalTorch[] = [];
   private swordGraphic!: Phaser.GameObjects.Graphics;
   private particles: { g: Phaser.GameObjects.Ellipse; vx: number; vy: number }[] = [];
   private titleText!: Phaser.GameObjects.Text;
@@ -155,7 +156,7 @@ export class MenuScene extends Phaser.Scene {
     const torchFlickering = this.eventPhase === 'flicker';
     const torchDark       = this.eventPhase === 'dark' || this.eventPhase === 'restore';
 
-    this.updateTorches(torchFlickering, torchDark);
+    this.updateTorches(delta, torchFlickering, torchDark);
     this.updateTitle(torchDark);
     this.updateBlood();
     this.updateKnight();
@@ -479,7 +480,7 @@ export class MenuScene extends Phaser.Scene {
     // Right torch at (ARCH_R + 2, ARCH_TOP - 6)
     for (let side = 0; side < 2; side++) {
       const bx = side === 0 ? ARCH_L - 12 : ARCH_R + 3;
-      const by = ARCH_TOP - 8;
+      const by = ARCH_TOP + 6;
       const gfx = this.add.graphics();
       gfx.setDepth(10);
 
@@ -496,16 +497,9 @@ export class MenuScene extends Phaser.Scene {
         gfx.fillRect(bx + px * bracketPx, by + py * bracketPx, bracketPx, bracketPx);
       });
 
-      // Animated torch sprite (reuses in-game torch frames)
-      const sprite = this.add.sprite(bx + 5, by + 16, 'torch_1')
-        .setOrigin(0.5, 1)
-        .setDepth(12)
-        .setScale(0.55);
-      if (this.anims.exists('torch')) sprite.play('torch');
-      sprite.setBlendMode(Phaser.BlendModes.ADD);
-
-      if (side === 0) this.torchFlameL.push(sprite);
-      else            this.torchFlameR.push(sprite);
+      const torch = new InfernalTorch(this, bx + 5, by + 16, 0.58);
+      if (side === 0) this.torchFlameL.push(torch);
+      else            this.torchFlameR.push(torch);
     }
   }
 
@@ -788,7 +782,7 @@ export class MenuScene extends Phaser.Scene {
   // UPDATE METHODS
   // ══════════════════════════════════════════════════════════════════════════
 
-  private updateTorches(flickering: boolean, dark: boolean): void {
+  private updateTorches(delta: number, flickering: boolean, dark: boolean): void {
     const flickerL = Math.abs(Math.sin(this.torchPhase * 0.7 + 0.3)) * 0.5 + 0.5;
     const flickerR = Math.abs(Math.sin(this.torchPhase * 0.85 + 1.2)) * 0.5 + 0.5;
 
@@ -796,21 +790,17 @@ export class MenuScene extends Phaser.Scene {
       flickering ? (Math.random() > 0.35 ? base : 0.15) : base;
 
     const torchData = [
-      { sprite: this.torchFlameL[0], flicker: stutter(flickerL) },
-      { sprite: this.torchFlameR[0], flicker: stutter(flickerR) },
+      { torch: this.torchFlameL[0], flicker: stutter(flickerL) },
+      { torch: this.torchFlameR[0], flicker: stutter(flickerR) },
     ];
 
-    torchData.forEach(({ sprite, flicker: flk }) => {
-      if (!sprite) return;
-
-      if (dark) {
-        sprite.setVisible(false);
-        return;
+    torchData.forEach(({ torch, flicker: flk }) => {
+      if (!torch) return;
+      torch.step(delta);
+      torch.setDark(dark);
+      if (!dark) {
+        torch.setFlicker(flk);
       }
-
-      sprite.setVisible(true);
-      sprite.setAlpha(0.75 + flk * 0.35);
-      sprite.setScale(0.55 + flk * 0.12);
     });
   }
 
@@ -827,51 +817,98 @@ export class MenuScene extends Phaser.Scene {
   private updateBlood(): void {
     this.bloodGraphics.clear();
     const t = this.glitchIntensity;
-    if (t < 0.01) return;
+    if (t < 0.001) return;
 
-    // ── Heavy red wall wash ──
-    this.bloodGraphics.fillStyle(0x880000, 0.45 * t);
-    this.bloodGraphics.fillRect(0, 0, ARCH_L, H);
-    this.bloodGraphics.fillStyle(0x770000, 0.4 * t);
-    this.bloodGraphics.fillRect(ARCH_R, 0, W - ARCH_R, H);
+    const gfx = this.bloodGraphics;
+    const px = 2;
+    const q = (value: number) => Math.round(value / px) * px;
+    const intensity = Math.max(0.2, t);
+    const noise = (seed: number) => Math.abs(Math.sin(seed * 12.9898 + this.torchPhase * 0.33));
 
-    // ── Left wall drips — thick, long, multiple widths ──
-    const dripsL: [number, number, number, number][] = [
-      // [x, startY, width, length]
-      [6,  0, 2, 60],[14, 10, 3, 80],[22,  5, 2, 45],
-      [35, 0, 4, 90],[48, 15, 2, 55],[60,  8, 3, 70],
-      [72, 0, 2, 40],[82,  3, 4,100],
+    // ── Heavy layered wall wash ──
+    const washes: Array<{ startX: number; width: number; color: number; alpha: number }> = [
+      { startX: 0,       width: ARCH_L,        color: 0x1c0000, alpha: 0.55 },
+      { startX: 0,       width: ARCH_L,        color: 0x420000, alpha: 0.35 },
+      { startX: ARCH_R,  width: W - ARCH_R,    color: 0x1a0000, alpha: 0.5 },
+      { startX: ARCH_R,  width: W - ARCH_R,    color: 0x3e0000, alpha: 0.32 },
     ];
-    dripsL.forEach(([x, sy, w, len]) => {
-      this.bloodGraphics.fillStyle(0xaa0000, (0.65 + Math.random() * 0.3) * t);
-      this.bloodGraphics.fillRect(x, sy, w, len * t);
-      // bulge / pool at tip
-      this.bloodGraphics.fillStyle(0xaa1111, 0.6 * t);
-      this.bloodGraphics.fillEllipse(x + w / 2, sy + len * t, w * 2.5, w * 3);
-      // crack stain spreading sideways
-      this.bloodGraphics.fillStyle(0x550000, 0.25 * t);
-      this.bloodGraphics.fillRect(x - 2, sy + len * t * 0.7, w + 4, 2);
+    washes.forEach(({ startX, width, color, alpha }) => {
+      gfx.fillStyle(color, alpha * intensity);
+      gfx.fillRect(q(startX), 0, q(width), H);
     });
 
-    // ── Right wall drips ──
-    const dripsR: [number, number, number, number][] = [
-      [232, 0, 3, 75],[243, 8, 2, 55],[253,  0, 4, 88],
-      [264,12, 2, 50],[275, 4, 3, 95],[285,  0, 2, 42],
-      [295, 6, 4, 65],[308, 0, 3, 82],
-    ];
-    dripsR.forEach(([x, sy, w, len]) => {
-      this.bloodGraphics.fillStyle(0x990000, (0.6 + Math.random() * 0.3) * t);
-      this.bloodGraphics.fillRect(x, sy, w, len * t);
-      this.bloodGraphics.fillStyle(0xaa1111, 0.5 * t);
-      this.bloodGraphics.fillEllipse(x + w / 2, sy + len * t, w * 2.5, w * 3);
-      this.bloodGraphics.fillStyle(0x550000, 0.22 * t);
-      this.bloodGraphics.fillRect(x - 2, sy + len * t * 0.7, w + 4, 2);
-    });
+    // Subtle streaks to mimic dried cracks
+    gfx.fillStyle(0x080000, 0.2 + 0.18 * intensity);
+    for (let i = 0; i < 7; i += 1) {
+      const offset = 8 + i * 18 + noise(i) * 6;
+      gfx.fillRect(q(offset), 0, px, H);
+      gfx.fillRect(q(W - offset), 0, px, H);
+    }
+
+    const paintDrips = (originX: number, mirror = 1) => {
+      const drips: Array<{ x: number; start: number; w: number; len: number }> = [
+        { x: 6,  start: 6,  w: 3, len: 96 },
+        { x: 18, start: 2,  w: 4, len: 78 },
+        { x: 32, start: 10, w: 5, len: 118 },
+        { x: 50, start: 0,  w: 4, len: 102 },
+        { x: 66, start: 14, w: 3, len: 70 },
+        { x: 82, start: 4,  w: 4, len: 110 },
+      ];
+      drips.forEach((d, idx) => {
+        const bleed = 0.5 + noise(idx * 3.3 + mirror) * 0.45;
+        const x = mirror === 1 ? originX + d.x : originX - d.x - d.w;
+        const height = d.len * (0.3 + intensity * 0.7);
+        gfx.fillStyle(0x7c0000, bleed * intensity);
+        gfx.fillRect(q(x), q(d.start), q(d.w), q(height));
+
+        gfx.fillStyle(0x3a0000, 0.3 + 0.25 * intensity);
+        gfx.fillRect(q(x + 1), q(d.start + 2), q(Math.max(1, d.w - 2)), q(height * 0.85));
+
+        gfx.fillStyle(0xaa1a1a, 0.45 + 0.15 * intensity);
+        gfx.fillRect(q(x - 1), q(d.start + height), q(d.w + 2), px * 2);
+        gfx.fillRect(q(x - 2), q(d.start + height + 2), q(d.w + 4), px);
+
+        gfx.fillStyle(0xff6666, 0.12 + 0.08 * intensity);
+        gfx.fillRect(
+          q(x + (mirror === 1 ? d.w - 1 : 0)),
+          q(d.start + 4),
+          px,
+          q(height * 0.6)
+        );
+      });
+    };
+
+    paintDrips(0, 1);
+    paintDrips(W, -1);
+
+    // Floating mist / splatter near arch
+    for (let i = 0; i < 16; i += 1) {
+      const n = noise(i + 6.2);
+      const sx = ARCH_L + n * (ARCH_R - ARCH_L);
+      const sy = ARCH_TOP + n * 52;
+      gfx.fillStyle(0xbb1111, (0.15 + 0.12 * intensity) * (0.4 + n));
+      gfx.fillRect(q(sx), q(sy), q(2 + n * 3), px);
+    }
 
     // ── Floor blood pool spreading from both base corners ──
-    this.bloodGraphics.fillStyle(0x660000, 0.45 * t);
-    this.bloodGraphics.fillEllipse(18, H - 10, 50 * t, 14);
-    this.bloodGraphics.fillEllipse(W - 18, H - 10, 50 * t, 14);
+    const poolAlpha = 0.35 + 0.25 * intensity;
+    const pools = [
+      { x: ARCH_L - 6, y: H - 8, offset: 0 },
+      { x: ARCH_R + 6, y: H - 8, offset: 1 },
+    ];
+    pools.forEach((pool, idx) => {
+      const sway = 1 + noise(idx * 4.7) * 0.6;
+      const width = 56 * (0.3 + intensity * 0.7) * sway;
+      gfx.fillStyle(0x5a0000, poolAlpha);
+      gfx.fillRect(q(pool.x - width / 2), q(pool.y - 4), q(width), px * 2);
+      gfx.fillStyle(0x8c1010, 0.22 + 0.12 * intensity);
+      gfx.fillRect(q(pool.x - width / 3), q(pool.y - 6), q(width * 0.6), px);
+      gfx.fillStyle(0xff4a4a, 0.12 + 0.06 * intensity);
+      gfx.fillRect(q(pool.x - width / 4 + 6), q(pool.y - 8), q(width * 0.35), px);
+    });
+
+    gfx.fillStyle(0x320000, 0.35 + 0.25 * intensity);
+    gfx.fillRect(q(ARCH_L - 10), q(H - 11), q(ARCH_R - ARCH_L + 20), px * 2 + px);
   }
 
   /** Dead fallen knight — pixel art, fades in/out with glitch intensity */

@@ -1,40 +1,64 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
 import { DifficultyManager, type Difficulty } from '../systems/DifficultyManager';
+import { DifficultySelectOverlay, type DifficultyOption } from '../ui/DifficultySelectOverlay';
 
-interface DifficultyOption {
-  key: Difficulty;
-  label: string;
-  desc: string;
-  color: string;
-  textObj?: Phaser.GameObjects.Text;
-  descObj?: Phaser.GameObjects.Text;
-}
+const W = 320;
+const H = 180;
 
-const OPTIONS: DifficultyOption[] = [
+const CARD_CONFIGS: DifficultyOption[] = [
   {
     key: 'easy',
-    label: '[ EASY ]',
-    desc: 'Enemies -30% HP  •  Player +20% DMG  •  Boss attacks slower',
-    color: '#44dd88',
+    rank: 'RANK I',
+    name: "WANDERER'S PATH",
+    tagline: '"The dungeon remembers those who survived."',
+    tag: 'NOVICE',
+    icon: '✦',
+    accentHex: '#44dd88',
+    stats: [
+      { label: 'Enemies', value: '-30% HP, slower patrol routes' },
+      { label: 'Player', value: '+20% damage, +1 revive charge' },
+      { label: 'Boss Rhythm', value: 'Longer telegraphs, trimmed combos' },
+      { label: 'Loot Bias', value: 'Extra potions & shards' },
+    ],
   },
   {
     key: 'medium',
-    label: '[ MEDIUM ]',
-    desc: 'Balanced challenge — default settings',
-    color: '#ffdd00',
+    rank: 'RANK II',
+    name: 'BLOOD & IRON',
+    tagline: '"As the dungeon was always meant to be."',
+    tag: 'DEFAULT',
+    icon: '⚔',
+    accentHex: '#ffcc44',
+    stats: [
+      { label: 'Encounter Pace', value: 'Baseline HP, DMG, density' },
+      { label: 'AI Director', value: 'Full telemetry + adaptive waves' },
+      { label: 'Boss Rhythm', value: 'Intended feints & phase shifts' },
+      { label: 'Loot Bias', value: 'Balanced drops & curios' },
+    ],
   },
   {
     key: 'hard',
-    label: '[ HARD ]',
-    desc: 'Enemies +30% HP  •  Boss +40% HP  •  Boss hits +20% harder',
-    color: '#ff4444',
+    rank: 'RANK III',
+    name: 'ABYSS ETERNAL',
+    tagline: '"No light reaches this far. No mercy either."',
+    tag: 'CURSED',
+    icon: '☠',
+    accentHex: '#ff5555',
+    stats: [
+      { label: 'Enemies', value: '+30% HP, +12% speed' },
+      { label: 'Boss Core', value: '+40% HP, strikes +20%' },
+      { label: 'Director Aggro', value: 'Prefers elites & ambushes' },
+      { label: 'Loot Bias', value: 'Sparse healing, cursed gear' },
+    ],
   },
 ];
 
 export class DifficultySelectScene extends Phaser.Scene {
-  private selectedIndex = 1; // default Medium
+  private selectedIndex = 1;
   private fromScene = 'PlayerSelectScene';
+
+  private overlay?: DifficultySelectOverlay;
 
   constructor() {
     super('DifficultySelectScene');
@@ -42,140 +66,152 @@ export class DifficultySelectScene extends Phaser.Scene {
 
   init(data: { fromScene?: string }): void {
     this.fromScene = data?.fromScene ?? 'PlayerSelectScene';
-    // Sync selection to whatever difficulty is currently stored
-    const cur = DifficultyManager.get().getDifficulty();
-    const idx = OPTIONS.findIndex((o) => o.key === cur);
+
+    const current = DifficultyManager.get().getDifficulty();
+    const idx = CARD_CONFIGS.findIndex((c) => c.key === current);
     this.selectedIndex = idx >= 0 ? idx : 1;
   }
 
   create(): void {
     AudioManager.get().init(this);
 
-    // Background gradient
-    const gfx = this.add.graphics();
-    for (let y = 0; y < 180; y++) {
-      const t = y / 180;
-      const r = Math.round(4 + (14 - 4) * t);
-      const g = Math.round(2 + (6 - 2) * t);
-      const b = Math.round(18 + (36 - 18) * t);
-      gfx.fillStyle((r << 16) + (g << 8) + b, 1);
-      gfx.fillRect(0, y, 320, 1);
-    }
+    this.cameras.main.setBackgroundColor('#06070d');
+    this.cameras.main.roundPixels = true;
 
-    this.add
-      .text(160, 18, 'SELECT DIFFICULTY', {
-        fontFamily: '"Pixel Operator 8", "Press Start 2P"',
-        fontSize: '8px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
+    this._buildBackground();
+    this._mountOverlay();
+    this._bindKeys();
 
-    // Separator line
-    const sep = this.add.graphics();
-    sep.lineStyle(1, 0x334455, 0.8);
-    sep.lineBetween(30, 30, 290, 30);
-
-    // Difficulty rows
-    OPTIONS.forEach((opt, idx) => {
-      const y = 56 + idx * 40;
-
-      opt.textObj = this.add
-        .text(160, y, opt.label, {
-          fontFamily: '"Pixel Operator 8", "Press Start 2P"',
-          fontSize: '8px',
-          color: opt.color,
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-
-      opt.descObj = this.add
-        .text(160, y + 14, opt.desc, {
-          fontFamily: '"Press Start 2P"',
-          fontSize: '8px',
-          color: '#778899',
-          align: 'center',
-          wordWrap: { width: 280 },
-        })
-        .setOrigin(0.5);
-
-      opt.textObj.on('pointerover', () => {
-        if (this.selectedIndex !== idx) {
-          this.selectedIndex = idx;
-          this.refresh();
-          AudioManager.playSFX(this, 'menu_hover');
-        }
-      });
-      opt.textObj.on('pointerdown', () => {
-        this.selectedIndex = idx;
-        this.confirm();
-      });
-    });
-
-    // Buttons row
-    const backText = this.add
-      .text(60, 166, '[ BACK ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: '#778899',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    const confirmText = this.add
-      .text(250, 166, '[ CONFIRM ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '8px',
-        color: '#00ffcc',
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    backText.on('pointerdown', () => this.back());
-    confirmText.on('pointerdown', () => this.confirm());
-
-    this.input.keyboard?.on('keydown-UP',    () => this.move(-1));
-    this.input.keyboard?.on('keydown-DOWN',  () => this.move(1));
-    this.input.keyboard?.on('keydown-ENTER', () => this.confirm());
-    this.input.keyboard?.on('keydown-ESC',   () => this.back());
-
-    this.cameras.main.fadeIn(300, 0, 0, 0);
-    this.refresh();
+    this._renderOverlay();
+    this.cameras.main.fadeIn(220, 0, 0, 0);
   }
 
-  private move(dir: number): void {
-    this.selectedIndex = (this.selectedIndex + dir + OPTIONS.length) % OPTIONS.length;
-    this.refresh();
+  private _buildBackground(): void {
+    const bg = this.add.graphics();
+
+    for (let y = 0; y < H; y++) {
+      const t = y / (H - 1);
+      const color = this._lerpColor(0x0b0c16, 0x14101f, t);
+      bg.fillStyle(color, 1);
+      bg.fillRect(0, y, W, 1);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const alpha = 0.045 - i * 0.007;
+      const pad = i * 8;
+      bg.fillStyle(0x5a2b86, Math.max(alpha, 0.008));
+      bg.fillEllipse(W / 2, 82, 180 + pad * 2, 92 + pad);
+    }
+
+    const vignette = this.add.graphics();
+    for (let i = 0; i < 6; i++) {
+      vignette.fillStyle(0x000000, 0.035);
+      vignette.fillRoundedRect(-i * 2, -i * 2, W + i * 4, H + i * 4, 10);
+    }
+
+    const footerFade = this.add.graphics();
+    for (let y = H - 40; y < H; y++) {
+      const t = (y - (H - 40)) / 40;
+      footerFade.fillStyle(0x020204, t * 0.45);
+      footerFade.fillRect(0, y, W, 1);
+    }
+
+    const particles = this.add.graphics();
+    particles.fillStyle(0xd3b786, 0.2);
+    for (let i = 0; i < 18; i++) {
+      particles.fillRect(
+        Phaser.Math.Between(20, W - 20),
+        Phaser.Math.Between(10, 70),
+        1,
+        1,
+      );
+    }
+  }
+
+  private _mountOverlay(): void {
+    const parent = this.game.canvas?.parentElement;
+    if (!parent) throw new Error('DifficultySelectScene: canvas parent missing');
+
+    this.overlay?.destroy();
+    this.overlay = new DifficultySelectOverlay(parent, {
+      options: CARD_CONFIGS,
+      initialIndex: this.selectedIndex,
+      onSelect: (index) => {
+        if (this.selectedIndex === index) return;
+        this.selectedIndex = index;
+        this._renderOverlay();
+        AudioManager.playSFX(this, 'menu_hover');
+      },
+      onConfirm: () => this._confirm(),
+      onBack: () => this._back(),
+    });
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.overlay?.destroy();
+      this.overlay = undefined;
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.overlay?.destroy();
+      this.overlay = undefined;
+    });
+  }
+
+  private _bindKeys(): void {
+    this.input.keyboard?.on('keydown-LEFT', () => this._move(-1));
+    this.input.keyboard?.on('keydown-RIGHT', () => this._move(1));
+    this.input.keyboard?.on('keydown-UP', () => this._move(-1));
+    this.input.keyboard?.on('keydown-DOWN', () => this._move(1));
+    this.input.keyboard?.on('keydown-ENTER', () => this._confirm());
+    this.input.keyboard?.on('keydown-ESC', () => this._back());
+  }
+
+  private _move(direction: number): void {
+    this.selectedIndex =
+      (this.selectedIndex + direction + CARD_CONFIGS.length) % CARD_CONFIGS.length;
+
+    this._renderOverlay();
     AudioManager.playSFX(this, 'menu_hover');
   }
 
-  private refresh(): void {
-    OPTIONS.forEach((opt, idx) => {
-      const selected = idx === this.selectedIndex;
-      opt.textObj?.setAlpha(selected ? 1 : 0.45);
-      opt.descObj?.setColor(selected ? '#aabbcc' : '#445566');
-      if (selected) {
-        opt.textObj?.setScale(1.05);
-      } else {
-        opt.textObj?.setScale(1);
-      }
-    });
+  private _renderOverlay(): void {
+    this.overlay?.render(this.selectedIndex);
   }
 
-  private confirm(): void {
-    const chosen = OPTIONS[this.selectedIndex];
-    DifficultyManager.get().setDifficulty(chosen.key);
+  private _confirm(): void {
+    const config = CARD_CONFIGS[this.selectedIndex];
+    if (!config) return;
+    DifficultyManager.get().setDifficulty(config.key);
+
     AudioManager.playSFX(this, 'ui_click');
-    this.cameras.main.fadeOut(280, 0, 0, 0);
+
+    this.cameras.main.fadeOut(180, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start('LevelScene', { level: 1 });
     });
   }
 
-  private back(): void {
+  private _back(): void {
     AudioManager.playSFX(this, 'menu_hover');
-    this.cameras.main.fadeOut(200, 0, 0, 0);
+
+    this.cameras.main.fadeOut(160, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
       this.scene.start(this.fromScene);
     });
+  }
+
+  private _lerpColor(a: number, b: number, t: number): number {
+    const ar = (a >> 16) & 0xff;
+    const ag = (a >> 8) & 0xff;
+    const ab = a & 0xff;
+
+    const br = (b >> 16) & 0xff;
+    const bg = (b >> 8) & 0xff;
+    const bb = b & 0xff;
+
+    const rr = Math.round(ar + (br - ar) * t);
+    const rg = Math.round(ag + (bg - ag) * t);
+    const rb = Math.round(ab + (bb - ab) * t);
+
+    return (rr << 16) | (rg << 8) | rb;
   }
 }
