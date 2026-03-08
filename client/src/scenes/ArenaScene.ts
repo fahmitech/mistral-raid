@@ -92,6 +92,8 @@ export class ArenaScene extends Phaser.Scene {
   private arenaEmbers: { sprite: Phaser.GameObjects.Ellipse; speed: number; drift: number }[] = [];
 
   private bossGlow!: Phaser.GameObjects.Arc;
+  private bossThinkingText!: Phaser.GameObjects.Text;
+  private bossThinkingPulseTween: Phaser.Tweens.Tween | null = null;
   private shieldGlow!: Phaser.GameObjects.Arc;
   private lastBossAiAt = 0;
 
@@ -209,6 +211,7 @@ export class ArenaScene extends Phaser.Scene {
       .arc(this.player.x, this.player.y, 12, 0, 360, false, 0x33aaff, 0)
       .setDepth(19)
       .setBlendMode(Phaser.BlendModes.ADD);
+    this.createBossThinkingIndicator();
     this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
       fontSize: '8px',
@@ -488,11 +491,52 @@ export class ArenaScene extends Phaser.Scene {
     this.micIndicator.setColor(color);
   }
 
+  private createBossThinkingIndicator(): void {
+    this.bossThinkingText = this.add.text(this.boss.x, this.boss.y - 20, '...', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ffee88',
+      stroke: '#000000',
+      strokeThickness: 2,
+      resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(19).setVisible(false);
+
+    this.bossThinkingPulseTween = this.tweens.add({
+      targets: this.bossThinkingText,
+      alpha: { from: 0.35, to: 1 },
+      duration: 420,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      paused: true,
+    });
+  }
+
+  private syncBossThinkingIndicator(): void {
+    const shouldShow = this.aiState === 'thinking';
+
+    if (shouldShow !== this.bossThinkingText.visible) {
+      this.bossThinkingText.setVisible(shouldShow);
+      if (shouldShow) {
+        this.bossThinkingPulseTween?.play();
+      } else {
+        this.bossThinkingPulseTween?.pause();
+        this.bossThinkingText.setAlpha(1);
+      }
+    }
+
+    if (shouldShow) {
+      const bossTopY = this.boss.y - this.boss.displayHeight * 0.55;
+      this.bossThinkingText.setPosition(this.boss.x, bossTopY);
+    }
+  }
+
   update(time: number, delta: number): void {
     this.lighting.update(this.player.x, this.player.y);
 
     // Boss red glow tracks boss position
     this.bossGlow.setPosition(this.boss.x, this.boss.y);
+    this.syncBossThinkingIndicator();
 
     // Shield glow — visible only while shield is active
     const shieldOn = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
@@ -720,6 +764,7 @@ export class ArenaScene extends Phaser.Scene {
       case 'ai_state':
         this.aiState = msg.payload.state;
         this.devConsole.setAIState(this.aiState);
+        this.syncBossThinkingIndicator();
         if (this.aiState === 'thinking') {
           this.analyzingOverlay.show();
         } else {
@@ -1104,6 +1149,9 @@ export class ArenaScene extends Phaser.Scene {
   shutdown(): void {
     this.lighting?.destroy();
     this.bossGlow?.destroy();
+    this.bossThinkingPulseTween?.stop();
+    this.bossThinkingPulseTween = null;
+    this.bossThinkingText?.destroy();
     this.shieldGlow?.destroy();
     this.arenaEmbers.forEach((p) => p.sprite.destroy());
     this.arenaEmbers = [];

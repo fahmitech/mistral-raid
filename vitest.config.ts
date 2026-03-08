@@ -4,7 +4,11 @@ import path from 'path'
 export default defineConfig({
   test: {
     setupFiles: ['./tests/helpers/setup.ts'],
-    include: ['tests/unit/**/*.test.ts'],
+    include: [
+      'tests/unit/**/*.test.ts',
+      'client/src/**/__tests__/**/*.test.ts',
+      'server/src/**/__tests__/**/*.test.ts'
+    ],
     environment: 'node',
     coverage: {
       provider: 'v8',

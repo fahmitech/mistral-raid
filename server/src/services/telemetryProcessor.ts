@@ -55,7 +55,7 @@ export function getSummary(session: Session): TelemetrySummary | null {
   return session.latestTelemetrySummary;
 }
 
-function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], timestamp: number): TelemetrySummary {
+export function buildSummary(recentSamples: SampleEntry[], longSamples: SampleEntry[], timestamp: number): TelemetrySummary {
   if (!recentSamples.length && !longSamples.length) {
     return {
       avgAccuracy: 0,
@@ -121,7 +121,7 @@ function pruneSamples(samples: SampleEntry[], cutoff: number): void {
   }
 }
 
-function computeWindowStats(samples: SampleEntry[]): {
+export function computeWindowStats(samples: SampleEntry[]): {
   avgAccuracy: number;
   cornerPercentage: number;
   dashCount: number;
@@ -166,4 +166,8 @@ function computeWindowStats(samples: SampleEntry[]): {
     sampleCount: samples.length,
     windowSeconds,
   };
+}
+
+export function clearTelemetryStateForTests(): void {
+  telemetryState.clear();
 }

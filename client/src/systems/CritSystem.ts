@@ -1,9 +1,9 @@
-import Phaser from 'phaser';
-import { Player } from '../entities/Player';
+import type Phaser from 'phaser';
+import type { Player } from '../entities/Player';
 
-const CRIT_CAP = 0.4;
-const HIT_COUNTER_CRIT_THRESHOLD = 10;
-const HIT_COUNTER_CRIT_GAIN = 0.02;
+export const CRIT_CAP = 0.4;
+export const HIT_COUNTER_CRIT_THRESHOLD = 10;
+export const HIT_COUNTER_CRIT_GAIN = 0.02;
 
 export class CritSystem {
   static calculateDamage(
