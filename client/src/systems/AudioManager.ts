@@ -11,7 +11,7 @@ import {
   AUDIO_VOLUMES_KEY,
 } from '../types/AudioTypes';
 
-const SERVER_URL = 'http://localhost:8787';
+const SERVER_URL = (import.meta as any).env?.VITE_SERVER_URL ?? 'http://localhost:8787';
 const MAX_BUFFERS = 60; // evict LRU beyond this
 
 // ─── Cooldowns (ms) ────────────────────────────────────────────────────────────
