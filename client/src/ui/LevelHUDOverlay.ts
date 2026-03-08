@@ -59,7 +59,7 @@ export class LevelHUDOverlay {
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
-      padding: '8px 10px',
+      padding: '20px 12px 10px',
       fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
       fontSize: '9px',
       color: '#d5e0ff',

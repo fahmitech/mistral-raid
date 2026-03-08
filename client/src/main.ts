@@ -34,7 +34,7 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.ENVELOP,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: INTERNAL_WIDTH,
     height: INTERNAL_HEIGHT,
@@ -68,8 +68,11 @@ const startGame = () => {
   game = new Phaser.Game(config);
 
   const updateIntegerZoom = () => {
-    const maxZoom = game.scale.getMaxZoom();
-    const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
+    const parentWidth = game.scale.parentSize.width;
+    const parentHeight = game.scale.parentSize.height;
+    const zoomX = parentWidth / INTERNAL_WIDTH;
+    const zoomY = parentHeight / INTERNAL_HEIGHT;
+    const nextZoom = Math.max(1, Math.ceil(Math.max(zoomX, zoomY)));
     if (game.scale.zoom !== nextZoom) {
       game.scale.setZoom(nextZoom);
     }
