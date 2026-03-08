@@ -172,6 +172,10 @@ export interface GameStateData {
   isMultiShot: boolean;
   dashCharges: number;
   activeBuffs: string[]; // Buff ID array (BuffType strings)
+  // RM-5: Persistent story state
+  loreDiscovered: string[];
+  bossHistory: string[];
+  sanctumReached: boolean;
 }
 
 export interface SaveData {

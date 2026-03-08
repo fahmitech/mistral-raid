@@ -31,6 +31,12 @@ export interface Session {
   // Director state
   directorInterval: ReturnType<typeof setInterval> | null;
   lastDirectorDecision: { difficultyDelta: number; enemyBias: string; reason: string } | null;
+  // Story state (RM-4, RM-5)
+  levelTag: string;
+  loreDiscovered: string[];
+  bossHistory: string[];
+  playerClass: string;
+  sanctumReached: boolean;
 }
 
 // ── Telemetry ───────────────────────────────────────────────────
@@ -54,6 +60,35 @@ export interface RawTelemetry {
   skippedMandatoryLore?: number;
   retreatDistance?: number;          // px moved backward
   wallBias?: number;                 // 0-100 %
+}
+
+export interface SampleEntry {
+  sample: RawTelemetry;
+  dashDelta: number;
+  loreInteractionDelta: number;
+  loreReadTimeDelta: number;
+  skippedLoreDelta: number;
+  retreatDelta: number;
+  time: number;
+}
+
+export interface SessionTelemetryState {
+  recentSamples: SampleEntry[];
+  longSamples: SampleEntry[];
+  lastSummaryAt: number;
+  lastDashCount: number | null;
+  lastLoreInteractionCount: number | null;
+  lastLoreReadTime: number | null;
+  lastSkippedLore: number | null;
+  lastRetreatDistance: number | null;
+  // Session totals
+  sessionDashCount: number;
+  sessionLoreInteractionCount: number;
+  sessionLoreReadTimeSum: number;
+  sessionLoreReadTimeCount: number;
+  sessionSkippedLore: number;
+  sessionRetreatDistance: number;
+  logCounter: number;
 }
 
 export interface TelemetrySummary {
@@ -82,6 +117,31 @@ export interface TelemetrySummary {
     sampleCount: number;
     windowSeconds: number;
   };
+}
+
+// ── RM-2: Player Psychological Profile ─────────────────────────
+export interface PlayerProfile {
+  aggression: 'reckless' | 'aggressive' | 'balanced' | 'cautious' | 'passive';
+  movementStyle: 'erratic' | 'evasive' | 'methodical' | 'static';
+  loreBehavior: 'obsessive' | 'engaged' | 'selective' | 'dismissive' | 'ignorant';
+  panicResponse: 'composed' | 'reactive' | 'erratic' | 'freezing';
+  environmentUsage: 'wall_reliant' | 'center_preferring' | 'roaming' | 'corner_locked';
+  healingStyle: 'proactive' | 'reactive' | 'reckless' | 'none';
+}
+
+export interface StoryContext {
+  levelTag: string;
+  loreDiscovered: string[];
+  bossHistory: string[];
+  playerClass: string;
+  runSummary: PlayerProfile;
+  sanctumReached: boolean;
+}
+
+// ── RM-3: Director Narrative ───────────────────────────────────
+export interface DirectorNarrativeResult {
+  narrativeLabel: string;  // e.g. "escalating_commitment"
+  narrativeLine: string;   // e.g. "The dungeon grows impatient."
 }
 
 export type BossMovementMode =
@@ -169,6 +229,10 @@ export interface CompanionContext {
   playerMaxHP: number;
   level: number;
   coins: number;
+  // Story context (RM-6)
+  loreDiscovered?: string[];
+  bossHistory?: string[];
+  playerProfile?: PlayerProfile;
 }
 
 export interface CompanionReply {
@@ -195,7 +259,7 @@ export type ServerToClientMessage =
   | { type: 'AUDIO_DONE'; payload: { format: 'mp3' | 'wav' | 'ogg' } }
   | { type: 'AUDIO_READY'; payload: { audioBase64: string; format: 'mp3' } }
   | { type: 'mechanics_update'; payload: MechanicConfig }
-  | { type: 'director_update'; payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'director_update'; payload: { difficultyDelta: number; enemyBias: string; reason: string; narrativeLabel: string; narrativeLine: string; timestamp: number } }
   | { type: 'BOSS_DIRECTIVE'; payload: BossDirective }
   | { type: 'ENEMY_DIRECTIVE'; payload: EnemyDirective }
   | { type: 'AI_ASSISTANT_REPLY'; payload: CompanionReply }

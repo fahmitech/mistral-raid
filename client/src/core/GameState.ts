@@ -90,6 +90,11 @@ export class GameState {
       this.data.dashCharges = DASH_MAX_CHARGES;
     }
     this.data.dashCharges = Math.max(0, Math.min(DASH_MAX_CHARGES, this.data.dashCharges));
+
+    // RM-5: Restore story state
+    this.data.loreDiscovered = Array.isArray(save.state.loreDiscovered) ? [...save.state.loreDiscovered] : [];
+    this.data.bossHistory = Array.isArray(save.state.bossHistory) ? [...save.state.bossHistory] : [];
+    this.data.sanctumReached = Boolean(save.state.sanctumReached);
   }
 
   setHP(hp: number): void {
@@ -252,6 +257,9 @@ export class GameState {
       isMultiShot: false,
       dashCharges: DASH_MAX_CHARGES,
       activeBuffs: [],
+      loreDiscovered: [],
+      bossHistory: [],
+      sanctumReached: false,
     };
   }
 
@@ -273,6 +281,23 @@ export class GameState {
 
   resetBuffs(): void {
     this.data.activeBuffs = [];
+  }
+
+  // RM-5 Story Methods
+  recordLore(id: string): void {
+    if (!this.data.loreDiscovered.includes(id)) {
+      this.data.loreDiscovered.push(id);
+    }
+  }
+
+  recordBossDefeat(id: string): void {
+    if (!this.data.bossHistory.includes(id)) {
+      this.data.bossHistory.push(id);
+    }
+  }
+
+  setSanctumReached(reached = true): void {
+    this.data.sanctumReached = reached;
   }
 }
 

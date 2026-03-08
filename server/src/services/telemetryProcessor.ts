@@ -1,32 +1,5 @@
-import type { RawTelemetry, Session, TelemetrySummary } from '../types.js';
-
-interface SampleEntry {
-  sample: RawTelemetry;
-  dashDelta: number;
-  loreInteractionDelta: number;
-  loreReadTimeDelta: number;
-  skippedLoreDelta: number;
-  retreatDelta: number;
-  time: number;
-}
-
-interface SessionTelemetryState {
-  recentSamples: SampleEntry[];
-  longSamples: SampleEntry[];
-  lastSummaryAt: number;
-  lastDashCount: number | null;
-  lastLoreInteractionCount: number | null;
-  lastLoreReadTime: number | null;
-  lastSkippedLore: number | null;
-  lastRetreatDistance: number | null;
-  // Session totals
-  sessionDashCount: number;
-  sessionLoreInteractionCount: number;
-  sessionLoreReadTimeSum: number;
-  sessionLoreReadTimeCount: number;
-  sessionSkippedLore: number;
-  sessionRetreatDistance: number;
-}
+import type { RawTelemetry, Session, TelemetrySummary, SampleEntry, SessionTelemetryState } from '../types.js';
+import { logger } from './loggingService.js';
 
 const telemetryState = new Map<string, SessionTelemetryState>();
 
@@ -52,6 +25,7 @@ function getState(sessionId: string): SessionTelemetryState {
     sessionLoreReadTimeCount: 0,
     sessionSkippedLore: 0,
     sessionRetreatDistance: 0,
+    logCounter: 0,
   };
   telemetryState.set(sessionId, state);
   return state;
@@ -61,24 +35,32 @@ export function ingest(session: Session, raw: RawTelemetry): void {
   const state = getState(session.id);
   const now = Date.now();
 
+  // Log raw telemetry to production log file (Sampled 1 in 10)
+  state.logCounter++;
+  if (state.logCounter % 10 === 0) {
+    logger.writeLog('telemetry', { sessionId: session.id, raw });
+  }
+
+  const isFirst = state.lastDashCount === null;
+
   const lastDash = state.lastDashCount ?? 0;
-  const dashDelta = Math.max(0, raw.dashCount - lastDash);
+  const dashDelta = isFirst ? 0 : Math.max(0, raw.dashCount - lastDash);
   state.lastDashCount = raw.dashCount;
 
   const lastLoreInt = state.lastLoreInteractionCount ?? 0;
-  const loreInteractionDelta = Math.max(0, (raw.loreInteractionCount ?? 0) - lastLoreInt);
+  const loreInteractionDelta = isFirst ? 0 : Math.max(0, (raw.loreInteractionCount ?? 0) - lastLoreInt);
   state.lastLoreInteractionCount = raw.loreInteractionCount ?? 0;
 
   const lastReadTime = state.lastLoreReadTime ?? 0;
-  const loreReadTimeDelta = Math.max(0, (raw.timeSpentReadingLore ?? 0) - lastReadTime);
+  const loreReadTimeDelta = isFirst ? 0 : Math.max(0, (raw.timeSpentReadingLore ?? 0) - lastReadTime);
   state.lastLoreReadTime = raw.timeSpentReadingLore ?? 0;
 
   const lastSkipped = state.lastSkippedLore ?? 0;
-  const skippedLoreDelta = Math.max(0, (raw.skippedMandatoryLore ?? 0) - lastSkipped);
+  const skippedLoreDelta = isFirst ? 0 : Math.max(0, (raw.skippedMandatoryLore ?? 0) - lastSkipped);
   state.lastSkippedLore = raw.skippedMandatoryLore ?? 0;
 
   const lastRetreat = state.lastRetreatDistance ?? 0;
-  const retreatDelta = Math.max(0, (raw.retreatDistance ?? 0) - lastRetreat);
+  const retreatDelta = isFirst ? 0 : Math.max(0, (raw.retreatDistance ?? 0) - lastRetreat);
   state.lastRetreatDistance = raw.retreatDistance ?? 0;
 
   // Update session totals
@@ -114,7 +96,7 @@ export function getSummary(session: Session): TelemetrySummary | null {
   return session.latestTelemetrySummary;
 }
 
-function buildSummary(state: SessionTelemetryState, timestamp: number): TelemetrySummary {
+export function buildSummary(state: SessionTelemetryState, timestamp: number): TelemetrySummary {
   const { recentSamples, longSamples } = state;
   if (!recentSamples.length && !longSamples.length) {
     return {
@@ -243,7 +225,8 @@ function computeWindowStats(samples: SampleEntry[]): {
     dashSum += entry.dashDelta;
     const zone = entry.sample.playerZone;
     zoneCounts.set(zone, (zoneCounts.get(zone) ?? 0) + 1);
-    // Story fields (using deltas for totals)
+
+    // Story fields
     loreInteractionSum += entry.loreInteractionDelta;
     loreReadTimeSum += entry.loreReadTimeDelta;
     if (entry.loreReadTimeDelta > 0) { loreReadTimeCount += 1; }

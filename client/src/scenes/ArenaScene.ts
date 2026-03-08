@@ -94,6 +94,12 @@ export class ArenaScene extends Phaser.Scene {
   private bossGlow!: Phaser.GameObjects.Arc;
   private shieldGlow!: Phaser.GameObjects.Arc;
   private lastBossAiAt = 0;
+  private loreItems!: Phaser.GameObjects.Group;
+  private activeLoreText: Phaser.GameObjects.Text | null = null;
+  private activeLoreBg: Phaser.GameObjects.Rectangle | null = null;
+  private isReadingLore = false;
+  private mandatoryLoreZones: Phaser.Geom.Rectangle[] = [];
+  private triggeredMandatoryLore = new Set<number>();
 
   constructor() {
     super('ArenaScene');
@@ -227,7 +233,7 @@ export class ArenaScene extends Phaser.Scene {
       boss: this.boss,
       onDamage: (amount, source) => this.damagePlayer(amount, source),
       onOrbDestroyed: () => this.telemetry.recordOrbDestroyed(),
-      onMinionKilled: () => {},
+      onMinionKilled: () => { },
     });
 
     this.setupNetworking();
@@ -348,18 +354,18 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildArenaEnvironment(): void {
-    const TILE_COLS = Math.ceil(INTERNAL_WIDTH  / TILE_SIZE); // 20
+    const TILE_COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE); // 20
     const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE); // 12
 
     // ── Resolve tile keys with fallbacks ──────────────────────────────────
     const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
     const stainKeys = ['floor_stain_1', 'floor_stain_2'];
-    const wallKey     = this.textures.exists('wall_mid')                 ? 'wall_mid'                 : 'floor_1';
-    const wallTopKey  = this.textures.exists('wall_top_mid')             ? 'wall_top_mid'             : wallKey;
-    const cornerTLKey = this.textures.exists('wall_corner_top_left')     ? 'wall_corner_top_left'     : wallTopKey;
-    const cornerTRKey = this.textures.exists('wall_corner_top_right')    ? 'wall_corner_top_right'    : wallTopKey;
-    const cornerBLKey = this.textures.exists('wall_corner_front_left')   ? 'wall_corner_front_left'   : wallKey;
-    const cornerBRKey = this.textures.exists('wall_corner_front_right')  ? 'wall_corner_front_right'  : wallKey;
+    const wallKey = this.textures.exists('wall_mid') ? 'wall_mid' : 'floor_1';
+    const wallTopKey = this.textures.exists('wall_top_mid') ? 'wall_top_mid' : wallKey;
+    const cornerTLKey = this.textures.exists('wall_corner_top_left') ? 'wall_corner_top_left' : wallTopKey;
+    const cornerTRKey = this.textures.exists('wall_corner_top_right') ? 'wall_corner_top_right' : wallTopKey;
+    const cornerBLKey = this.textures.exists('wall_corner_front_left') ? 'wall_corner_front_left' : wallKey;
+    const cornerBRKey = this.textures.exists('wall_corner_front_right') ? 'wall_corner_front_right' : wallKey;
 
     // ── Full grid coverage using individual images (no RenderTexture) ─────
     // Every cell is drawn as a plain add.image — 100% reliable, no RT batching issues.
@@ -368,21 +374,21 @@ export class ArenaScene extends Phaser.Scene {
         const px = col * TILE_SIZE;
         const py = row * TILE_SIZE;
 
-        const isTopHeader  = row === 0;
-        const isTopWall    = row === 1;
+        const isTopHeader = row === 0;
+        const isTopWall = row === 1;
         const isBottomWall = row >= TILE_ROWS - 2;
-        const isLeftWall   = col === 0;
-        const isRightWall  = col === TILE_COLS - 1;
+        const isLeftWall = col === 0;
+        const isRightWall = col === TILE_COLS - 1;
 
         let key: string;
         if (isTopHeader) {
-          if      (isLeftWall)  key = cornerTLKey;
+          if (isLeftWall) key = cornerTLKey;
           else if (isRightWall) key = cornerTRKey;
-          else                  key = wallTopKey;
+          else key = wallTopKey;
         } else if (isBottomWall) {
-          if      (isLeftWall)  key = cornerBLKey;
+          if (isLeftWall) key = cornerBLKey;
           else if (isRightWall) key = cornerBRKey;
-          else                  key = wallKey;
+          else key = wallKey;
         } else if (isLeftWall || isRightWall || isTopWall) {
           key = wallKey;
         } else {
@@ -402,7 +408,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Banners (2 on top wall) ────────────────────────────────────────────
     const bannerKeys = ['wall_banner_red', 'wall_banner_blue', 'wall_banner_green', 'wall_banner_yellow'];
-    const bannerKey  = bannerKeys.find((k) => this.textures.exists(k));
+    const bannerKey = bannerKeys.find((k) => this.textures.exists(k));
     const bannerCols = [5, 14];
     if (bannerKey) {
       bannerCols.forEach((col) =>
@@ -416,32 +422,58 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
 
-    // ── Crates near 4 corners of the arena interior ───────────────────────
+    // ── Lore Items (Crates) ───────────────────────────────────────────────
+    this.loreItems = this.add.group();
     const crateKeys = ['chest_empty_open_anim_f0', 'chest_empty', 'chest_full', 'chest_full_open_anim_f0'];
-    const crateKey  = crateKeys.find((k) => this.textures.exists(k));
+    const crateKey = crateKeys.find((k) => this.textures.exists(k));
+    const loreSnippets = [
+      { id: "lore_fragment_412", text: "Fragment 412: The subject shows increasing resistance to the stimulus." },
+      { id: "lore_walls_breathing", text: "The walls are breathing. Or maybe it's just the cooling fans." },
+      { id: "lore_entry_08", text: "ENTRY 08: Do not trust the silence. It is just the Watcher thinking." },
+      { id: "lore_arena_lie", text: "They promised a way out. They lied. There is only the arena." }
+    ];
+
     const cratePositions: [number, number][] = [
       [2, 2], [TILE_COLS - 3, 2], [2, TILE_ROWS - 3], [TILE_COLS - 3, TILE_ROWS - 3],
     ];
-    cratePositions.forEach(([col, row]) => {
+    loreSnippets.forEach((data, idx) => {
+      const [col, row] = cratePositions[idx];
       const cx = col * TILE_SIZE + 8;
       const cy = row * TILE_SIZE + 8;
+      let sprite: Phaser.GameObjects.GameObject;
       if (crateKey) {
-        this.add.sprite(cx, cy, crateKey).setDepth(2);
+        sprite = this.add.sprite(cx, cy, crateKey).setDepth(2);
       } else {
         const cg = this.add.graphics().setDepth(2);
         cg.fillStyle(0x554433, 1);
         cg.fillRect(cx - 6, cy - 6, 12, 12);
-        cg.lineStyle(1, 0x776655, 1);
-        cg.strokeRect(cx - 6, cy - 6, 12, 12);
+        sprite = cg;
       }
+      sprite.setData('lore', data.text);
+      sprite.setData('loreId', data.id);
+      this.loreItems.add(sprite);
     });
+
+    // Mandatory Lore Trigger (near boss)
+    this.mandatoryLoreZones.push(new Phaser.Geom.Rectangle(INTERNAL_WIDTH / 2 - 40, 60, 80, 40));
+
+    // Lore HUD
+    this.activeLoreBg = this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 60, INTERNAL_WIDTH - 40, 40, 0x000000, 0.8)
+      .setScrollFactor(0).setDepth(100).setVisible(false);
+    this.activeLoreText = this.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 60, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ffffff',
+      wordWrap: { width: INTERNAL_WIDTH - 60 },
+      align: 'center'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101).setVisible(false);
 
     // ── 4 torches — 2 on top wall, 2 on bottom wall ───────────────────────
     const torchPositions = [
-      { x: 2  * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-left
-      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-right
-      { x: 2  * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-left
-      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-right
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-right
+      { x: 2 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-right
     ];
     torchPositions.forEach(({ x, y }) => {
       const torch = this.add.sprite(x, y, 'torch_1').setDepth(2);
@@ -452,7 +484,7 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaEmbers = [];
     torchPositions.forEach(({ x, y }) => {
       for (let i = 0; i < 6; i++) {
-        const size  = Phaser.Math.FloatBetween(1, 2);
+        const size = Phaser.Math.FloatBetween(1, 2);
         const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
         const sprite = this.add
           .ellipse(
@@ -559,8 +591,48 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.bossHp <= 0 && this.arenaPhase !== 'VICTORY') {
       this.arenaPhase = 'VICTORY';
+      GameState.get().recordBossDefeat(this.boss.config.type);
       this.scene.start('VictoryScene');
     }
+
+    this.handleLoreInteractions();
+  }
+
+  private handleLoreInteractions(): void {
+    let nearAny = false;
+    this.loreItems.getChildren().forEach((obj: any) => {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x || 0, obj.y || 0);
+      if (dist < 40) {
+        nearAny = true;
+        if (!this.isReadingLore) {
+          this.isReadingLore = true;
+          this.activeLoreBg?.setVisible(true);
+          this.activeLoreText?.setVisible(true);
+          this.activeLoreText?.setText(obj.getData('lore'));
+          this.telemetry.recordLoreInteraction();
+          GameState.get().recordLore(obj.getData('loreId'));
+        }
+      }
+    });
+
+    if (!nearAny && this.isReadingLore) {
+      this.isReadingLore = false;
+      this.activeLoreBg?.setVisible(false);
+      this.activeLoreText?.setVisible(false);
+      this.telemetry.recordLoreClose();
+    }
+
+    // Check mandatory lore skips
+    this.mandatoryLoreZones.forEach((zone, idx) => {
+      if (!this.triggeredMandatoryLore.has(idx)) {
+        if (zone.contains(this.player.x, this.player.y)) {
+          this.triggeredMandatoryLore.add(idx);
+          if (!this.isReadingLore) {
+            this.telemetry.recordMandatoryLoreSkipped();
+          }
+        }
+      }
+    });
   }
 
   private setupNetworking(): void {
@@ -650,7 +722,7 @@ export class ArenaScene extends Phaser.Scene {
   private scheduleTtsFallback(): void {
     this.cancelTtsFallback();
     this.waitingForTTS = true;
-    this.ttsFallbackTimer = this.time.delayedCall(2600, () => {
+    this.ttsFallbackTimer = this.time.delayedCall(7000, () => {
       this.ttsFallbackTimer = null;
       if (!this.waitingForTTS) return;
       this.waitingForTTS = false;
@@ -684,9 +756,15 @@ export class ArenaScene extends Phaser.Scene {
     if (!wsClient.isConnected) return;
     this.introTauntSent = true;
 
+    const story = GameState.get().getData();
     const payload = {
       ...this.telemetry.compile('player-1'),
       player_said: 'I have entered your arena. Show me what you are.',
+      level_tag: `level_${story.level}`,
+      lore_discovered: story.loreDiscovered,
+      boss_history: story.bossHistory,
+      player_class: story.character,
+      sanctum_reached: story.sanctumReached
     };
     wsClient.send({ type: 'ANALYZE', payload });
     this.devConsole.setTTSStatus('waiting');
@@ -709,7 +787,15 @@ export class ArenaScene extends Phaser.Scene {
     this.telemetry.setPlayerHpAtTransition(GameState.get().getData().playerHP);
     this.telemetry.setPhaseForcedByTimeout(forcedByTimeout);
 
-    const payload = this.telemetry.compile('player-1');
+    const story = GameState.get().getData();
+    const payload = {
+      ...this.telemetry.compile('player-1'),
+      level_tag: `level_${story.level}`,
+      lore_discovered: story.loreDiscovered,
+      boss_history: story.bossHistory,
+      player_class: story.character,
+      sanctum_reached: story.sanctumReached
+    };
     wsClient.send({ type: 'ANALYZE', payload });
     this.devConsole.setTTSStatus('waiting');
   }
@@ -904,8 +990,8 @@ export class ArenaScene extends Phaser.Scene {
           createdAt: this.time.now,
         });
       },
-      spawnEnemy: () => {},
-      shake: () => {},
+      spawnEnemy: () => { },
+      shake: () => { },
     };
     this.boss.updateAI(this.player, time, actions);
   }

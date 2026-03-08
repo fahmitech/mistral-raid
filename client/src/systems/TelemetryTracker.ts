@@ -44,6 +44,9 @@ export class TelemetryTracker {
   private wallProximitySamples = 0;
   private wallProximityHits = 0;
   private lastEnemyDistance: number | null = null;
+  private lastLoreOpenTime: number | null = null;
+  private worldWidth: number | null = null;
+  private worldHeight: number | null = null;
 
   startPhase(bossMaxHp: number): void {
     this.heatmap = this.defaultHeatmap();
@@ -67,6 +70,7 @@ export class TelemetryTracker {
     this.reactionTimes = [];
     this.playerHpAtTransition = 0;
     this.phaseForcedByTimeout = false;
+
     // Story-aware resets
     this.loreInteractionCount = 0;
     this.loreReadTimes = [];
@@ -76,6 +80,7 @@ export class TelemetryTracker {
     this.wallProximitySamples = 0;
     this.wallProximityHits = 0;
     this.lastEnemyDistance = null;
+    this.lastLoreOpenTime = null;
   }
 
   update(player: Player, boss: Phaser.GameObjects.Sprite | null, delta: number): void {
@@ -182,6 +187,14 @@ export class TelemetryTracker {
   // ── Story-aware recording methods ─────────────────────────────
   recordLoreInteraction(): void {
     this.loreInteractionCount += 1;
+    this.lastLoreOpenTime = performance.now();
+  }
+
+  recordLoreClose(): void {
+    if (this.lastLoreOpenTime !== null) {
+      this.loreReadTimes.push((performance.now() - this.lastLoreOpenTime) / 1000);
+      this.lastLoreOpenTime = null;
+    }
   }
 
   recordLoreRead(durationMs: number): void {
@@ -195,9 +208,6 @@ export class TelemetryTracker {
   recordMandatoryLoreSkipped(): void {
     this.skippedMandatoryLore += 1;
   }
-
-  private worldWidth: number | null = null;
-  private worldHeight: number | null = null;
 
   getCurrentZone(x: number, y: number): string {
     return this.computeZone(x, y);
@@ -228,9 +238,6 @@ export class TelemetryTracker {
 
     const wallBias = this.wallProximitySamples > 0
       ? (this.wallProximityHits / this.wallProximitySamples) * 100
-      : 0;
-    const avgLoreReadTime = this.loreReadTimes.length > 0
-      ? this.loreReadTimes.reduce((s, v) => s + v, 0) / this.loreReadTimes.length
       : 0;
     const avgLoreLingerTime = this.loreLingerTimes.length > 0
       ? this.loreLingerTimes.reduce((s, v) => s + v, 0) / this.loreLingerTimes.length

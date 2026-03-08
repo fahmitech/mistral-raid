@@ -92,6 +92,9 @@ export interface CompanionContext {
   playerMaxHP: number;
   level: number;
   coins: number;
+  // Story context (RM-6)
+  loreDiscovered?: string[];
+  bossHistory?: string[];
 }
 
 export interface CompanionReply {
