@@ -3,26 +3,13 @@ import { AudioManager } from '../systems/AudioManager';
 import { MenuOverlay, MenuOverlayItem } from '../ui/MenuOverlay';
 
 // ─── Design constants (mirrors our React mockup) ──────────────────────────
-const W = 320;
-const H = 180;
-
-// Arch portal dimensions (scaled from 1280×720 → 320×180)
-const ARCH_CX   = 160;   // centre x
-const ARCH_TOP  = 50;    // top of rectangular sides (where arc begins)
-const ARCH_BOT  = 148;   // bottom of void — extended deeper, leaves only a thin floor strip
-const ARCH_RX   = 65;    // horizontal radius of the rounded top arc
-const ARCH_RY   = 50;    // vertical radius
-const ARCH_L    = ARCH_CX - ARCH_RX;  // 95
-const ARCH_R    = ARCH_CX + ARCH_RX;  // 225
-
 // Stone tile size
 const TILE_W = 10;
-const TILE_H =  9;
+const TILE_H = 9;
 
 // Menu layout
-const MENU_X    = ARCH_CX;
-const MENU_TOP  = 64;    // y of first item
-const ITEM_GAP  = 9;
+const MENU_TOP = 64;    // y of first item
+const ITEM_GAP = 9;
 const MENU_FONT = '"Press Start 2P", monospace';
 const MENU_TEXT_SCALE = 1;
 const HUD_TEXT_COLOR = '#fef3c7';
@@ -98,8 +85,8 @@ export class MenuScene extends Phaser.Scene {
     }
 
     // Keyboard nav
-    this.input.keyboard?.on('keydown-UP',    () => this.moveSelection(-1));
-    this.input.keyboard?.on('keydown-DOWN',  () => this.moveSelection(1));
+    this.input.keyboard?.on('keydown-UP', () => this.moveSelection(-1));
+    this.input.keyboard?.on('keydown-DOWN', () => this.moveSelection(1));
     this.input.keyboard?.on('keydown-ENTER', () => this.activateSelection());
 
   }
@@ -144,8 +131,8 @@ export class MenuScene extends Phaser.Scene {
         this.glitchIntensity -= delta / 320;
         if (this.glitchIntensity <= 0) {
           this.glitchIntensity = 0;
-          this.eventPhase  = 'idle';
-          this.eventTimer  = 0;
+          this.eventPhase = 'idle';
+          this.eventTimer = 0;
           this.eventNextIn = 4200 + Math.random() * 3200;
         }
         break;
@@ -153,7 +140,7 @@ export class MenuScene extends Phaser.Scene {
 
     // Convenience booleans for sub-systems
     const torchFlickering = this.eventPhase === 'flicker';
-    const torchDark       = this.eventPhase === 'dark' || this.eventPhase === 'restore';
+    const torchDark = this.eventPhase === 'dark' || this.eventPhase === 'restore';
 
     this.updateTorches(torchFlickering, torchDark);
     this.updateTitle(torchDark);
@@ -169,35 +156,44 @@ export class MenuScene extends Phaser.Scene {
 
   /** Full-screen dungeon hallway: floor, ceiling, side walls with stone tiles */
   private createDungeonHallway(): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    const centerX = this.cameras.main.centerX;
+
+    const archRx = 65;
+    const archRy = 50;
+    const archTop = 50;
+    const archBot = 148;
+    const archL = centerX - archRx;
+    const archR = centerX + archRx;
+
     const gfx = this.add.graphics();
-
-    // ── Sky / void base ──
     gfx.fillStyle(0x000005, 1);
-    gfx.fillRect(0, 0, W, H);
+    gfx.fillRect(0, 0, width, height);
 
-    // ── LEFT WALL — perspective trapezoid, stone tiles ──
+    // ── LEFT WALL ──
     this.drawStoneTrapezoid(gfx,
-      [{ x: 0, y: 0 }, { x: ARCH_L, y: ARCH_TOP }, { x: ARCH_L, y: ARCH_BOT }, { x: 0, y: H }],
+      [{ x: 0, y: 0 }, { x: archL, y: archTop }, { x: archL, y: archBot }, { x: 0, y: height }],
       'left'
     );
 
     // ── RIGHT WALL ──
     this.drawStoneTrapezoid(gfx,
-      [{ x: W, y: 0 }, { x: ARCH_R, y: ARCH_TOP }, { x: ARCH_R, y: ARCH_BOT }, { x: W, y: H }],
+      [{ x: width, y: 0 }, { x: archR, y: archTop }, { x: archR, y: archBot }, { x: width, y: height }],
       'right'
     );
 
     // ── CEILING ──
     this.drawStoneTrapezoid(gfx,
-      [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: ARCH_R, y: ARCH_TOP }, { x: ARCH_L, y: ARCH_TOP }],
+      [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: archR, y: archTop }, { x: archL, y: archTop }],
       'ceil'
     );
 
     // ── FLOOR ──
     this.drawStoneTrapezoid(gfx,
-      [{ x: 0, y: H }, { x: W, y: H }, { x: ARCH_R, y: ARCH_BOT }, { x: ARCH_L, y: ARCH_BOT }],
+      [{ x: 0, y: height }, { x: width, y: height }, { x: archR, y: archBot }, { x: archL, y: archBot }],
       'floor',
-      0x080710   // darker floor base
+      0x080710
     );
 
     // Store reference to redraw wall glow
@@ -216,21 +212,23 @@ export class MenuScene extends Phaser.Scene {
     gfx.fillPoints(poly as Phaser.Types.Math.Vector2Like[], true);
 
     // Stone tile grid — clipped by drawing only tiles whose centre is inside the polygon
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
     const isInsidePoly = (px: number, py: number) => {
       let inside = false;
       for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
         const xi = poly[i].x, yi = poly[i].y;
         const xj = poly[j].x, yj = poly[j].y;
         if (((yi > py) !== (yj > py)) &&
-            (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+          (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
           inside = !inside;
         }
       }
       return inside;
     };
 
-    const cols = Math.ceil(W / TILE_W) + 2;
-    const rows = Math.ceil(H / TILE_H) + 2;
+    const cols = Math.ceil(width / TILE_W) + 2;
+    const rows = Math.ceil(height / TILE_H) + 2;
 
     // Seeded random for consistent cracks
     const seededRandom = (seed: number) => {
@@ -393,12 +391,19 @@ export class MenuScene extends Phaser.Scene {
   /** The dark arch portal — rounded top, straight sides */
   private createVoid(): void {
     const gfx = this.add.graphics();
+    const centerX = this.cameras.main.centerX;
+    const archRx = 65;
+    const archRy = 50;
+    const archTop = 50;
+    const archBot = 148;
+    const archL = centerX - archRx;
+    const archR = centerX + archRx;
 
     // Solid void fill using fillPath (rect body + arc cap)
     gfx.fillStyle(0x010008, 1);
 
     // Body: rectangle from arc centre down to bottom
-    gfx.fillRect(ARCH_L, ARCH_TOP, ARCH_RX * 2, ARCH_BOT - ARCH_TOP);
+    gfx.fillRect(archL, archTop, archRx * 2, archBot - archTop);
 
     // Rounded cap: filled arc at top (half ellipse)
     // Approximate with a polygon
@@ -407,32 +412,32 @@ export class MenuScene extends Phaser.Scene {
     for (let i = 0; i <= steps; i++) {
       const angle = Math.PI + (i / steps) * Math.PI; // π → 2π (bottom half of circle = top of arch)
       arcPoints.push({
-        x: ARCH_CX + Math.cos(angle) * ARCH_RX,
-        y: ARCH_TOP + Math.sin(angle) * ARCH_RY,   // sin goes negative = upward
+        x: centerX + Math.cos(angle) * archRx,
+        y: archTop + Math.sin(angle) * archRy,   // sin goes negative = upward
       });
     }
     // Close with the rectangle bottom corners
-    arcPoints.push({ x: ARCH_R, y: ARCH_TOP });
-    arcPoints.push({ x: ARCH_L, y: ARCH_TOP });
+    arcPoints.push({ x: archR, y: archTop });
+    arcPoints.push({ x: archL, y: archTop });
     gfx.fillPoints(arcPoints as Phaser.Types.Math.Vector2Like[], true);
 
     // Receding corridor perspective lines
     gfx.lineStyle(0.5, 0x1a1438, 0.5);
     for (let i = 0; i <= 6; i++) {
-      const t  = i / 6;
-      const lx = ARCH_L + t * ARCH_RX;
-      const ly = ARCH_TOP - (1 - t) * 8;
-      gfx.strokeLineShape(new Phaser.Geom.Line(lx, ly, ARCH_CX, ARCH_TOP + (ARCH_BOT - ARCH_TOP) * 0.52));
-      const rx = ARCH_R - t * ARCH_RX;
-      gfx.strokeLineShape(new Phaser.Geom.Line(rx, ly, ARCH_CX, ARCH_TOP + (ARCH_BOT - ARCH_TOP) * 0.52));
+      const t = i / 6;
+      const lx = archL + t * archRx;
+      const ly = archTop - (1 - t) * 8;
+      gfx.strokeLineShape(new Phaser.Geom.Line(lx, ly, centerX, archTop + (archBot - archTop) * 0.52));
+      const rx = archR - t * archRx;
+      gfx.strokeLineShape(new Phaser.Geom.Line(rx, ly, centerX, archTop + (archBot - archTop) * 0.52));
     }
 
     // Perspective rings inside void
     [[0.25, 0x1c1240], [0.45, 0x150e30], [0.6, 0x0f0a20]].forEach(([t, col], i) => {
-      const lx = ARCH_L + (t as number) * ARCH_RX;
-      const rx = ARCH_R - (t as number) * ARCH_RX;
-      const ty = ARCH_TOP + (t as number) * (ARCH_BOT - ARCH_TOP) * 0.55;
-      const by = ARCH_BOT - (t as number) * (ARCH_BOT - ARCH_TOP) * 0.40;
+      const lx = archL + (t as number) * archRx;
+      const rx = archR - (t as number) * archRx;
+      const ty = archTop + (t as number) * (archBot - archTop) * 0.55;
+      const by = archBot - (t as number) * (archBot - archTop) * 0.40;
       gfx.lineStyle(0.8, col as number, 0.5 - i * 0.1);
       gfx.strokeRect(lx, ty, rx - lx, by - ty);
     });
@@ -443,24 +448,24 @@ export class MenuScene extends Phaser.Scene {
     for (let i = 0; i < 9; i++) {
       const shade = i % 2 === 0 ? 0x1a1825 : 0x141320;
       frameGfx.fillStyle(shade, 1);
-      frameGfx.fillRect(ARCH_L - 4, ARCH_TOP + i * 9, 5, 8);
+      frameGfx.fillRect(archL - 4, archTop + i * 9, 5, 8);
       frameGfx.fillStyle(0x080610, 1);
-      frameGfx.fillRect(ARCH_L - 4, ARCH_TOP + i * 9, 5, 0.5);
+      frameGfx.fillRect(archL - 4, archTop + i * 9, 5, 0.5);
     }
     // Right pillar stones
     for (let i = 0; i < 9; i++) {
       const shade = i % 2 === 0 ? 0x1a1825 : 0x141320;
       frameGfx.fillStyle(shade, 1);
-      frameGfx.fillRect(ARCH_R, ARCH_TOP + i * 9, 5, 8);
+      frameGfx.fillRect(archR, archTop + i * 9, 5, 8);
       frameGfx.fillStyle(0x080610, 1);
-      frameGfx.fillRect(ARCH_R, ARCH_TOP + i * 9, 5, 0.5);
+      frameGfx.fillRect(archR, archTop + i * 9, 5, 0.5);
     }
     // Arc cap keystone blocks
     const kSteps = 10;
     for (let i = 0; i <= kSteps; i++) {
       const angle = Math.PI + (i / kSteps) * Math.PI;
-      const kx = ARCH_CX + Math.cos(angle) * ARCH_RX - 2;
-      const ky = ARCH_TOP + Math.sin(angle) * ARCH_RY - 2;
+      const kx = centerX + Math.cos(angle) * archRx - 2;
+      const ky = archTop + Math.sin(angle) * archRy - 2;
       const shade = i % 2 === 0 ? 0x1c1a28 : 0x16141e;
       frameGfx.fillStyle(shade, 1);
       frameGfx.fillRect(kx, ky, 5, 4);
@@ -468,28 +473,32 @@ export class MenuScene extends Phaser.Scene {
 
     // Cyan arch edge glow — very subtle
     frameGfx.lineStyle(0.8, 0x00ffff, 0.08);
-    frameGfx.strokeRect(ARCH_L, ARCH_TOP, ARCH_RX * 2, ARCH_BOT - ARCH_TOP);
+    frameGfx.strokeRect(archL, archTop, archRx * 2, archBot - archTop);
     frameGfx.setDepth(2);
     gfx.setDepth(2);
   }
 
   /** Two pixel-art torches flanking the arch entrance */
   private createTorches(): void {
-    // Left torch at (ARCH_L - 10, ARCH_TOP - 6)
-    // Right torch at (ARCH_R + 2, ARCH_TOP - 6)
+    const centerX = this.cameras.main.centerX;
+    const archRx = 65;
+    const archTop = 50;
+    const archL = centerX - archRx;
+    const archR = centerX + archRx;
+
     for (let side = 0; side < 2; side++) {
-      const bx = side === 0 ? ARCH_L - 12 : ARCH_R + 3;
-      const by = ARCH_TOP - 8;
+      const bx = side === 0 ? archL - 12 : archR + 3;
+      const by = archTop - 8;
       const gfx = this.add.graphics();
       gfx.setDepth(10);
 
       // Bracket (static — draw once)
       const bracketPx = 2;
       const bracket: [number, number, number][] = [
-        [1,3,0x6a4820],[2,3,0x7a5828],[3,3,0x6a4820],
-        [0,4,0x3a2a18],[1,4,0x7a5828],[2,4,0x8a6830],[3,4,0x7a5828],[4,4,0x3a2a18],
-        [1,5,0x5a3818],[2,5,0x6a4820],[3,5,0x5a3818],
-        [2,6,0x4a2a10],[2,7,0x4a2a10],
+        [1, 3, 0x6a4820], [2, 3, 0x7a5828], [3, 3, 0x6a4820],
+        [0, 4, 0x3a2a18], [1, 4, 0x7a5828], [2, 4, 0x8a6830], [3, 4, 0x7a5828], [4, 4, 0x3a2a18],
+        [1, 5, 0x5a3818], [2, 5, 0x6a4820], [3, 5, 0x5a3818],
+        [2, 6, 0x4a2a10], [2, 7, 0x4a2a10],
       ];
       bracket.forEach(([px, py, col]) => {
         gfx.fillStyle(col, 1);
@@ -505,14 +514,14 @@ export class MenuScene extends Phaser.Scene {
       sprite.setBlendMode(Phaser.BlendModes.ADD);
 
       if (side === 0) this.torchFlameL.push(sprite);
-      else            this.torchFlameR.push(sprite);
+      else this.torchFlameR.push(sprite);
     }
   }
 
   private createTitle(): void {
     this.ensureTitleTextures();
 
-    const titleY = 30;
+    const titleY = 20;
     const titleString = 'MISTRAL RAID';
     const titleStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: MENU_FONT,
@@ -522,14 +531,15 @@ export class MenuScene extends Phaser.Scene {
       resolution: 2,
     };
 
-    this.titleOutlineText = this.add.text(ARCH_CX, titleY, titleString, titleStyle)
+    const centerX = this.cameras.main.centerX;
+    this.titleOutlineText = this.add.text(centerX, titleY, titleString, titleStyle)
       .setOrigin(0.5)
       .setDepth(19);
     this.titleOutlineText.setColor('#08002a');
     this.titleOutlineText.setStroke('#08002a', 8);
     this.titleOutlineText.setShadow(0, 0, '#08002a', 24, false, true);
 
-    this.titleText = this.add.text(ARCH_CX, titleY, titleString, titleStyle)
+    this.titleText = this.add.text(centerX, titleY, titleString, titleStyle)
       .setOrigin(0.5)
       .setDepth(20);
     this.titleText.setStroke('#08002a', 3);
@@ -545,7 +555,7 @@ export class MenuScene extends Phaser.Scene {
 
     const overlayWidth = this.titleText.displayWidth + 12;
     const overlayHeight = this.titleText.displayHeight + 8;
-    this.titleScanlineOverlay = this.add.tileSprite(ARCH_CX, titleY, overlayWidth, overlayHeight, 'menu_title_scan')
+    this.titleScanlineOverlay = this.add.tileSprite(centerX, titleY, overlayWidth, overlayHeight, 'menu_title_scan')
       .setDepth(21)
       .setAlpha(0.35)
       .setBlendMode(Phaser.BlendModes.ADD);
@@ -559,8 +569,8 @@ export class MenuScene extends Phaser.Scene {
       yoyo: true,
     });
 
-    const subtitleY = titleY + 16;
-    this.subtitleText = this.addPixelText(ARCH_CX, subtitleY, 'THE WATCHER', {
+    const subtitleY = titleY + 18;
+    this.subtitleText = this.addPixelText(centerX, subtitleY, 'THE WATCHER', {
       fontFamily: MENU_FONT,
       fontSize: '10px',
       color: '#7b5fff',
@@ -587,7 +597,19 @@ export class MenuScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
-        onUpdate: () => { target.y = Math.round(target.y); },
+        onUpdate: () => {
+          (target as any).y = Math.round((target as any).y);
+          // Responsive scale check for title
+          if (target === this.titleText || target === this.titleOutlineText || target === this.titleScanlineOverlay) {
+            const maxWidth = this.cameras.main.width - 16;
+            const currentWidth = (target as any).width || (target as any).displayWidth;
+            if (currentWidth > maxWidth) {
+              (target as any).setScale(maxWidth / currentWidth);
+            } else {
+              (target as any).setScale(1);
+            }
+          }
+        },
       });
     });
   }
@@ -600,13 +622,22 @@ export class MenuScene extends Phaser.Scene {
       return;
     }
 
-    const subtitleY = this.subtitleText?.y ?? MENU_TOP - 8;
+    const centerX = this.cameras.main.centerX;
+    const height = this.cameras.main.height;
+    const uiScale = 720 / height; // Ratio from Phaser space to Overlay space
+
+    const layoutX = centerX * uiScale;
+    const layoutTop = 62 * uiScale;
+    const layoutGap = 6 * uiScale;
+    const layoutSubtitleY = (this.subtitleText?.y ?? 46) * uiScale;
+    const layoutHintY = height * uiScale - 24;
+
     this.menuOverlay = new MenuOverlay(parent, canvas, {
-      menuX: MENU_X,
-      menuTop: MENU_TOP,
-      itemGap: ITEM_GAP,
-      subtitleY,
-      hintBaseline: H - 4,
+      menuX: layoutX,
+      menuTop: layoutTop,
+      itemGap: layoutGap,
+      subtitleY: layoutSubtitleY,
+      hintBaseline: layoutHintY,
     });
     this.menuOverlay.setSubtitle('THE WATCHER');
     this.menuOverlay.setHints('↑↓ NAVIGATE   ENTER SELECT   ESC BACK');
@@ -675,12 +706,19 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createParticles(): void {
+    const centerX = this.cameras.main.centerX;
     const colors = [0x00aacc, 0x6622cc, 0x2244aa];
+    const archRx = 65;
+    const archTop = 50;
+    const archBot = 148;
+    const archL = centerX - archRx;
+    const archR = centerX + archRx;
+
     for (let i = 0; i < 18; i++) {
       const size = Phaser.Math.FloatBetween(0.5, 1.5);
       const g = this.add.ellipse(
-        Phaser.Math.Between(ARCH_L + 4, ARCH_R - 4),
-        Phaser.Math.Between(ARCH_TOP + 4, ARCH_BOT - 4),
+        Phaser.Math.Between(archL + 4, archR - 4),
+        Phaser.Math.Between(archTop + 4, archBot - 4),
         size, size,
         Phaser.Utils.Array.GetRandom(colors),
         Phaser.Math.FloatBetween(0.2, 0.5),
@@ -694,20 +732,21 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private createNavHints(): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
     const hintBg = this.add.graphics().setDepth(18);
     const paddingX = 18;
     const paddingY = 3;
-    const bgWidth = W - paddingX * 2;
+    const bgWidth = width - paddingX * 2;
     const bgHeight = 18;
     hintBg.fillStyle(0x050a16, 0.88);
-    hintBg.fillRoundedRect(paddingX, H - bgHeight - paddingY, bgWidth, bgHeight, 6);
+    hintBg.fillRoundedRect(paddingX, height - bgHeight - paddingY, bgWidth, bgHeight, 6);
     hintBg.lineStyle(1, 0x1e2b45, 0.9);
-    hintBg.strokeRoundedRect(paddingX, H - bgHeight - paddingY, bgWidth, bgHeight, 6);
-
+    hintBg.strokeRoundedRect(paddingX, height - bgHeight - paddingY, bgWidth, bgHeight, 6);
   }
 
   private createBloodLayer(): void {
-    this.bloodGraphics  = this.add.graphics().setDepth(15);
+    this.bloodGraphics = this.add.graphics().setDepth(15);
     this.knightGraphics = this.add.graphics().setDepth(16);
   }
 
@@ -736,7 +775,7 @@ export class MenuScene extends Phaser.Scene {
     }
 
     obj.setResolution(RESOLUTION);
-   
+
 
     // Make sure the text texture is sampled sharply
     obj.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
@@ -766,7 +805,7 @@ export class MenuScene extends Phaser.Scene {
 
     const width = 16;
     const height = 16;
-   const gfx = this.make.graphics({ x: 0, y: 0 });
+    const gfx = this.make.graphics({ x: 0, y: 0 });
     gfx.clear();
     gfx.fillStyle(0xffffff, 0.08);
     gfx.fillRect(0, 0, width, height);
@@ -815,12 +854,13 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private updateTitle(dark: boolean): void {
+    const centerX = this.cameras.main.centerX;
     if (dark) {
       this.titleText.setAlpha(0.85);
-      this.titleText.x = ARCH_CX + (Math.random() > 0.5 ? 1 : -1);
+      this.titleText.x = centerX + (Math.random() > 0.5 ? 1 : -1);
     } else {
       this.titleText.setAlpha(1);
-      this.titleText.x = ARCH_CX;
+      this.titleText.x = centerX;
     }
   }
 
@@ -829,18 +869,25 @@ export class MenuScene extends Phaser.Scene {
     const t = this.glitchIntensity;
     if (t < 0.01) return;
 
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    const centerX = this.cameras.main.centerX;
+    const archHalfWidth = 64; // Design constant for arch half-width
+    const archL = centerX - archHalfWidth;
+    const archR = centerX + archHalfWidth;
+
     // ── Heavy red wall wash ──
     this.bloodGraphics.fillStyle(0x880000, 0.45 * t);
-    this.bloodGraphics.fillRect(0, 0, ARCH_L, H);
+    this.bloodGraphics.fillRect(0, 0, archL, height);
     this.bloodGraphics.fillStyle(0x770000, 0.4 * t);
-    this.bloodGraphics.fillRect(ARCH_R, 0, W - ARCH_R, H);
+    this.bloodGraphics.fillRect(archR, 0, width - archR, height);
 
     // ── Left wall drips — thick, long, multiple widths ──
     const dripsL: [number, number, number, number][] = [
       // [x, startY, width, length]
-      [6,  0, 2, 60],[14, 10, 3, 80],[22,  5, 2, 45],
-      [35, 0, 4, 90],[48, 15, 2, 55],[60,  8, 3, 70],
-      [72, 0, 2, 40],[82,  3, 4,100],
+      [6, 0, 2, 60], [14, 10, 3, 80], [22, 5, 2, 45],
+      [35, 0, 4, 90], [48, 15, 2, 55], [60, 8, 3, 70],
+      [72, 0, 2, 40], [82, 3, 4, 100],
     ];
     dripsL.forEach(([x, sy, w, len]) => {
       this.bloodGraphics.fillStyle(0xaa0000, (0.65 + Math.random() * 0.3) * t);
@@ -855,9 +902,9 @@ export class MenuScene extends Phaser.Scene {
 
     // ── Right wall drips ──
     const dripsR: [number, number, number, number][] = [
-      [232, 0, 3, 75],[243, 8, 2, 55],[253,  0, 4, 88],
-      [264,12, 2, 50],[275, 4, 3, 95],[285,  0, 2, 42],
-      [295, 6, 4, 65],[308, 0, 3, 82],
+      [archR + 10, 0, 3, 75], [archR + 21, 8, 2, 55], [archR + 31, 10, 4, 88],
+      [archR + 42, 12, 2, 50], [archR + 53, 4, 3, 95], [archR + 63, 0, 2, 42],
+      [archR + 73, 6, 4, 65], [archR + 86, 0, 3, 82],
     ];
     dripsR.forEach(([x, sy, w, len]) => {
       this.bloodGraphics.fillStyle(0x990000, (0.6 + Math.random() * 0.3) * t);
@@ -870,8 +917,8 @@ export class MenuScene extends Phaser.Scene {
 
     // ── Floor blood pool spreading from both base corners ──
     this.bloodGraphics.fillStyle(0x660000, 0.45 * t);
-    this.bloodGraphics.fillEllipse(18, H - 10, 50 * t, 14);
-    this.bloodGraphics.fillEllipse(W - 18, H - 10, 50 * t, 14);
+    this.bloodGraphics.fillEllipse(18, height - 10, 50 * t, 14);
+    this.bloodGraphics.fillEllipse(width - 18, height - 10, 50 * t, 14);
   }
 
   /** Dead fallen knight — pixel art, fades in/out with glitch intensity */
@@ -880,48 +927,50 @@ export class MenuScene extends Phaser.Scene {
     const t = this.glitchIntensity;
     if (t < 0.01) return;
 
-    // Knight lies on the floor just inside the arch left side
-    // Horizontal, head to the right, feet to the left
-    // Origin: floor level = ARCH_BOT - 4, centred around x=118
-    const ox = 108;
-    const oy = ARCH_BOT - 12;
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    const centerX = this.cameras.main.centerX;
+    const archBot = height; // Simplified for fullscreen
+
+    const ox = centerX - 52;
+    const oy = archBot - 12;
     const px = 2;
 
     const knight: [number, number, number][] = [
       // ── Helmet ──
-      [9,0,0x888899],[10,0,0x9999aa],[11,0,0x888899],
-      [8,1,0x666677],[9,1,0xaaaacc],[10,1,0xbbbbdd],[11,1,0xaaaacc],[12,1,0x666677],
-      [8,2,0x555566],[9,2,0x999aaa],[10,2,0x8888aa],[11,2,0x999aaa],[12,2,0x555566],
+      [9, 0, 0x888899], [10, 0, 0x9999aa], [11, 0, 0x888899],
+      [8, 1, 0x666677], [9, 1, 0xaaaacc], [10, 1, 0xbbbbdd], [11, 1, 0xaaaacc], [12, 1, 0x666677],
+      [8, 2, 0x555566], [9, 2, 0x999aaa], [10, 2, 0x8888aa], [11, 2, 0x999aaa], [12, 2, 0x555566],
       // visor slit
-      [9,2,0x222233],[10,2,0x111122],[11,2,0x222233],
+      [9, 2, 0x222233], [10, 2, 0x111122], [11, 2, 0x222233],
 
       // ── Chest / torso (lying flat) ──
-      [4,1,0x667788],[5,1,0x778899],[6,1,0x8899aa],[7,1,0x778899],
-      [4,2,0x556677],[5,2,0x667788],[6,2,0x778899],[7,2,0x667788],
-      [3,2,0x445566],
+      [4, 1, 0x667788], [5, 1, 0x778899], [6, 1, 0x8899aa], [7, 1, 0x778899],
+      [4, 2, 0x556677], [5, 2, 0x667788], [6, 2, 0x778899], [7, 2, 0x667788],
+      [3, 2, 0x445566],
 
       // ── Arm reaching out (left) ──
-      [1,1,0x556677],[2,1,0x667788],[3,1,0x667788],
-      [0,2,0x445566],[1,2,0x556677],[2,2,0x667788],
+      [1, 1, 0x556677], [2, 1, 0x667788], [3, 1, 0x667788],
+      [0, 2, 0x445566], [1, 2, 0x556677], [2, 2, 0x667788],
       // gauntlet
-      [0,1,0x778899],[-1,1,0x889988],
+      [0, 1, 0x778899], [-1, 1, 0x889988],
 
       // ── Legs ──
-      [4,3,0x556677],[5,3,0x667788],[6,3,0x556677],
-      [4,4,0x445566],[5,4,0x556677],
+      [4, 3, 0x556677], [5, 3, 0x667788], [6, 3, 0x556677],
+      [4, 4, 0x445566], [5, 4, 0x556677],
       // boots
-      [4,5,0x334455],[5,5,0x334455],
+      [4, 5, 0x334455], [5, 5, 0x334455],
 
       // ── Broken sword lying beside knight ──
-      [7,4,0x99aacc],[8,4,0xaabbdd],[9,4,0x99aacc],   // blade fragment
-      [10,4,0x7788aa],[11,4,0x556688],                  // tip (broken)
-      [6,4,0x885544],[6,5,0x774433],                    // handle
+      [7, 4, 0x99aacc], [8, 4, 0xaabbdd], [9, 4, 0x99aacc],   // blade fragment
+      [10, 4, 0x7788aa], [11, 4, 0x556688],                  // tip (broken)
+      [6, 4, 0x885544], [6, 5, 0x774433],                    // handle
       // crossguard
-      [6,3,0x997755],[7,3,0x886644],
+      [6, 3, 0x997755], [7, 3, 0x886644],
 
       // ── Puddle of blood under helmet ──
-      [8,3,0x880000],[9,3,0xaa0000],[10,3,0x880000],
-      [8,4,0x660000],[9,5,0x550000],
+      [8, 3, 0x880000], [9, 3, 0xaa0000], [10, 3, 0x880000],
+      [8, 4, 0x660000], [9, 5, 0x550000],
     ];
 
     // Draw shadow/silhouette first
@@ -947,12 +996,19 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private updateParticles(delta: number): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    const centerX = this.cameras.main.centerX;
+    const archHalfWidth = 64;
+    const archL = centerX - archHalfWidth;
+    const archR = centerX + archHalfWidth;
+
     this.particles.forEach(p => {
       p.g.y += p.vy * (delta / 16);
       p.g.x += p.vx * (delta / 16);
-      if (p.g.y < ARCH_TOP + 2) p.g.y = ARCH_BOT - 4;
-      if (p.g.x < ARCH_L + 2)  p.g.x = ARCH_R - 4;
-      if (p.g.x > ARCH_R - 2)  p.g.x = ARCH_L + 4;
+      if (p.g.y < 0) p.g.y = height - 4;
+      if (p.g.x < archL + 2) p.g.x = archR - 4;
+      if (p.g.x > archR - 2) p.g.x = archL + 4;
     });
   }
 
@@ -967,10 +1023,17 @@ export class MenuScene extends Phaser.Scene {
     const targetItem = this.items[this.selectedIndex];
     if (!targetItem) return;
 
-    const cy = this.menuOverlay?.getItemCenterY(this.selectedIndex) ?? (MENU_TOP + this.selectedIndex * ITEM_GAP);
-    const itemLeft = this.menuOverlay?.getItemLeft(this.selectedIndex);
-    const fallbackLeft = MENU_X - 50;
-    const sx = (itemLeft ?? fallbackLeft) - 34;
+    const centerX = this.cameras.main.centerX;
+    const height = this.cameras.main.height;
+    const phaserToUiScale = 720 / height;
+    const uiToPhaserScale = 1 / phaserToUiScale;
+
+    const overlayCy = this.menuOverlay?.getItemCenterY(this.selectedIndex);
+    const cy = overlayCy ? (overlayCy * uiToPhaserScale) : (60 + this.selectedIndex * 9);
+
+    const overlayLeft = this.menuOverlay?.getItemLeft(this.selectedIndex);
+    const itemLeft = overlayLeft ? (overlayLeft * uiToPhaserScale) : (centerX - 50);
+    const sx = itemLeft - 34;
 
     // === POMMEL ===
     gfx.fillStyle(0x7755bb, 1);

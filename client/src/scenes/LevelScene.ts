@@ -81,22 +81,13 @@ export class LevelScene extends Phaser.Scene {
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private lighting!: LightingSystem;
   private minimap!: MiniMap;
-  private shieldRing!: Phaser.GameObjects.Graphics;
+  private shieldRing?: Phaser.GameObjects.Arc;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: { [key: string]: Phaser.Input.Keyboard.Key };
 
   private lastShotAt = 0;
   private hudOverlay?: LevelHUDOverlay;
-  private dashBar?: Phaser.GameObjects.Graphics;
-  private dashBarBg?: Phaser.GameObjects.Graphics;
-  private dashCooldownRect = { x: 0, y: 0, width: 0, height: 0 };
-  private shieldBarRect = { x: 0, y: 0, width: 0, height: 0 };
-  private shieldBarBg?: Phaser.GameObjects.Graphics;
-  private shieldIndicator?: Phaser.GameObjects.Graphics;
-  private leftSeparator?: Phaser.GameObjects.Graphics;
-  private rightSeparator?: Phaser.GameObjects.Graphics;
-  private heartSprites: Phaser.GameObjects.Image[] = [];
   private lastHP = -1;
   private lastTelemetrySentAt = 0;
 
@@ -284,7 +275,7 @@ export class LevelScene extends Phaser.Scene {
       },
     });
 
-    this.shieldRing = this.add.graphics().setDepth(18);
+    this.shieldRing = this.add.arc(0, 0, 10, 0, 360, false, 0x00ffe1, 0.6).setDepth(18).setStrokeStyle(2, 0x00ffe1, 1);
 
     this.cameras.main.fadeIn(500, 0, 0, 0);
     this.showLevelIntro();
@@ -591,13 +582,8 @@ export class LevelScene extends Phaser.Scene {
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
     this.shieldRing?.destroy();
-    // @ts-expect-error - shieldRing is set in create.
     this.shieldRing = undefined;
 
-    this.dashBar?.destroy();
-    this.dashBar = undefined;
-    this.shieldIndicator?.destroy();
-    this.shieldIndicator = undefined;
     this.bossBar?.destroy();
     this.bossBar = undefined;
     this.bossNameText?.destroy();
@@ -634,7 +620,6 @@ export class LevelScene extends Phaser.Scene {
 
     this.wsMessageUnsub?.();
     this.wsMessageUnsub = null;
-    wsClient.disconnect();
     this.telemetryActive = false;
   }
 
@@ -752,7 +737,7 @@ export class LevelScene extends Phaser.Scene {
     }
     this.player.initPhysics();
     if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
-      this.player.play(`${this.playerSpriteKey}_idle`);
+      this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
     }
     this.applyEquippedWeapon();
   }
@@ -851,124 +836,16 @@ export class LevelScene extends Phaser.Scene {
     });
     this.hudOverlay.setHintVisible(false);
     this.hudOverlay.setDashCharges(GameState.get().getDashCharges());
-    this.hudOverlay.setShieldReady(true);
+    this.hudOverlay.updateShield(1, true);
     this.hudOverlay.setCompanionBadge(null);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.hudOverlay?.destroy());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.hudOverlay?.destroy());
 
-    // Hearts + dash/shield bars
-    const heartConfig = this.createHearts();
-
-    const abilityW = 70;
-    const abilityH = 8;
-    const gap = 10;
-
-    const dashRect = {
-      x: heartConfig.endX + 8,
-      y: INTERNAL_HEIGHT - 18,
-      width: abilityW,
-      height: abilityH,
-    };
-    const shieldRect = {
-      x: Math.round(dashRect.x + abilityW + gap + 18),
-      y: INTERNAL_HEIGHT - 18,
-      width: abilityW,
-      height: abilityH,
-    };
-
-    this.dashCooldownRect = dashRect;
-    this.shieldBarRect = shieldRect;
-
-    this.dashBarBg = this.add.graphics().setScrollFactor(0).setDepth(18);
-    this.shieldBarBg = this.add.graphics().setScrollFactor(0).setDepth(18);
-    this.dashBar = this.add.graphics().setScrollFactor(0).setDepth(19);
-    this.shieldIndicator = this.add.graphics().setScrollFactor(0).setDepth(19);
-
-    this.drawAbilityBackground(this.dashBarBg, dashRect);
-    this.drawAbilityBackground(this.shieldBarBg, shieldRect);
-
-    this.leftSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
-    this.rightSeparator = this.add.graphics().setScrollFactor(0).setDepth(18);
-    this.drawSeparators(heartConfig);
     this.updateDashChargesDisplay();
-
-    // ── Clickable zones over dash and shield bars ──────────────────────────
-    const hitPad = 6; // extra hit area above/below the bars
-    this.add
-      .rectangle(
-        dashRect.x + dashRect.width / 2,
-        dashRect.y + dashRect.height / 2,
-        dashRect.width + 8,
-        dashRect.height + hitPad * 2
-      )
-      .setScrollFactor(0)
-      .setDepth(25)
-      .setAlpha(0.001)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.tryDash(this.lastUpdateTime));
-
-    this.add
-      .rectangle(
-        shieldRect.x + shieldRect.width / 2,
-        shieldRect.y + shieldRect.height / 2,
-        shieldRect.width + 8,
-        shieldRect.height + hitPad * 2
-      )
-      .setScrollFactor(0)
-      .setDepth(25)
-      .setAlpha(0.001)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.tryShield());
-  }
-
-  private createHearts(): { maxHearts: number; endX: number } {
-    this.heartSprites.forEach((heart) => heart.destroy());
-    this.heartSprites = [];
-    const maxHearts = Math.ceil(GameState.get().getData().playerMaxHP / 2);
-    const startX = 6;
-    const spacing = 18;
-    const heartY = INTERNAL_HEIGHT - 12;
-    for (let i = 0; i < maxHearts; i += 1) {
-      const heart = this.add
-        .image(startX + i * spacing, heartY, 'ui_heart_full')
-        .setOrigin(0, 1)
-        .setScale(1)
-        .setScrollFactor(0)
-        .setDepth(20);
-      this.heartSprites.push(heart);
-    }
-    return { maxHearts, endX: startX + maxHearts * spacing };
   }
 
   private updateDashChargesDisplay(): void {
     this.hudOverlay?.setDashCharges(GameState.get().getDashCharges());
-  }
-
-  private drawAbilityBackground(
-    graphics: Phaser.GameObjects.Graphics | undefined,
-    rect: { x: number; y: number; width: number; height: number }
-  ): void {
-    if (!graphics) return;
-    graphics.clear();
-    graphics.fillStyle(0x000000, 0.55);
-    graphics.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, 3);
-    graphics.lineStyle(1, 0xffffff, 0.15);
-    graphics.strokeRoundedRect(rect.x, rect.y, rect.width, rect.height, 3);
-  }
-
-  private drawSeparators(heartConfig: { maxHearts: number; endX: number }): void {
-    const sepHeight = 28;
-    const sepTop = INTERNAL_HEIGHT - sepHeight - 10;
-    const draw = (graphics: Phaser.GameObjects.Graphics | undefined, x: number) => {
-      if (!graphics) return;
-      graphics.clear();
-      graphics.fillStyle(0xffffff, 0.15);
-      graphics.fillRect(x, sepTop, 2, sepHeight);
-      graphics.fillStyle(0xffffff, 0.05);
-      graphics.fillRect(x + 2, sepTop, 1, sepHeight);
-    };
-    draw(this.leftSeparator, heartConfig.endX + 10);
-    draw(this.rightSeparator, this.shieldBarRect.x + this.shieldBarRect.width + 10);
   }
 
   private flashDashWarning(): void {
@@ -977,12 +854,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private pulseDashIcon(): void {
-    if (!this.dashBarBg) return;
-    this.tweens.add({
-      targets: this.dashBarBg,
-      alpha: { from: 0.6, to: 1 },
-      duration: 180,
-    });
+    // Moved to LevelHUDOverlay
   }
 
   private updateHUD(time: number): void {
@@ -1004,69 +876,17 @@ export class LevelScene extends Phaser.Scene {
 
     if (state.playerHP !== this.lastHP) {
       this.lastHP = state.playerHP;
-      this.updateHearts();
+      this.hudOverlay?.updateHealth(state.playerHP, state.playerMaxHP);
     }
 
-    // ── Dash bar — segmented charge display ──────────────────────────────────
-    const { x: dx, y: dy, width: dw, height: dh } = this.dashCooldownRect;
-    if (this.dashBar && dw > 0) {
-      this.dashBar.clear();
-      const charges = GameState.get().getDashCharges();
-      const dashRemaining = Math.max(0, this.player.dashCooldownUntil - time);
-      const recharging = dashRemaining > 0;
-      const segW = Math.floor((dw - (DASH_MAX_CHARGES - 1) * 2) / DASH_MAX_CHARGES);
-      for (let i = 0; i < DASH_MAX_CHARGES; i += 1) {
-        const segX = dx + i * (segW + 2);
-        const filled = i < charges;
-        const isRecharging = !filled && i === charges && recharging;
-        if (filled) {
-          this.dashBar.fillStyle(0x00e5ff, 0.9);
-          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
-        } else if (isRecharging) {
-          const pct = 1 - dashRemaining / DASH_COOLDOWN_MS;
-          this.dashBar.fillStyle(0x004455, 0.6);
-          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
-          this.dashBar.fillStyle(0x00b8cc, 0.85);
-          this.dashBar.fillRoundedRect(segX, dy, Math.max(2, segW * pct), dh, 2);
-        } else {
-          this.dashBar.fillStyle(0x00304a, 0.5);
-          this.dashBar.fillRoundedRect(segX, dy, segW, dh, 2);
-        }
-      }
-    }
-
-    // ── Shield bar — cooldown / active state ──────────────────────────────────
-    const { x: sx, y: sy, width: sw, height: sh } = this.shieldBarRect;
-    if (this.shieldIndicator && sw > 0) {
-      this.shieldIndicator.clear();
-      const shieldActive = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
-      if (shieldActive) {
-        this.hudOverlay?.setShieldReady(true);
-        // Pulsing full bar while shield is active
-        const pulse = 0.7 + Math.sin(time / 150) * 0.3;
-        this.shieldIndicator.fillStyle(0x7c4dff, pulse);
-        this.shieldIndicator.fillRoundedRect(sx, sy, sw, sh, 2);
-        this.shieldIndicator.lineStyle(1, 0xbb88ff, 0.9);
-        this.shieldIndicator.strokeRoundedRect(sx, sy, sw, sh, 2);
-      } else {
-        const shieldRemaining = Math.max(0, this.player.shieldCooldownUntil - time);
-        const pct = shieldRemaining > 0 ? 1 - shieldRemaining / SHIELD_COOLDOWN_MS : 1;
-        this.hudOverlay?.setShieldReady(pct >= 1);
-        // Background (empty)
-        this.shieldIndicator.fillStyle(0x1a0a3a, 0.5);
-        this.shieldIndicator.fillRoundedRect(sx, sy, sw, sh, 2);
-        // Fill
-        if (pct > 0) {
-          const color = pct >= 1 ? 0x9966ff : 0x4422aa;
-          this.shieldIndicator.fillStyle(color, 0.85);
-          this.shieldIndicator.fillRoundedRect(sx, sy, sw * pct, sh, 2);
-        }
-        // Ready glow when fully recharged
-        if (pct >= 1) {
-          this.shieldIndicator.lineStyle(1, 0xaa77ff, 0.6);
-          this.shieldIndicator.strokeRoundedRect(sx, sy, sw, sh, 2);
-        }
-      }
+    // Shield active state overlay communication
+    const shieldActive = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
+    if (shieldActive) {
+      this.hudOverlay?.updateShield(1, true);
+    } else {
+      const shieldRemaining = Math.max(0, this.player.shieldCooldownUntil - time);
+      const pct = shieldRemaining > 0 ? 1 - shieldRemaining / SHIELD_COOLDOWN_MS : 1;
+      this.hudOverlay?.updateShield(pct, false);
     }
 
     const connected = wsClient.isConnected;
@@ -1137,14 +957,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateHearts(): void {
-    const hp = GameState.get().getData().playerHP;
-    for (let i = 0; i < this.heartSprites.length; i += 1) {
-      const heartValue = Math.max(0, Math.min(2, hp - i * 2));
-      const sprite = this.heartSprites[i];
-      if (heartValue >= 2) sprite.setTexture('ui_heart_full');
-      else if (heartValue === 1) sprite.setTexture('ui_heart_half');
-      else sprite.setTexture('ui_heart_empty');
-    }
+    // Health display is now handled by LevelHUDOverlay
   }
 
   private handleInput(time: number): void {
@@ -1161,22 +974,37 @@ export class LevelScene extends Phaser.Scene {
 
     const gs = GameState.get();
     const state = gs.getData();
-    if (move.lengthSq() > 0) {
-      move.normalize();
-      this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
-      this.player.updateFacing(move);
-      if (move.x !== 0) this.player.setFlipX(move.x < 0);
-      if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
-        this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
-      }
-      if (time - this.lastFootstepAt > 200) {
-        this.lastFootstepAt = time;
-        AudioManager.playSFX(this, 'footstep');
+
+    if (time < this.player.dashActiveUntil) {
+      this.player.setVelocity(this.player.dashVelocity.x, this.player.dashVelocity.y);
+      // Spawn trail continuously during dash
+      if (Math.random() < 0.3) {
+        const ghost = this.add.circle(this.player.x, this.player.y, 4, 0x00ffe1, 0.6).setDepth(9);
+        this.tweens.add({
+          targets: ghost,
+          alpha: 0,
+          duration: Phaser.Math.Between(160, 336),
+          onComplete: () => ghost.destroy(),
+        });
       }
     } else {
-      this.player.setVelocity(0, 0);
-      if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
-        this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
+      if (move.lengthSq() > 0) {
+        move.normalize();
+        this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
+        this.player.updateFacing(move);
+        if (move.x !== 0) this.player.setFlipX(move.x < 0);
+        if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
+          this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
+        }
+        if (time - this.lastFootstepAt > 200) {
+          this.lastFootstepAt = time;
+          AudioManager.playSFX(this, 'footstep');
+        }
+      } else {
+        this.player.setVelocity(0, 0);
+        if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
+          this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
+        }
       }
     }
 
@@ -1354,11 +1182,15 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private updateShieldRing(time: number): void {
-    this.shieldRing.clear();
-    if (this.player.isShieldActive(time)) {
-      const pulse = 0.5 + Math.sin(time / 140) * 0.2;
-      this.shieldRing.lineStyle(1, 0x33aaff, 0.9);
-      this.shieldRing.strokeCircle(this.player.x, this.player.y, 11 + pulse * 2);
+    if (!this.shieldRing) return;
+    const shieldActive = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
+    if (shieldActive) {
+      const pulse = Math.sin(time / 150) * 0.5;
+      this.shieldRing.setPosition(this.player.x, this.player.y);
+      this.shieldRing.setRadius(11 + pulse * 2);
+      this.shieldRing.setAlpha(0.9);
+    } else {
+      this.shieldRing.setAlpha(0);
     }
   }
 
@@ -1490,20 +1322,16 @@ export class LevelScene extends Phaser.Scene {
 
     const dir = this.player.lastDir.clone();
     if (dir.lengthSq() === 0) dir.set(1, 0);
-    const newX = Phaser.Math.Clamp(
-      this.player.x + dir.x * DASH_DISTANCE,
-      TILE_SIZE,
-      this.maze.width * TILE_SIZE - TILE_SIZE
-    );
-    const newY = Phaser.Math.Clamp(
-      this.player.y + dir.y * DASH_DISTANCE,
-      TILE_SIZE,
-      this.maze.height * TILE_SIZE - TILE_SIZE
-    );
-    this.spawnDashTrail(this.player.x, this.player.y, newX, newY);
-    this.player.setPosition(newX, newY);
+
+    // Convert 44px instant dash into physics velocity over 100ms
+    const dashDurationMs = 100;
+    const speed = DASH_DISTANCE / (dashDurationMs / 1000);
+
+    this.player.dashActiveUntil = time + dashDurationMs;
+    this.player.dashVelocity.set(dir.x * speed, dir.y * speed);
+
     this.player.dashCooldownUntil = time + DASH_COOLDOWN_MS;
-    this.player.setInvincible(DASH_INVINCIBLE_MS, time);
+    this.player.setInvincible(Math.max(DASH_INVINCIBLE_MS, dashDurationMs), time);
     this.shakeCamera(28, 0.0025);
     AudioManager.playSFX(this, 'dash');
     this.updateDashChargesDisplay();
@@ -1979,7 +1807,7 @@ export class LevelScene extends Phaser.Scene {
       this.stairsActive = true;
     }
     const text = this.add
-      .text(160, 90, 'BOSS DEFEATED!', {
+      .text(this.cameras.main.centerX, 90, 'BOSS DEFEATED!', {
         fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffdd44',
@@ -2060,16 +1888,16 @@ export class LevelScene extends Phaser.Scene {
       const room = rooms[i % rooms.length];
       const type = types[i % types.length];
       const base = ENEMY_CONFIGS[type];
-      const diffMgr  = DifficultyManager.get();
-      const diff     = diffMgr.getSettings();
+      const diffMgr = DifficultyManager.get();
+      const diff = diffMgr.getSettings();
 
       // Easy mode: normal enemies die in 1 hit, strong enemies in 2 hits.
       // "Strong" = base HP >= 7 (BigZombie 14, IceZombie 8, MaskedOrc 16, BigDemon 22).
       let enemyHp: number;
       if (diffMgr.getDifficulty() === 'easy') {
-        const gs     = GameState.get();
-        const state  = gs.getData();
-        const pDmg   = Math.max(1, Math.round(
+        const gs = GameState.get();
+        const state = gs.getData();
+        const pDmg = Math.max(1, Math.round(
           gs.getEffectiveWeaponDamage(state.playerDamage, state.equippedWeapon) * diff.playerDamageMult
         ));
         enemyHp = base.hp >= 7 ? pDmg * 2 : pDmg;
@@ -2129,7 +1957,7 @@ export class LevelScene extends Phaser.Scene {
       this.boss.play(`${this.boss.config.spriteKey}_idle`);
     }
     this.bossNameText = this.add
-      .text(160, 20, this.boss.config.name, {
+      .text(this.cameras.main.centerX, 20, this.boss.config.name, {
         fontFamily: '"Press Start 2P"',
         fontSize: '6px',
         color: '#ff6666',
@@ -2169,7 +1997,7 @@ export class LevelScene extends Phaser.Scene {
 
   private showPhaseText(phase: number): void {
     const text = this.add
-      .text(160, 70, `PHASE ${phase}!`, {
+      .text(this.cameras.main.centerX, 70, `PHASE ${phase}!`, {
         fontFamily: '"Press Start 2P"',
         fontSize: '7px',
         color: '#ffffff',
@@ -2364,9 +2192,10 @@ export class LevelScene extends Phaser.Scene {
     const threshold = this.getKillThreshold();
     const remaining = Math.max(0, threshold - totalKilled);
 
-    this.add.rectangle(160, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
+    const centerX = this.cameras.main.centerX;
+    this.add.rectangle(centerX, 90, 230, 80, 0x000000, 0.8).setScrollFactor(0).setDepth(50);
 
-    this.add.text(160, 64, 'YOU DIED', {
+    this.add.text(centerX, 64, 'YOU DIED', {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '12px',
       color: '#ff5555',
@@ -2376,7 +2205,7 @@ export class LevelScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const livesLabel = this.lives === 1 ? '1 LIFE REMAINING' : `${this.lives} LIVES REMAINING`;
-    this.add.text(160, 80, livesLabel, {
+    this.add.text(centerX, 80, livesLabel, {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '9px',
       color: '#8ef6ff',
@@ -2384,14 +2213,14 @@ export class LevelScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
     const killsLabel = `KILLS: ${totalKilled} / ${threshold}  (${remaining} TO GO)`;
-    this.add.text(160, 94, killsLabel, {
+    this.add.text(centerX, 94, killsLabel, {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '8px',
       color: '#ffd76a',
       resolution: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(51);
 
-    this.add.text(160, 108, 'RESTARTING LEVEL...', {
+    this.add.text(centerX, 108, 'RESTARTING LEVEL...', {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '8px',
       color: '#94a3b8',
@@ -2475,8 +2304,9 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private showLevelIntro(): void {
+    const centerX = this.cameras.main.centerX;
     const introBg = this.add
-      .rectangle(160, 78, 220, 50, 0x040a14, 0.85)
+      .rectangle(centerX, 78, 220, 50, 0x040a14, 0.85)
       .setStrokeStyle(2, 0x0f1c2f, 0.9)
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -2485,30 +2315,30 @@ export class LevelScene extends Phaser.Scene {
 
     const titleStyle: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '18px',
+      fontSize: '15px',
       color: '#fef3c7',
       fontStyle: 'bold',
       stroke: '#0f172a',
-      strokeThickness: 4,
+      strokeThickness: 3,
       shadow: {
         color: '#000000',
-        blur: 8,
+        blur: 6,
         fill: false,
         offsetX: 0,
         offsetY: 0,
       },
     };
     const title = this.add
-      .text(160, 66, this.levelData.name, titleStyle)
+      .text(centerX, 66, this.levelData.name, titleStyle)
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setAlpha(0)
       .setDepth(20);
 
     const subtitle = this.add
-      .text(160, 90, this.levelData.subtitle.toUpperCase(), {
+      .text(centerX, 88, this.levelData.subtitle.toUpperCase(), {
         fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-        fontSize: '12px',
+        fontSize: '10px',
         color: '#d5e0ff',
         fontStyle: '600',
         letterSpacing: 2,
@@ -2518,7 +2348,7 @@ export class LevelScene extends Phaser.Scene {
           offsetX: 0,
           offsetY: 0,
           color: '#000000',
-          blur: 6,
+          blur: 4,
           fill: false,
         },
       })

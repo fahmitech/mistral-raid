@@ -15,7 +15,17 @@ import { ArenaScene } from './scenes/ArenaScene';
 import { CoopSelectScene } from './scenes/CoopSelectScene';
 import { DifficultySelectScene } from './scenes/DifficultySelectScene';
 import { AICompanionDebugOverlay } from './systems/AICompanionDebugOverlay';
-import { INTERNAL_HEIGHT, INTERNAL_WIDTH, ZOOM } from './config/constants';
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH, updateInternalResolution, ZOOM } from './config/constants';
+
+const calculateTargetResolution = () => {
+  const baseHeight = 180;
+  const aspect = window.innerWidth / window.innerHeight;
+  const width = Math.round(baseHeight * aspect);
+  return { width, height: baseHeight };
+};
+
+const initialRes = calculateTargetResolution();
+updateInternalResolution(initialRes.width, initialRes.height);
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -39,7 +49,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: INTERNAL_WIDTH,
     height: INTERNAL_HEIGHT,
   },
-  scene:[
+  scene: [
     BootScene,
     MenuScene,
     PlayerSelectScene,
@@ -67,22 +77,29 @@ let game: Phaser.Game;
 const startGame = () => {
   game = new Phaser.Game(config);
 
-  const updateIntegerZoom = () => {
+  const handleResize = () => {
+    // 1. Update internal resolution constants
+    const { width, height } = calculateTargetResolution();
+    updateInternalResolution(width, height);
+
+    // 2. Update Phaser game size
+    game.scale.setGameSize(width, height);
+
+    // 3. Update integer zoom logic
     const maxZoom = game.scale.getMaxZoom();
-    const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
+    const nextZoom = Math.max(1, Math.min(ZOOM, maxZoom));
     if (game.scale.zoom !== nextZoom) {
       game.scale.setZoom(nextZoom);
     }
-  };
 
-  window.addEventListener('resize', updateIntegerZoom);
-  updateIntegerZoom();
-
-  setTimeout(() => {
+    // 4. Ensure pixelated rendering stays applied
     if (game.canvas) {
       game.canvas.style.imageRendering = 'pixelated';
     }
-  }, 0);
+  };
+
+  window.addEventListener('resize', handleResize);
+  handleResize();
 };
 
 // Preload critical font before starting game
@@ -132,7 +149,7 @@ const showErrorOverlay = (title: string, details: string) => {
 };
 
 window.addEventListener('error', (event: ErrorEvent) => {
-  const details =[event.message, event.filename ? `at ${event.filename}:${event.lineno}:${event.colno}` : '', event.error?.stack ?? '']
+  const details = [event.message, event.filename ? `at ${event.filename}:${event.lineno}:${event.colno}` : '', event.error?.stack ?? '']
     .filter(Boolean)
     .join('\n');
   showErrorOverlay('Runtime error', details);

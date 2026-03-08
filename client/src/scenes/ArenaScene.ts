@@ -227,7 +227,7 @@ export class ArenaScene extends Phaser.Scene {
       boss: this.boss,
       onDamage: (amount, source) => this.damagePlayer(amount, source),
       onOrbDestroyed: () => this.telemetry.recordOrbDestroyed(),
-      onMinionKilled: () => {},
+      onMinionKilled: () => { },
     });
 
     this.setupNetworking();
@@ -348,18 +348,18 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildArenaEnvironment(): void {
-    const TILE_COLS = Math.ceil(INTERNAL_WIDTH  / TILE_SIZE); // 20
+    const TILE_COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE); // 20
     const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE); // 12
 
     // ── Resolve tile keys with fallbacks ──────────────────────────────────
     const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
     const stainKeys = ['floor_stain_1', 'floor_stain_2'];
-    const wallKey     = this.textures.exists('wall_mid')                 ? 'wall_mid'                 : 'floor_1';
-    const wallTopKey  = this.textures.exists('wall_top_mid')             ? 'wall_top_mid'             : wallKey;
-    const cornerTLKey = this.textures.exists('wall_corner_top_left')     ? 'wall_corner_top_left'     : wallTopKey;
-    const cornerTRKey = this.textures.exists('wall_corner_top_right')    ? 'wall_corner_top_right'    : wallTopKey;
-    const cornerBLKey = this.textures.exists('wall_corner_front_left')   ? 'wall_corner_front_left'   : wallKey;
-    const cornerBRKey = this.textures.exists('wall_corner_front_right')  ? 'wall_corner_front_right'  : wallKey;
+    const wallKey = this.textures.exists('wall_mid') ? 'wall_mid' : 'floor_1';
+    const wallTopKey = this.textures.exists('wall_top_mid') ? 'wall_top_mid' : wallKey;
+    const cornerTLKey = this.textures.exists('wall_corner_top_left') ? 'wall_corner_top_left' : wallTopKey;
+    const cornerTRKey = this.textures.exists('wall_corner_top_right') ? 'wall_corner_top_right' : wallTopKey;
+    const cornerBLKey = this.textures.exists('wall_corner_front_left') ? 'wall_corner_front_left' : wallKey;
+    const cornerBRKey = this.textures.exists('wall_corner_front_right') ? 'wall_corner_front_right' : wallKey;
 
     // ── Full grid coverage using individual images (no RenderTexture) ─────
     // Every cell is drawn as a plain add.image — 100% reliable, no RT batching issues.
@@ -368,21 +368,21 @@ export class ArenaScene extends Phaser.Scene {
         const px = col * TILE_SIZE;
         const py = row * TILE_SIZE;
 
-        const isTopHeader  = row === 0;
-        const isTopWall    = row === 1;
+        const isTopHeader = row === 0;
+        const isTopWall = row === 1;
         const isBottomWall = row >= TILE_ROWS - 2;
-        const isLeftWall   = col === 0;
-        const isRightWall  = col === TILE_COLS - 1;
+        const isLeftWall = col === 0;
+        const isRightWall = col === TILE_COLS - 1;
 
         let key: string;
         if (isTopHeader) {
-          if      (isLeftWall)  key = cornerTLKey;
+          if (isLeftWall) key = cornerTLKey;
           else if (isRightWall) key = cornerTRKey;
-          else                  key = wallTopKey;
+          else key = wallTopKey;
         } else if (isBottomWall) {
-          if      (isLeftWall)  key = cornerBLKey;
+          if (isLeftWall) key = cornerBLKey;
           else if (isRightWall) key = cornerBRKey;
-          else                  key = wallKey;
+          else key = wallKey;
         } else if (isLeftWall || isRightWall || isTopWall) {
           key = wallKey;
         } else {
@@ -402,7 +402,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Banners (2 on top wall) ────────────────────────────────────────────
     const bannerKeys = ['wall_banner_red', 'wall_banner_blue', 'wall_banner_green', 'wall_banner_yellow'];
-    const bannerKey  = bannerKeys.find((k) => this.textures.exists(k));
+    const bannerKey = bannerKeys.find((k) => this.textures.exists(k));
     const bannerCols = [5, 14];
     if (bannerKey) {
       bannerCols.forEach((col) =>
@@ -418,7 +418,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Crates near 4 corners of the arena interior ───────────────────────
     const crateKeys = ['chest_empty_open_anim_f0', 'chest_empty', 'chest_full', 'chest_full_open_anim_f0'];
-    const crateKey  = crateKeys.find((k) => this.textures.exists(k));
+    const crateKey = crateKeys.find((k) => this.textures.exists(k));
     const cratePositions: [number, number][] = [
       [2, 2], [TILE_COLS - 3, 2], [2, TILE_ROWS - 3], [TILE_COLS - 3, TILE_ROWS - 3],
     ];
@@ -438,10 +438,10 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── 4 torches — 2 on top wall, 2 on bottom wall ───────────────────────
     const torchPositions = [
-      { x: 2  * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-left
-      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4                     }, // top-right
-      { x: 2  * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-left
-      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4   }, // bottom-right
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-right
+      { x: 2 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-right
     ];
     torchPositions.forEach(({ x, y }) => {
       const torch = this.add.sprite(x, y, 'torch_1').setDepth(2);
@@ -452,7 +452,7 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaEmbers = [];
     torchPositions.forEach(({ x, y }) => {
       for (let i = 0; i < 6; i++) {
-        const size  = Phaser.Math.FloatBetween(1, 2);
+        const size = Phaser.Math.FloatBetween(1, 2);
         const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
         const sprite = this.add
           .ellipse(
@@ -821,22 +821,36 @@ export class ArenaScene extends Phaser.Scene {
 
     const gs = GameState.get();
     const state = gs.getData();
-    if (move.lengthSq() > 0) {
-      move.normalize();
-      this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
-      this.player.updateFacing(move);
-      if (move.x !== 0) this.player.setFlipX(move.x < 0);
-      if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
-        this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
-      }
-      if (time - this.lastFootstepAt > 200) {
-        this.lastFootstepAt = time;
-        AudioManager.playSFX(this, 'footstep');
+
+    if (time < this.player.dashActiveUntil) {
+      this.player.setVelocity(this.player.dashVelocity.x, this.player.dashVelocity.y);
+      if (Math.random() < 0.3) {
+        const ghost = this.add.circle(this.player.x, this.player.y, 4, 0x00ffe1, 0.6).setDepth(9);
+        this.tweens.add({
+          targets: ghost,
+          alpha: 0,
+          duration: Phaser.Math.Between(160, 336),
+          onComplete: () => ghost.destroy(),
+        });
       }
     } else {
-      this.player.setVelocity(0, 0);
-      if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
-        this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
+      if (move.lengthSq() > 0) {
+        move.normalize();
+        this.player.setVelocity(move.x * state.playerSpeed, move.y * state.playerSpeed);
+        this.player.updateFacing(move);
+        if (move.x !== 0) this.player.setFlipX(move.x < 0);
+        if (this.anims.exists(`${this.playerSpriteKey}_run`)) {
+          this.player.anims?.play(`${this.playerSpriteKey}_run`, true);
+        }
+        if (time - this.lastFootstepAt > 200) {
+          this.lastFootstepAt = time;
+          AudioManager.playSFX(this, 'footstep');
+        }
+      } else {
+        this.player.setVelocity(0, 0);
+        if (this.anims.exists(`${this.playerSpriteKey}_idle`)) {
+          this.player.anims?.play(`${this.playerSpriteKey}_idle`, true);
+        }
       }
     }
 
@@ -904,8 +918,8 @@ export class ArenaScene extends Phaser.Scene {
           createdAt: this.time.now,
         });
       },
-      spawnEnemy: () => {},
-      shake: () => {},
+      spawnEnemy: () => { },
+      shake: () => { },
     };
     this.boss.updateAI(this.player, time, actions);
   }
@@ -949,12 +963,15 @@ export class ArenaScene extends Phaser.Scene {
 
     const dir = this.player.lastDir.clone();
     if (dir.lengthSq() === 0) dir.set(1, 0);
-    const newX = Phaser.Math.Clamp(this.player.x + dir.x * DASH_DISTANCE, 10, INTERNAL_WIDTH - 10);
-    const newY = Phaser.Math.Clamp(this.player.y + dir.y * DASH_DISTANCE, 10, INTERNAL_HEIGHT - 10);
-    this.spawnDashTrail(this.player.x, this.player.y, newX, newY);
-    this.player.setPosition(newX, newY);
+
+    const dashDurationMs = 100;
+    const speed = DASH_DISTANCE / (dashDurationMs / 1000);
+
+    this.player.dashActiveUntil = time + dashDurationMs;
+    this.player.dashVelocity.set(dir.x * speed, dir.y * speed);
+
     this.player.dashCooldownUntil = time + DASH_COOLDOWN_MS;
-    this.player.setInvincible(DASH_INVINCIBLE_MS, time);
+    this.player.setInvincible(Math.max(DASH_INVINCIBLE_MS, dashDurationMs), time);
     AudioManager.playSFX(this, 'dash');
     this.telemetry.recordDash(dir);
   }

@@ -1,5 +1,10 @@
-export const INTERNAL_WIDTH = 320;
-export const INTERNAL_HEIGHT = 180;
+export let INTERNAL_WIDTH = 320;
+export let INTERNAL_HEIGHT = 180;
+
+export function updateInternalResolution(w: number, h: number) {
+    INTERNAL_WIDTH = Math.round(w);
+    INTERNAL_HEIGHT = Math.round(h);
+}
 export const DISPLAY_WIDTH = 1280;
 export const DISPLAY_HEIGHT = 720;
 export const ZOOM = 4;

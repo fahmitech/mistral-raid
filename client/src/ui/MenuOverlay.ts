@@ -59,15 +59,18 @@ export class MenuOverlay {
       letterSpacing: '0',
       color: '#cfd8ff',
       userSelect: 'none',
+      webkitFontSmoothing: 'none',
+      fontSmooth: 'never',
+      imageRendering: 'pixelated',
     });
 
     this.stage = document.createElement('div');
-Object.assign(this.stage.style, {
-  position: 'absolute',
-  width: `${INTERNAL_WIDTH}px`,
-  height: `${INTERNAL_HEIGHT}px`,
-  transformOrigin: 'top left',
-});
+    Object.assign(this.stage.style, {
+      position: 'absolute',
+      width: `${INTERNAL_WIDTH}px`,
+      height: `${INTERNAL_HEIGHT}px`,
+      transformOrigin: 'top left',
+    });
 
     this.content = document.createElement('div');
     Object.assign(this.content.style, {
@@ -81,10 +84,10 @@ Object.assign(this.stage.style, {
     this.subtitleEl.style.transform = 'translate(-50%, -50%)';
     this.subtitleEl.style.top = `${this.layout.subtitleY}px`;
     this.subtitleEl.style.fontFamily = '\'Press Start 2P\', monospace';
-    this.subtitleEl.style.fontSize = '10px';
-    this.subtitleEl.style.letterSpacing = '-0.25px';
+    this.subtitleEl.style.fontSize = '32px';
+    this.subtitleEl.style.letterSpacing = '-0.5px';
     this.subtitleEl.style.color = '#7b5fff';
-    this.subtitleEl.style.textShadow = '0 1px 0 #08001a';
+    this.subtitleEl.style.textShadow = '0 3px 0 #08001a, 0 0 15px rgba(123, 95, 255, 0.5)';
 
     this.menuListEl = document.createElement('div');
     Object.assign(this.menuListEl.style, {
@@ -95,7 +98,7 @@ Object.assign(this.stage.style, {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: `${Math.max(3, this.layout.itemGap - 5)}px`,
+      gap: `${this.layout.itemGap}px`,
       pointerEvents: 'auto',
     });
 
@@ -103,7 +106,7 @@ Object.assign(this.stage.style, {
     Object.assign(this.hintEl.style, {
       position: 'absolute',
       left: '0',
-      width: `${INTERNAL_WIDTH}px`,
+      width: '100%',
       transform: 'translateY(-100%)',
       color: '#bbf7d0',
       textAlign: 'center',
@@ -112,12 +115,13 @@ Object.assign(this.stage.style, {
       gap: '18px',
       pointerEvents: 'auto',
       fontFamily: '\'Press Start 2P\', monospace',
-      fontSize: '5px',
+      fontSize: '18px',
       letterSpacing: '0.25em',
       lineHeight: '1',
       padding: '0 4px',
+      overflow: 'hidden',
     });
-this.setHintPosition();
+    this.setHintPosition();
 
     this.content.appendChild(this.subtitleEl);
     this.content.appendChild(this.menuListEl);
@@ -144,11 +148,11 @@ this.setHintPosition();
       button.style.opacity = item.enabled ? '0.9' : '0.4';
       button.style.textShadow = '0 1px 0 rgba(5,7,11,0.85)';
       button.style.cursor = item.enabled ? 'pointer' : 'not-allowed';
-      button.style.padding = '1px 5px';
+      button.style.padding = '4px 12px';
       button.style.fontFamily = '\'Press Start 2P\', monospace';
-button.style.fontSize = '7.5px';
-button.style.letterSpacing = '-0.15px';
-button.style.lineHeight = '1.05';
+      button.style.fontSize = '26px';
+      button.style.letterSpacing = '-0.15px';
+      button.style.lineHeight = '1.2';
       button.disabled = !item.enabled;
       button.dataset.index = String(idx);
 
@@ -167,7 +171,7 @@ button.style.lineHeight = '1.05';
       this.menuListEl.appendChild(button);
       return button;
     });
-    
+
     this.applySelectedStyles();
   }
 
@@ -239,26 +243,33 @@ button.style.lineHeight = '1.05';
   }
 
   private setHintPosition(): void {
-  this.hintEl.style.top = `${this.layout.hintBaseline - 3}px`;
-}
+    this.hintEl.style.top = `${this.layout.hintBaseline - 3}px`;
+  }
 
   private updateStage(): void {
-  const canvasRect = this.canvas.getBoundingClientRect();
-  const parentRect = this.parent.getBoundingClientRect();
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const parentRect = this.parent.getBoundingClientRect();
 
-  // Position stage over the canvas inside the parent overlay
-  const left = canvasRect.left - parentRect.left;
-  const top = canvasRect.top - parentRect.top;
+    const left = canvasRect.left - parentRect.left;
+    const top = canvasRect.top - parentRect.top;
 
-  this.scaleX = canvasRect.width / INTERNAL_WIDTH;
-  this.scaleY = canvasRect.height / INTERNAL_HEIGHT;
+    // Use a higher base resolution for UI (720p height) for better layout control
+    const baseHeight = 720;
+    const aspect = INTERNAL_WIDTH / INTERNAL_HEIGHT;
+    const baseWidth = baseHeight * aspect;
 
-  this.stage.style.left = `${left}px`;
-  this.stage.style.top = `${top}px`;
-  this.stage.style.transform = `scale(${this.scaleX}, ${this.scaleY})`;
+    this.stage.style.width = `${baseWidth}px`;
+    this.stage.style.height = `${baseHeight}px`;
 
-  this.lastStageRect = this.stage.getBoundingClientRect();
-}
+    this.scaleX = canvasRect.width / baseWidth;
+    this.scaleY = canvasRect.height / baseHeight;
+
+    this.stage.style.left = `${left}px`;
+    this.stage.style.top = `${top}px`;
+    this.stage.style.transform = `scale(${this.scaleX}, ${this.scaleY})`;
+
+    this.lastStageRect = this.stage.getBoundingClientRect();
+  }
 
   private applySelectedStyles(): void {
     this.menuItemEls.forEach((el, idx) => {

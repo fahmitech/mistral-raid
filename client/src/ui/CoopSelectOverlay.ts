@@ -1,3 +1,4 @@
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
 import type { CompanionGuide } from '../config/companionGuides';
 
 export type CoopSection = 'hero' | 'companion' | 'personality';
@@ -40,48 +41,46 @@ const ensureStyles = (): void => {
   style.textContent = `
     .coop-ui { position:absolute; inset:0; font-family:'Press Start 2P', monospace; text-transform:uppercase; color:#cfd8ff; pointer-events:none; }
     .coop-bg { position:absolute; inset:0; background:radial-gradient(circle at 50% 15%, rgba(255,255,255,0.05), transparent 45%), linear-gradient(180deg,#04001a 0%,#050427 40%,#080835 100%); }
-    .coop-frame { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; padding:32px 32px 24px; gap:24px; }
-    .coop-header { text-align:center; letter-spacing:0.2em; color:#f5d0fe; text-shadow:0 1px 0 #130022, 0 0 24px rgba(245,208,254,0.7); font-size:17px; margin-top:12px; }
-    .coop-header small { display:block; margin-top:8px; font-size:10px; color:#fde68a; letter-spacing:0.25em; opacity:0.95; }
-    .coop-panel { position:relative; width:740px; min-height:420px; background:rgba(5,12,24,0.95); border:2px solid rgba(80,110,170,0.85); border-radius:12px; padding:34px 44px; display:flex; flex-direction:column; gap:32px; box-shadow:0 0 52px rgba(10,0,40,0.7); pointer-events:auto; }
-    .coop-panel::before,.coop-panel::after { content:''; position:absolute; width:8px; height:8px; border:1px solid rgba(80,110,180,0.6); }
+    .coop-frame { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px; gap:32px; }
+    .coop-header { text-align:center; letter-spacing:0.2em; color:#f5d0fe; text-shadow:0 1px 0 #130022, 0 0 24px rgba(245,208,254,0.7); font-size:32px; margin-top:0; }
+    .coop-header small { display:block; margin-top:12px; font-size:14px; color:#fde68a; letter-spacing:0.25em; opacity:0.95; }
+    .coop-panel { position:relative; width:950px; min-height:550px; background:rgba(5,12,24,0.95); border:3px solid rgba(80,110,170,0.85); border-radius:16px; padding:48px 64px; display:flex; flex-direction:column; gap:48px; box-shadow:0 0 80px rgba(10,0,40,0.8); pointer-events:auto; }
+    .coop-panel::before,.coop-panel::after { content:''; position:absolute; width:12px; height:12px; border:1px solid rgba(80,110,180,0.6); }
     .coop-panel::before { top:-1px; left:-1px; border-right:none; border-bottom:none; }
     .coop-panel::after { bottom:-1px; right:-1px; border-left:none; border-top:none; }
-    .coop-section { display:flex; flex-direction:column; gap:10px; }
-    .coop-section + .coop-section { border-top:1px solid rgba(80,100,150,0.4); padding-top:16px; }
-    .coop-section-title { font-size:11px; letter-spacing:0.25em; color:#facc15; font-family:'Press Start 2P', monospace; }
+    .coop-section { display:flex; flex-direction:column; gap:16px; }
+    .coop-section + .coop-section { border-top:1.5px solid rgba(80,100,150,0.4); padding-top:32px; }
+    .coop-section-title { font-size:16px; letter-spacing:0.25em; color:#facc15; font-family:'Press Start 2P', monospace; }
     .coop-section-title.secondary { color:#94a3b8; }
-    .coop-portrait-row { display:flex; justify-content:center; gap:52px; padding:0 20px; }
-    .coop-portrait { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 0; border:none; background:none; cursor:pointer; pointer-events:auto; }
-    .coop-portrait .frame { width:92px; height:92px; border:3px solid rgba(40,60,90,0.45); border-radius:10px; display:flex; align-items:center; justify-content:center; background:#091023; box-shadow:inset 0 3px 8px rgba(0,0,0,0.65); transition:border-color 0.15s, box-shadow 0.15s; }
-    .coop-portrait img { width:52px; height:58px; image-rendering:pixelated; }
-    .coop-portrait .placeholder { width:34px; height:42px; background:rgba(255,255,255,0.15); border-radius:3px; }
-    .coop-portrait span { font-size:9px; color:#7f8db2; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; }
-    .coop-portrait.selected .frame.hero { border-color:#ffdd00; box-shadow:0 0 8px rgba(255,221,0,0.5); }
-    .coop-portrait.selected .frame.companion { border-color:#a855f7; box-shadow:0 0 8px rgba(168,85,247,0.5); }
-    .coop-portrait.selected span { color:#f8fafc; }
-    .coop-personality-row { display:flex; justify-content:space-between; gap:24px; padding:0 24px; }
-    .coop-personality-btn { flex:1; border:none; background:none; text-align:center; cursor:pointer; opacity:0.45; color:#94a3b8; font-size:9px; display:flex; flex-direction:column; gap:7px; align-items:center; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; }
-    .coop-personality-btn .icon { font-size:14px; line-height:1; }
-    .coop-companion-card { position:absolute; width:240px; background:rgba(8,12,28,0.95); border:2px solid rgba(80,110,170,0.85); border-radius:10px; padding:16px 18px; box-shadow:0 12px 28px rgba(0,0,0,0.55); opacity:0; transform:translateY(6px); transition:opacity 0.2s ease, transform 0.2s ease; pointer-events:none; z-index:5; }
+    .coop-portrait-row { display:flex; justify-content:center; gap:64px; padding:0 32px; }
+    .coop-portrait { flex:1; display:flex; flex-direction:column; align-items:center; gap:12px; padding:8px 0; border:none; background:none; cursor:pointer; pointer-events:auto; transition: transform 0.2s; }
+    .coop-portrait:hover { transform: scale(1.05); }
+    .coop-portrait .frame { width:120px; height:120px; border:4px solid rgba(40,60,90,0.45); border-radius:12px; display:flex; align-items:center; justify-content:center; background:#091023; box-shadow:inset 0 4px 12px rgba(0,0,0,0.65); transition:all 0.2s; }
+    .coop-portrait img { width:80px; height:80px; image-rendering:pixelated; }
+    .coop-portrait .placeholder { width:60px; height:60px; background:rgba(255,255,255,0.15); border-radius:4px; }
+    .coop-portrait span { font-size:11px; color:#7f8db2; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; }
+    .coop-portrait.selected .frame.hero { border-color:#ffdd00; box-shadow:0 0 16px rgba(255,221,0,0.6); transform: scale(1.1); }
+    .coop-portrait.selected .frame.companion { border-color:#a855f7; box-shadow:0 0 16px rgba(168,85,247,0.6); transform: scale(1.1); }
+    .coop-portrait.selected span { color:#f8fafc; font-weight:bold; }
+    .coop-personality-row { display:flex; justify-content:space-between; gap:32px; padding:0 32px; }
+    .coop-personality-btn { flex:1; border:none; background:none; text-align:center; cursor:pointer; opacity:0.45; color:#94a3b8; font-size:11px; display:flex; flex-direction:column; gap:12px; align-items:center; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; transition: all 0.2s; }
+    .coop-personality-btn .icon { font-size:24px; line-height:1; }
+    .coop-personality-btn:hover { opacity:0.8; transform: translateY(-4px); }
+    .coop-companion-card { position:absolute; width:340px; background:rgba(8,12,28,0.95); border:3px solid rgba(80,110,170,0.85); border-radius:12px; padding:24px 30px; box-shadow:0 16px 40px rgba(0,0,0,0.6); opacity:0; transform:translateY(10px); transition:opacity 0.2s ease, transform 0.2s ease; pointer-events:none; z-index:5; }
     .coop-companion-card.visible { opacity:1; transform:translateY(0); }
-    .coop-companion-card h4 { font-size:11px; margin-bottom:4px; letter-spacing:0.16em; }
-    .coop-companion-card .subtitle { font-size:7px; color:#9facd8; letter-spacing:0.24em; margin-bottom:8px; }
-    .coop-companion-card p { font-size:7px; line-height:1.6; color:#dbe8ff; }
-    .coop-companion-card .ability { margin-top:10px; padding-top:10px; border-top:1px solid rgba(90,120,180,0.35); }
-    .coop-companion-card .ability strong { display:block; font-size:8px; letter-spacing:0.18em; margin-bottom:4px; }
-    .coop-companion-card .stats { margin-top:12px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .coop-companion-card .stat label { font-size:6px; color:#9facd8; letter-spacing:0.18em; display:block; margin-bottom:2px; }
-    .coop-companion-card .stat .value { font-size:7px; color:#f8fafc; letter-spacing:0.1em; display:block; margin-bottom:2px; }
-    .coop-companion-card .stat .bar { width:100%; height:5px; background:#0b1424; border:1px solid rgba(255,255,255,0.15); position:relative; }
-    .coop-companion-card .stat .bar::after { content:''; position:absolute; top:0; left:0; height:100%; background:var(--bar-color, #94a3b8); width:var(--bar-fill,50%); }
-    .coop-personality-btn.selected { opacity:1; text-shadow:0 0 8px currentColor; }
-    .coop-bottom { border-top:1px solid rgba(80,100,150,0.4); padding-top:16px; display:flex; flex-direction:column; gap:10px; align-items:center; }
-    .coop-desc { font-size:8px; color:#e3ebff; letter-spacing:0.12em; text-align:center; }
-    .coop-instructions { font-size:7px; color:#9ea9d1; letter-spacing:0.1em; text-align:center; }
-    .coop-buttons { width:86%; display:flex; justify-content:space-between; gap:24px; }
-    .coop-btn { flex:1; font-family:'Press Start 2P', monospace; font-size:10px; padding:10px 0; background:rgba(8,12,28,0.95); border:2px solid rgba(90,120,190,0.95); color:#f0f4ff; box-shadow:0 4px 14px rgba(0,0,0,0.65); cursor:pointer; letter-spacing:0.16em; }
-    .coop-btn:hover { background:rgba(12,18,38,0.95); }
+    .coop-companion-card h4 { font-size:14px; margin-bottom:8px; letter-spacing:0.16em; }
+    .coop-companion-card .subtitle { font-size:10px; color:#9facd8; letter-spacing:0.24em; margin-bottom:14px; }
+    .coop-companion-card p { font-size:10px; line-height:1.6; color:#dbe8ff; }
+    .coop-companion-card .ability { margin-top:16px; padding-top:16px; border-top:1.5px solid rgba(90,120,180,0.35); }
+    .coop-companion-card .ability strong { display:block; font-size:11px; letter-spacing:0.18em; margin-bottom:6px; }
+    .coop-companion-card .stats { margin-top:20px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .coop-personality-btn.selected { opacity:1; text-shadow:0 0 12px currentColor; transform: scale(1.1) translateY(-4px); }
+    .coop-bottom { border-top:1.5px solid rgba(80,100,150,0.4); padding-top:24px; display:flex; flex-direction:column; gap:16px; align-items:center; }
+    .coop-desc { font-size:11px; color:#e3ebff; letter-spacing:0.12em; text-align:center; }
+    .coop-instructions { font-size:10px; color:#9ea9d1; letter-spacing:0.1em; text-align:center; }
+    .coop-buttons { width:100%; display:flex; justify-content:space-between; gap:32px; }
+    .coop-btn { flex:1; font-family:'Press Start 2P', monospace; font-size:14px; padding:16px 0; background:rgba(8,12,28,0.95); border:2px solid rgba(90,120,190,0.95); color:#f0f4ff; box-shadow:0 6px 20px rgba(0,0,0,0.65); cursor:pointer; letter-spacing:0.16em; transition: all 0.2s; }
+    .coop-btn:hover { background:rgba(20,30,60,0.98); border-color:#00ffcc; color:#00ffcc; box-shadow: 0 0 24px rgba(0,255,204,0.3); }
   `;
   document.head.appendChild(style);
 };
@@ -99,10 +98,17 @@ export class CoopSelectOverlay {
   private companionDetails: CompanionGuide[];
   private pinnedCompanionIndex: number | null = null;
   private hoverCompanionIndex: number | null = null;
+  private partner_canvas: HTMLCanvasElement;
+  private stage: HTMLDivElement;
+  private resizeObserver: ResizeObserver;
+  private scaleX = 1;
+  private scaleY = 1;
+  private lastStageRect: DOMRect | null = null;
 
-  constructor(parent: HTMLElement, options: CoopSelectOverlayOptions) {
+  constructor(parent: HTMLElement, canvas: HTMLCanvasElement, options: CoopSelectOverlayOptions) {
     parent.querySelectorAll<HTMLDivElement>('[data-coop-overlay="true"]').forEach((node) => node.remove());
     ensureStyles();
+    this.partner_canvas = canvas;
     this.root = document.createElement('div');
     this.root.dataset.coopOverlay = 'true';
     this.root.className = 'coop-ui';
@@ -112,8 +118,18 @@ export class CoopSelectOverlay {
     bg.className = 'coop-bg';
     this.root.appendChild(bg);
 
+    this.stage = document.createElement('div');
+    Object.assign(this.stage.style, {
+      position: 'absolute',
+      width: `${INTERNAL_WIDTH}px`,
+      height: `${INTERNAL_HEIGHT}px`,
+      transformOrigin: 'top left',
+    });
+
     const frame = document.createElement('div');
     frame.className = 'coop-frame';
+    frame.style.width = '100%';
+    frame.style.height = '100%';
     const header = document.createElement('div');
     header.className = 'coop-header';
     header.innerHTML = 'AI CO-OP MODE<small>AI COMPANION POWERED BY MISTRAL</small>';
@@ -138,6 +154,8 @@ export class CoopSelectOverlay {
 
     const bottom = document.createElement('div');
     bottom.className = 'coop-bottom';
+    bottom.style.paddingTop = '8px';
+    bottom.style.gap = '4px';
     panel.appendChild(bottom);
 
     this.descEl = document.createElement('div');
@@ -161,7 +179,12 @@ export class CoopSelectOverlay {
     buttons.append(backBtn, startBtn);
     bottom.appendChild(buttons);
 
-    this.root.appendChild(frame);
+    this.stage.appendChild(frame);
+    this.root.appendChild(this.stage);
+
+    this.resizeObserver = new ResizeObserver(() => this.updateStage());
+    this.resizeObserver.observe(canvas);
+    this.updateStage();
 
     this.sectionTitleMap = {
       hero: heroSection.querySelector('.coop-section-title') as HTMLDivElement,
@@ -199,9 +222,11 @@ export class CoopSelectOverlay {
       return;
     }
     const rect = btn.getBoundingClientRect();
+    if (!this.lastStageRect) return; // shouldn't happen
+
     const panelRect = this.panelEl.getBoundingClientRect();
-    const top = rect.bottom - panelRect.top + 6;
-    const left = rect.left - panelRect.left + rect.width / 2 - 120;
+    const top = (rect.bottom - panelRect.top) / this.scaleY + 8;
+    const left = (rect.left - panelRect.left + rect.width / 2) / this.scaleX - 170; // 170 is half of card width (340/2)
     this.companionCard.style.top = `${top}px`;
     this.companionCard.style.left = `${left}px`;
     this.companionCard.innerHTML = this.buildCompanionCard(detail);
@@ -241,7 +266,30 @@ export class CoopSelectOverlay {
   }
 
   destroy(): void {
+    this.resizeObserver.disconnect();
     this.root.remove();
+  }
+
+  private updateStage(): void {
+    const canvasRect = this.partner_canvas.getBoundingClientRect();
+    const parentRect = this.root.parentElement?.getBoundingClientRect() ?? canvasRect;
+
+    const left = canvasRect.left - parentRect.left;
+    const top = canvasRect.top - parentRect.top;
+
+    const baseHeight = 720;
+    const aspect = INTERNAL_WIDTH / INTERNAL_HEIGHT;
+    const baseWidth = baseHeight * aspect;
+
+    this.scaleX = canvasRect.width / baseWidth;
+    this.scaleY = canvasRect.height / baseHeight;
+
+    this.stage.style.left = `${left}px`;
+    this.stage.style.top = `${top}px`;
+    this.stage.style.width = `${baseWidth}px`;
+    this.stage.style.height = `${baseHeight}px`;
+    this.stage.style.transform = `scale(${this.scaleX}, ${this.scaleY})`;
+    this.lastStageRect = this.stage.getBoundingClientRect();
   }
 
   private buildSection(title: string, section: CoopSection, subdued = false): HTMLDivElement {

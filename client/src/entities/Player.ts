@@ -11,6 +11,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   weaponSprite: Phaser.GameObjects.Sprite;
   invincibleUntil = 0;
   dashCooldownUntil = 0;
+  dashActiveUntil = 0;
+  dashVelocity = new Phaser.Math.Vector2(0, 0);
   shieldCooldownUntil = 0;
   shieldActiveUntil = 0;
   lastDir = new Phaser.Math.Vector2(1, 0);

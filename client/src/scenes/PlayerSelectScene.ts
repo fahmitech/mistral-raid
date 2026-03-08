@@ -32,7 +32,7 @@ export class PlayerSelectScene extends Phaser.Scene {
     if (!parent) throw new Error('PlayerSelectScene: canvas parent missing');
 
     parent.querySelectorAll<HTMLDivElement>('[data-solo-overlay="true"]').forEach((node) => node.remove());
-    this.overlay = new SoloSelectOverlay(parent, {
+    this.overlay = new SoloSelectOverlay(parent, this.game.canvas, {
       heroes: this.heroOptions,
       onSelect: (index) => {
         if (index === this.selectedIndex) return;
@@ -103,13 +103,15 @@ export class PlayerSelectScene extends Phaser.Scene {
 
   private createBackground(): void {
     const gfx = this.add.graphics();
-    for (let y = 0; y < 180; y += 1) {
-      const t = y / 180;
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
+    for (let y = 0; y < height; y += 1) {
+      const t = y / height;
       const r = Math.round(2 + (8 - 2) * t);
       const g = Math.round(0 + (6 - 0) * t);
       const b = Math.round(16 + (30 - 16) * t);
       gfx.fillStyle((r << 16) + (g << 8) + b, 1);
-      gfx.fillRect(0, y, 320, 1);
+      gfx.fillRect(0, y, width, 1);
     }
   }
 

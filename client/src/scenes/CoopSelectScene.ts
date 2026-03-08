@@ -16,17 +16,16 @@ const CHARACTER_ORDER: CharacterType[] = [
 ];
 
 const PERSONALITIES: { key: CompanionPersonality; label: string; desc: string; color: string }[] = [
-  { key: 'aggressive', label: 'AGGRO',    desc: 'Always attacking, high-risk offense',    color: '#ff4444' },
-  { key: 'tactical',  label: 'TACTICAL',  desc: 'Weakest enemy first, smart positioning', color: '#ffaa22' },
-  { key: 'protector', label: 'PROTECTOR', desc: 'Guards the player at all times',         color: '#44aaff' },
-  { key: 'balanced',  label: 'BALANCED',  desc: 'Mix of attack and defense',              color: '#44ff88' },
+  { key: 'aggressive', label: 'AGGRO', desc: 'Always attacking, high-risk offense', color: '#ff4444' },
+  { key: 'tactical', label: 'TACTICAL', desc: 'Weakest enemy first, smart positioning', color: '#ffaa22' },
+  { key: 'protector', label: 'PROTECTOR', desc: 'Guards the player at all times', color: '#44aaff' },
+  { key: 'balanced', label: 'BALANCED', desc: 'Mix of attack and defense', color: '#44ff88' },
 ];
 
-// Portrait box layout: 4 boxes centred in 320px
-const BOX_SIZE   = 24;
-const BOX_GAP    = 24;
-const BOX_STEP   = BOX_SIZE + BOX_GAP;                // 48px
-const ROW_START_X = (320 - (4 * BOX_SIZE + 3 * BOX_GAP)) / 2; // 76
+const BOX_SIZE = 24;
+const BOX_GAP = 24;
+const BOX_STEP = BOX_SIZE + BOX_GAP;                // 48px
+const getRowStartX = (width: number) => (width - (4 * BOX_SIZE + 3 * BOX_GAP)) / 2;
 
 type FocusedSection = CoopSection;
 
@@ -84,7 +83,7 @@ export class CoopSelectScene extends Phaser.Scene {
       color: p.color,
       icon: this.getPersonalityIcon(p.key),
     }));
-    this.overlay = new CoopSelectOverlay(parent, {
+    this.overlay = new CoopSelectOverlay(parent, this.game.canvas, {
       heroes: heroOptions,
       companions: companionOptions,
       companionDetails: COMPANION_GUIDES,
@@ -112,12 +111,12 @@ export class CoopSelectScene extends Phaser.Scene {
     this.createPortraitRow(110, this.companionSprites, this.companionBgs, COMPANION_GUIDES.map((guide) => guide.spriteKey), true);
 
     // ── Keyboard ──────────────────────────────────────────────────────────
-    this.input.keyboard?.on('keydown-LEFT',  () => this.shiftFocus(-1));
+    this.input.keyboard?.on('keydown-LEFT', () => this.shiftFocus(-1));
     this.input.keyboard?.on('keydown-RIGHT', () => this.shiftFocus(1));
-    this.input.keyboard?.on('keydown-UP',    () => this.switchSection(-1));
-    this.input.keyboard?.on('keydown-DOWN',  () => this.switchSection(1));
+    this.input.keyboard?.on('keydown-UP', () => this.switchSection(-1));
+    this.input.keyboard?.on('keydown-DOWN', () => this.switchSection(1));
     this.input.keyboard?.on('keydown-ENTER', () => this.confirm());
-    this.input.keyboard?.on('keydown-ESC',   () => this.back());
+    this.input.keyboard?.on('keydown-ESC', () => this.back());
 
     this.refreshAll();
   }
@@ -125,24 +124,27 @@ export class CoopSelectScene extends Phaser.Scene {
   // ── Private ──────────────────────────────────────────────────────────────
 
   private createBackground(): void {
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
     const gfx = this.add.graphics();
-    for (let y = 0; y < 180; y += 1) {
-      const t = y / 180;
+    for (let y = 0; y < height; y += 1) {
+      const t = y / height;
       const r = Math.round(4 + (10 - 4) * t);
       const g = Math.round(0 + (4 - 0) * t);
       const b = Math.round(20 + (40 - 20) * t);
       gfx.fillStyle((r << 16) + (g << 8) + b, 1);
-      gfx.fillRect(0, y, 320, 1);
+      gfx.fillRect(0, y, width, 1);
     }
 
     // Panel for hero row
     const panel = gfx;
     const panelWidth = 4 * BOX_STEP - BOX_GAP + 24;
     const panelHeight = 152;
+    const rowStartX = getRowStartX(width);
     panel.fillStyle(0x06101e, 0.82);
-    panel.fillRoundedRect(ROW_START_X - 6, 28, panelWidth, panelHeight, 6);
+    panel.fillRoundedRect(rowStartX - 6, 28, panelWidth, panelHeight, 6);
     panel.lineStyle(1, 0x334466, 0.7);
-    panel.strokeRoundedRect(ROW_START_X - 6, 28, panelWidth, panelHeight, 6);
+    panel.strokeRoundedRect(rowStartX - 6, 28, panelWidth, panelHeight, 6);
   }
 
   private createPortraitRow(
@@ -152,8 +154,10 @@ export class CoopSelectScene extends Phaser.Scene {
     spriteKeys: string[],
     isCompanion: boolean
   ): void {
+    const width = this.cameras.main.width;
+    const rowStartX = getRowStartX(width);
     spriteKeys.forEach((spriteKey, idx) => {
-      const cx = ROW_START_X + idx * BOX_STEP + BOX_SIZE / 2;
+      const cx = rowStartX + idx * BOX_STEP + BOX_SIZE / 2;
       const cy = rowCenterY;
 
       const bg = this.add.graphics();

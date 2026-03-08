@@ -19,12 +19,14 @@ export class PauseScene extends Phaser.Scene {
     this.scene.pause('LevelScene');
     AudioManager.get().playSFX('pause_whoosh', 0.7);
 
-    this.add.rectangle(160, 90, 320, 180, 0x000000, 0.55).setScrollFactor(0);
+    const { width, height } = this.cameras.main;
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.55).setScrollFactor(0);
     const panel = this.add.graphics();
-    panel.fillStyle(0x0a0f1e, 0.92);
-    panel.fillRoundedRect(72, 46, 176, 96, 6);
+    const cx = width / 2;
+    const cy = height / 2;
+    panel.fillRoundedRect(cx - 88, cy - 48, 176, 96, 6);
     panel.lineStyle(1, 0x224466, 0.9);
-    panel.strokeRoundedRect(72, 46, 176, 96, 6);
+    panel.strokeRoundedRect(cx - 88, cy - 48, 176, 96, 6);
 
     this.items = [
       {
@@ -63,7 +65,7 @@ export class PauseScene extends Phaser.Scene {
 
     this.items.forEach((item, idx) => {
       const text = this.add
-        .text(160, 62 + idx * 18, item.label.toUpperCase(), {
+        .text(cx, cy - 32 + idx * 18, item.label.toUpperCase(), {
           fontFamily: '"Press Start 2P"',
           fontSize: '6px',
           color: '#aabbcc',
