@@ -5,8 +5,36 @@ import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 import { CoopState, type CompanionPersonality } from '../systems/CoopState';
-import { CoopSelectOverlay, type CoopSection, type CoopSelectOverlayState } from '../ui/CoopSelectOverlay';
+import { CoopSelectOverlay, type CoopSection, type CoopSelectOverlayState, type CoopHeroOption, type PersonalityOption } from '../ui/CoopSelectOverlay';
 import { FRAME_URLS } from '../utils/assetManifest';
+
+// Hero extended info for the card display
+const HERO_INFO: Record<CharacterType, { role: string; shortDescription: string; accentHex: string; difficulty: string }> = {
+  [CharacterType.Knight]: {
+    role: 'TANK',
+    shortDescription: 'A balanced warrior with strong defense and steady offense. Perfect for learning the dungeon.',
+    accentHex: '#4a90d9',
+    difficulty: 'Forgiving',
+  },
+  [CharacterType.Rogue]: {
+    role: 'STRIKER',
+    shortDescription: 'Lightning-fast attacker with rapid fire. Low HP demands skilled play.',
+    accentHex: '#7ed957',
+    difficulty: 'Steady',
+  },
+  [CharacterType.Mage]: {
+    role: 'CASTER',
+    shortDescription: 'Devastating spell damage at the cost of fragility. High risk, high reward.',
+    accentHex: '#c084fc',
+    difficulty: 'Advanced',
+  },
+  [CharacterType.Paladin]: {
+    role: 'JUGGERNAUT',
+    shortDescription: 'An iron tank with maximum HP and heavy hits. Slow but unstoppable.',
+    accentHex: '#f59e0b',
+    difficulty: 'Steady',
+  },
+};
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -67,22 +95,39 @@ export class CoopSelectScene extends Phaser.Scene {
     this.overlay?.destroy();
     const parent = this.game.canvas?.parentElement;
     if (!parent) throw new Error('CoopSelectScene: canvas parentElement missing');
-    const heroOptions = CHARACTER_ORDER.map((type) => {
+    const heroOptions: CoopHeroOption[] = CHARACTER_ORDER.map((type) => {
       const cfg = CHARACTER_CONFIGS[type];
+      const info = HERO_INFO[type];
+      // Normalize stats to 0-1 range for display
+      const maxHP = 8;
+      const maxSpeed = 145;
+      const maxDamage = 2.0;
+      const maxFireRate = 420;
       return {
         label: cfg.label.toUpperCase(),
+        role: info.role,
+        shortDescription: info.shortDescription,
+        accentHex: info.accentHex,
         image: this.resolvePortraitUrl(cfg.spriteKey) ?? null,
+        stats: {
+          health: cfg.maxHP / maxHP,
+          speed: cfg.speed / maxSpeed,
+          power: cfg.damage / maxDamage,
+          attackSpeed: 1 - (cfg.fireRate / maxFireRate), // Lower fireRate = faster attacks
+        },
+        difficulty: info.difficulty,
       };
     });
     const companionOptions = COMPANION_GUIDES.map((guide) => ({
       label: guide.label,
       image: this.createCompanionPreview(guide),
     }));
-    const personalityOptions = PERSONALITIES.map((p) => ({
+    const personalityOptions: PersonalityOption[] = PERSONALITIES.map((p) => ({
       key: p.key,
       label: p.label,
       color: p.color,
       icon: this.getPersonalityIcon(p.key),
+      desc: p.desc,
     }));
     this.overlay = new CoopSelectOverlay(parent, {
       heroes: heroOptions,

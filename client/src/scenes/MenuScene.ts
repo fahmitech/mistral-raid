@@ -553,7 +553,7 @@ export class MenuScene extends Phaser.Scene {
       yoyo: true,
     });
 
-    const subtitleY = titleY + 16;
+    const subtitleY = titleY + 22;
     this.subtitleText = this.addPixelText(ARCH_CX, subtitleY, 'THE WATCHER', {
       fontFamily: MENU_FONT,
       fontSize: '10px',

@@ -1,22 +1,43 @@
+// -----------------------------------------------------------------------------
+// CoopSelectOverlay.ts — Dungeon-style dual-card coop selector
+// -----------------------------------------------------------------------------
+
 import type { CompanionGuide } from '../config/companionGuides';
+import { DungeonBackdrop } from './DungeonBackdrop';
 
 export type CoopSection = 'hero' | 'companion' | 'personality';
 
-interface CharacterOption {
+export interface CoopHeroOption {
+  label: string;
+  role: string;
+  shortDescription: string;
+  accentHex: string;
+  image?: string | null;
+  stats: {
+    health: number;
+    speed: number;
+    power: number;
+    attackSpeed: number;
+  };
+  difficulty: string;
+}
+
+export interface CoopCompanionOption {
   label: string;
   image?: string | null;
 }
 
-interface PersonalityOption {
+export interface PersonalityOption {
   key: string;
   label: string;
   color: string;
   icon: string;
+  desc: string;
 }
 
-interface CoopSelectOverlayOptions {
-  heroes: CharacterOption[];
-  companions: CharacterOption[];
+export interface CoopSelectOverlayOptions {
+  heroes: CoopHeroOption[];
+  companions: CoopCompanionOption[];
   companionDetails: CompanionGuide[];
   personalities: PersonalityOption[];
   onSelect: (section: CoopSection, index: number) => void;
@@ -33,281 +54,784 @@ export interface CoopSelectOverlayState {
   companionDetail: CompanionGuide;
 }
 
+type StatKey = 'health' | 'speed' | 'power' | 'attackSpeed';
+
+const STAT_ICONS: Record<StatKey, { filled: string; label: string }> = {
+  health: { filled: '♥', label: 'HP' },
+  speed: { filled: '⚡', label: 'SPD' },
+  power: { filled: '⚔', label: 'PWR' },
+  attackSpeed: { filled: '✦', label: 'ATK' },
+};
+
+const COMPANION_STAT_ICONS: Record<string, { filled: string; label: string }> = {
+  offense: { filled: '⚔', label: 'OFF' },
+  defense: { filled: '🛡', label: 'DEF' },
+  support: { filled: '✚', label: 'SUP' },
+};
+
+const DIFFICULTY_SKULLS: Record<string, number> = {
+  Forgiving: 1,
+  Steady: 2,
+  Advanced: 3,
+  Expert: 4,
+};
+
+const buildSkullDisplay = (difficulty: string): string => {
+  return '💀'.repeat(DIFFICULTY_SKULLS[difficulty] ?? 2);
+};
+
+const buildStatIcons = (value: number, filled: string): string => {
+  const count = Math.round(value * 5);
+  return filled.repeat(count);
+};
+
+const buildCompanionStatIcons = (value: number, filled: string): string => {
+  const count = Math.round((value / 10) * 5);
+  return filled.repeat(count);
+};
+
 const ensureStyles = (): void => {
-  if (document.getElementById('coop-select-redesign')) return;
+  const existing = document.getElementById('coop-dungeon-ui');
+  if (existing) existing.remove();
+
   const style = document.createElement('style');
-  style.id = 'coop-select-redesign';
+  style.id = 'coop-dungeon-ui';
   style.textContent = `
-    .coop-ui { position:absolute; inset:0; font-family:'Press Start 2P', monospace; text-transform:uppercase; color:#cfd8ff; pointer-events:none; }
-    .coop-bg { position:absolute; inset:0; background:radial-gradient(circle at 50% 15%, rgba(255,255,255,0.05), transparent 45%), linear-gradient(180deg,#04001a 0%,#050427 40%,#080835 100%); }
-    .coop-frame { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; padding:32px 32px 24px; gap:24px; }
-    .coop-header { text-align:center; letter-spacing:0.2em; color:#f5d0fe; text-shadow:0 1px 0 #130022, 0 0 24px rgba(245,208,254,0.7); font-size:17px; margin-top:12px; }
-    .coop-header small { display:block; margin-top:8px; font-size:10px; color:#fde68a; letter-spacing:0.25em; opacity:0.95; }
-    .coop-panel { position:relative; width:740px; min-height:420px; background:rgba(5,12,24,0.95); border:2px solid rgba(80,110,170,0.85); border-radius:12px; padding:34px 44px; display:flex; flex-direction:column; gap:32px; box-shadow:0 0 52px rgba(10,0,40,0.7); pointer-events:auto; }
-    .coop-panel::before,.coop-panel::after { content:''; position:absolute; width:8px; height:8px; border:1px solid rgba(80,110,180,0.6); }
-    .coop-panel::before { top:-1px; left:-1px; border-right:none; border-bottom:none; }
-    .coop-panel::after { bottom:-1px; right:-1px; border-left:none; border-top:none; }
-    .coop-section { display:flex; flex-direction:column; gap:10px; }
-    .coop-section + .coop-section { border-top:1px solid rgba(80,100,150,0.4); padding-top:16px; }
-    .coop-section-title { font-size:11px; letter-spacing:0.25em; color:#facc15; font-family:'Press Start 2P', monospace; }
-    .coop-section-title.secondary { color:#94a3b8; }
-    .coop-portrait-row { display:flex; justify-content:center; gap:52px; padding:0 20px; }
-    .coop-portrait { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 0; border:none; background:none; cursor:pointer; pointer-events:auto; }
-    .coop-portrait .frame { width:92px; height:92px; border:3px solid rgba(40,60,90,0.45); border-radius:10px; display:flex; align-items:center; justify-content:center; background:#091023; box-shadow:inset 0 3px 8px rgba(0,0,0,0.65); transition:border-color 0.15s, box-shadow 0.15s; }
-    .coop-portrait img { width:52px; height:58px; image-rendering:pixelated; }
-    .coop-portrait .placeholder { width:34px; height:42px; background:rgba(255,255,255,0.15); border-radius:3px; }
-    .coop-portrait span { font-size:9px; color:#7f8db2; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; }
-    .coop-portrait.selected .frame.hero { border-color:#ffdd00; box-shadow:0 0 8px rgba(255,221,0,0.5); }
-    .coop-portrait.selected .frame.companion { border-color:#a855f7; box-shadow:0 0 8px rgba(168,85,247,0.5); }
-    .coop-portrait.selected span { color:#f8fafc; }
-    .coop-personality-row { display:flex; justify-content:space-between; gap:24px; padding:0 24px; }
-    .coop-personality-btn { flex:1; border:none; background:none; text-align:center; cursor:pointer; opacity:0.45; color:#94a3b8; font-size:9px; display:flex; flex-direction:column; gap:7px; align-items:center; letter-spacing:0.12em; font-family:'Press Start 2P', monospace; }
-    .coop-personality-btn .icon { font-size:14px; line-height:1; }
-    .coop-companion-card { position:absolute; width:240px; background:rgba(8,12,28,0.95); border:2px solid rgba(80,110,170,0.85); border-radius:10px; padding:16px 18px; box-shadow:0 12px 28px rgba(0,0,0,0.55); opacity:0; transform:translateY(6px); transition:opacity 0.2s ease, transform 0.2s ease; pointer-events:none; z-index:5; }
-    .coop-companion-card.visible { opacity:1; transform:translateY(0); }
-    .coop-companion-card h4 { font-size:11px; margin-bottom:4px; letter-spacing:0.16em; }
-    .coop-companion-card .subtitle { font-size:7px; color:#9facd8; letter-spacing:0.24em; margin-bottom:8px; }
-    .coop-companion-card p { font-size:7px; line-height:1.6; color:#dbe8ff; }
-    .coop-companion-card .ability { margin-top:10px; padding-top:10px; border-top:1px solid rgba(90,120,180,0.35); }
-    .coop-companion-card .ability strong { display:block; font-size:8px; letter-spacing:0.18em; margin-bottom:4px; }
-    .coop-companion-card .stats { margin-top:12px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-    .coop-companion-card .stat label { font-size:6px; color:#9facd8; letter-spacing:0.18em; display:block; margin-bottom:2px; }
-    .coop-companion-card .stat .value { font-size:7px; color:#f8fafc; letter-spacing:0.1em; display:block; margin-bottom:2px; }
-    .coop-companion-card .stat .bar { width:100%; height:5px; background:#0b1424; border:1px solid rgba(255,255,255,0.15); position:relative; }
-    .coop-companion-card .stat .bar::after { content:''; position:absolute; top:0; left:0; height:100%; background:var(--bar-color, #94a3b8); width:var(--bar-fill,50%); }
-    .coop-personality-btn.selected { opacity:1; text-shadow:0 0 8px currentColor; }
-    .coop-bottom { border-top:1px solid rgba(80,100,150,0.4); padding-top:16px; display:flex; flex-direction:column; gap:10px; align-items:center; }
-    .coop-desc { font-size:8px; color:#e3ebff; letter-spacing:0.12em; text-align:center; }
-    .coop-instructions { font-size:7px; color:#9ea9d1; letter-spacing:0.1em; text-align:center; }
-    .coop-buttons { width:86%; display:flex; justify-content:space-between; gap:24px; }
-    .coop-btn { flex:1; font-family:'Press Start 2P', monospace; font-size:10px; padding:10px 0; background:rgba(8,12,28,0.95); border:2px solid rgba(90,120,190,0.95); color:#f0f4ff; box-shadow:0 4px 14px rgba(0,0,0,0.65); cursor:pointer; letter-spacing:0.16em; }
-    .coop-btn:hover { background:rgba(12,18,38,0.95); }
+    .coop-ui {
+      position: absolute;
+      inset: 0;
+      font-family: 'Press Start 2P', monospace;
+      color: #c8c0e8;
+      background: #03010a;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .coop-ui .coop-screen {
+      position: relative;
+      z-index: 5;
+      box-shadow: inset 0 0 220px #000, inset 0 0 80px rgba(40,20,80,0.15);
+      animation: coop-torch-dim 12s infinite alternate;
+    }
+
+    @keyframes coop-torch-dim {
+      0%,100% { box-shadow: inset 0 0 220px #000, inset 0 0 80px rgba(40,20,80,0.15); }
+      50%     { box-shadow: inset 0 0 260px #000, inset 0 0 100px rgba(60,20,100,0.2); }
+    }
+
+    .coop-screen {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: auto;
+      min-height: 100vh;
+      box-sizing: border-box;
+      justify-content: center;
+    }
+
+    .coop-header {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .coop-header-title {
+      font-size: 32px;
+      letter-spacing: 6px;
+      color: #e0d8ff;
+      text-shadow: 0 0 20px rgba(80,40,140,0.8), 0 0 40px rgba(120,20,80,0.5), 4px 4px 0 #03010a;
+    }
+
+    /* Center box between thumbnails */
+    .coop-mistral-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 20px;
+      background: linear-gradient(180deg, #0a0612 0%, #050308 100%);
+      border: 2px solid #2a1a4c;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+    }
+
+    .coop-mistral-box span {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #fde68a;
+      text-shadow: 0 0 8px rgba(253,230,138,0.4), 2px 2px 0 rgba(0,0,0,0.9);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    /* Thumbnail rows */
+    .coop-thumb-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .coop-thumb-label {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: #a080b0;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
+    }
+
+    .coop-thumb-label.focused {
+      color: #ffdd00;
+      text-shadow: 0 0 8px rgba(255,221,0,0.5);
+    }
+
+    .coop-thumbs {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .coop-thumb {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      border: 3px solid #2a1a4c;
+      background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+    }
+
+    .coop-thumb img {
+      width: 85%;
+      height: 85%;
+      image-rendering: pixelated;
+      object-fit: contain;
+    }
+
+    .coop-thumb:hover {
+      border-color: #4a3a7c;
+      transform: scale(1.08);
+    }
+
+    .coop-thumb.active {
+      border-color: var(--thumb-accent, #a080c0);
+      box-shadow: 0 0 16px var(--thumb-accent, rgba(160,128,192,0.4)), 0 6px 16px rgba(0,0,0,0.8);
+      transform: scale(1.12);
+    }
+
+    /* Dual cards container */
+    .coop-cards {
+      display: flex;
+      gap: 20px;
+      flex: 1;
+      max-height: 320px;
+    }
+
+    .coop-card {
+      flex: 1;
+      background: linear-gradient(135deg, #1a1428 0%, #12101c 50%, #0a0814 100%);
+      border: 3px solid var(--card-accent, #3a2a5c);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.03);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .coop-card.focused {
+      border-width: 4px;
+      box-shadow: 0 0 20px var(--card-accent, rgba(160,128,192,0.4)), 0 10px 32px rgba(0,0,0,0.9);
+    }
+
+    .coop-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 2px solid rgba(255,255,255,0.07);
+    }
+
+    .coop-card-type {
+      font-size: 8px;
+      letter-spacing: 2px;
+      color: #706890;
+    }
+
+    .coop-card-name {
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
+    }
+
+    .coop-card-role-badge {
+      font-size: 8px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 2px solid var(--card-accent);
+      background: rgba(0,0,0,0.7);
+      color: var(--card-accent);
+    }
+
+    .coop-card-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .coop-card-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .coop-card-right {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .coop-card-art {
+      aspect-ratio: 1;
+      background: linear-gradient(180deg, #0a0615 0%, #040410 100%);
+      border-radius: 6px;
+      border: 2px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+      max-height: 100px;
+    }
+
+    .coop-card-art img {
+      width: 80%;
+      height: 80%;
+      image-rendering: pixelated;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.9));
+    }
+
+    .coop-card-peril {
+      text-align: center;
+      font-size: 14px;
+      text-shadow: 0 0 8px black;
+      padding: 4px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 4px;
+    }
+
+    .coop-card-stats {
+      background: rgba(0,0,0,0.5);
+      border-radius: 5px;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .coop-card-stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      line-height: 1.5;
+    }
+
+    .coop-card-stat-label {
+      width: 28px;
+      color: #a0a0a0;
+      letter-spacing: 1px;
+    }
+
+    .coop-card-stat-icons {
+      flex: 1;
+      letter-spacing: 3px;
+      color: var(--card-accent);
+      font-size: 12px;
+      text-shadow: 0 0 6px currentColor;
+    }
+
+    .coop-card-desc {
+      font-size: 8px;
+      color: #b8b0d8;
+      text-transform: none;
+      line-height: 1.5;
+      letter-spacing: 0.3px;
+    }
+
+    .coop-card-ability {
+      font-size: 8px;
+      color: #ffeb99;
+      text-transform: none;
+      line-height: 1.5;
+      letter-spacing: 0.3px;
+      padding: 6px 8px;
+      background: rgba(255,220,100,0.06);
+      border-radius: 4px;
+      border-left: 3px solid #ffeb99;
+    }
+
+    .coop-card-ability strong {
+      display: block;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    /* Personality section - boxed panel */
+    .coop-personality-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, #1a1428 0%, #12101c 50%, #0a0814 100%);
+      border: 3px solid #3a2a5c;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.03);
+      transition: all 0.3s ease;
+    }
+
+    .coop-personality-section.focused {
+      border-color: #ffdd00;
+      box-shadow: 0 0 20px rgba(255,221,0,0.3), 0 8px 24px rgba(0,0,0,0.8);
+    }
+
+    .coop-personality-label {
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: #a080b0;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
+    }
+
+    .coop-personality-label.focused {
+      color: #ffdd00;
+      text-shadow: 0 0 8px rgba(255,221,0,0.5), 2px 2px 0 rgba(0,0,0,0.9);
+    }
+
+    .coop-personality-row {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .coop-personality-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 20px;
+      background: linear-gradient(180deg, #0f0a1a 0%, #080510 100%);
+      border: 2px solid #2a1a4c;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      opacity: 0.5;
+      min-width: 90px;
+    }
+
+    .coop-personality-btn .icon {
+      font-size: 22px;
+    }
+
+    .coop-personality-btn .label {
+      font-size: 8px;
+      letter-spacing: 1px;
+      font-family: 'Press Start 2P', monospace;
+    }
+
+    .coop-personality-btn:hover {
+      opacity: 0.8;
+      transform: scale(1.05);
+      background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
+    }
+
+    .coop-personality-btn.active {
+      opacity: 1;
+      border-color: var(--pers-color, #a080c0);
+      box-shadow: 0 0 16px var(--pers-color, rgba(160,128,192,0.5)), inset 0 0 20px rgba(0,0,0,0.3);
+      background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
+    }
+
+    .coop-personality-desc {
+      font-size: 9px;
+      color: #e0d8ff;
+      text-align: center;
+      letter-spacing: 1px;
+      padding: 8px 16px;
+      background: rgba(0,0,0,0.4);
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+      min-height: 18px;
+    }
+
+    /* Controls */
+    .coop-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 8px;
+    }
+
+    .coop-instructions {
+      text-align: center;
+      font-size: 8px;
+      letter-spacing: 2px;
+      color: #706890;
+    }
+
+    .coop-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .coop-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px;
+      padding: 10px 20px;
+      background: linear-gradient(180deg, #2a1f50 0%, #1a1438 50%, #0f0b24 100%);
+      border: 2px solid #4a3a8e;
+      border-radius: 6px;
+      color: #d0c8f0;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .coop-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(80,60,140,0.5);
+    }
+
+    .coop-btn.primary {
+      background: linear-gradient(180deg, #6a2030 0%, #4a1520 50%, #2a0a10 100%);
+      border-color: #c03040;
+      color: #ff6070;
+      box-shadow: 0 0 16px rgba(180,40,60,0.5);
+    }
+
+    .coop-btn.primary:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 28px rgba(200,50,70,0.7), 0 0 50px rgba(140,20,40,0.4);
+    }
   `;
   document.head.appendChild(style);
 };
 
 export class CoopSelectOverlay {
   private root: HTMLDivElement;
-  private descEl: HTMLDivElement;
-  private instructionEl: HTMLDivElement;
-  private sectionTitleMap: Record<CoopSection, HTMLDivElement>;
-  private heroButtons: HTMLButtonElement[] = [];
-  private companionButtons: HTMLButtonElement[] = [];
-  private personalityButtons: HTMLButtonElement[] = [];
-  private panelEl: HTMLDivElement;
-  private companionCard?: HTMLDivElement;
-  private companionDetails: CompanionGuide[];
-  private pinnedCompanionIndex: number | null = null;
-  private hoverCompanionIndex: number | null = null;
+  private heroThumbs: HTMLButtonElement[] = [];
+  private companionThumbs: HTMLButtonElement[] = [];
+  private heroCard!: HTMLDivElement;
+  private companionCard!: HTMLDivElement;
+  private personalityBtns: HTMLButtonElement[] = [];
+  private personalityDescEl!: HTMLDivElement;
+  private instructionsEl!: HTMLDivElement;
+  private confirmBtn!: HTMLButtonElement;
+  private heroThumbLabel!: HTMLDivElement;
+  private companionThumbLabel!: HTMLDivElement;
+  private personalityLabel!: HTMLDivElement;
+  private personalitySectionEl!: HTMLDivElement;
+
+  private options: CoopSelectOverlayOptions;
+  private ambientAudio: HTMLAudioElement;
+  private backdrop?: DungeonBackdrop;
 
   constructor(parent: HTMLElement, options: CoopSelectOverlayOptions) {
     parent.querySelectorAll<HTMLDivElement>('[data-coop-overlay="true"]').forEach((node) => node.remove());
     ensureStyles();
+
+    this.options = options;
+
     this.root = document.createElement('div');
-    this.root.dataset.coopOverlay = 'true';
     this.root.className = 'coop-ui';
-    this.companionDetails = options.companionDetails;
+    this.root.dataset.coopOverlay = 'true';
+    this.backdrop = new DungeonBackdrop(this.root);
 
-    const bg = document.createElement('div');
-    bg.className = 'coop-bg';
-    this.root.appendChild(bg);
+    // Dungeon ambient audio
+    this.ambientAudio = new Audio('/audio/ambient/dungeon_ambient.mp3');
+    this.ambientAudio.loop = true;
+    this.ambientAudio.volume = 0.2;
+    this.ambientAudio.play().catch(() => {});
 
-    const frame = document.createElement('div');
-    frame.className = 'coop-frame';
+    const screen = document.createElement('div');
+    screen.className = 'coop-screen';
+    this.root.appendChild(screen);
+
+    // Header
     const header = document.createElement('div');
     header.className = 'coop-header';
-    header.innerHTML = 'AI CO-OP MODE<small>AI COMPANION POWERED BY MISTRAL</small>';
-    frame.appendChild(header);
+    header.innerHTML = `<div class="coop-header-title">AI CO-OP MODE</div>`;
+    screen.appendChild(header);
 
-    const panel = document.createElement('div');
-    panel.className = 'coop-panel';
-    frame.appendChild(panel);
-    this.panelEl = panel;
+    // Thumbnail sections container - spread with Mistral box in center
+    const thumbContainer = document.createElement('div');
+    thumbContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin: 8px 0; padding: 0 20px;';
+    screen.appendChild(thumbContainer);
 
-    const heroSection = panel.appendChild(this.buildSection('YOUR HERO', 'hero'));
-    heroSection.appendChild(this.buildRow('hero', options.heroes, this.heroButtons, options.onSelect));
+    // Hero thumbnails
+    const heroThumbSection = document.createElement('div');
+    heroThumbSection.className = 'coop-thumb-section';
+    this.heroThumbLabel = document.createElement('div');
+    this.heroThumbLabel.className = 'coop-thumb-label';
+    this.heroThumbLabel.textContent = 'YOUR HERO';
+    heroThumbSection.appendChild(this.heroThumbLabel);
 
-    const companionSection = panel.appendChild(this.buildSection('AI COMPANION', 'companion', true));
-    companionSection.appendChild(this.buildRow('companion', options.companions, this.companionButtons, options.onSelect));
+    const heroThumbRow = document.createElement('div');
+    heroThumbRow.className = 'coop-thumbs';
+    options.heroes.forEach((hero, idx) => {
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'coop-thumb';
+      thumb.style.setProperty('--thumb-accent', hero.accentHex);
+      if (hero.image) {
+        thumb.innerHTML = `<img src="${hero.image}" alt="${hero.label}" />`;
+      }
+      thumb.addEventListener('click', () => options.onSelect('hero', idx));
+      heroThumbRow.appendChild(thumb);
+      this.heroThumbs.push(thumb);
+    });
+    heroThumbSection.appendChild(heroThumbRow);
+    thumbContainer.appendChild(heroThumbSection);
+
+    // Center Mistral box
+    const mistralBox = document.createElement('div');
+    mistralBox.className = 'coop-mistral-box';
+    mistralBox.innerHTML = '<span>AI COMPANION<br/>POWERED BY MISTRAL</span>';
+    thumbContainer.appendChild(mistralBox);
+
+    // Companion thumbnails
+    const companionThumbSection = document.createElement('div');
+    companionThumbSection.className = 'coop-thumb-section';
+    this.companionThumbLabel = document.createElement('div');
+    this.companionThumbLabel.className = 'coop-thumb-label';
+    this.companionThumbLabel.textContent = 'AI COMPANION';
+    companionThumbSection.appendChild(this.companionThumbLabel);
+
+    const companionThumbRow = document.createElement('div');
+    companionThumbRow.className = 'coop-thumbs';
+    options.companions.forEach((companion, idx) => {
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'coop-thumb';
+      const detail = options.companionDetails[idx];
+      thumb.style.setProperty('--thumb-accent', detail?.color ?? '#a855f7');
+      if (companion.image) {
+        thumb.innerHTML = `<img src="${companion.image}" alt="${companion.label}" />`;
+      }
+      thumb.addEventListener('click', () => options.onSelect('companion', idx));
+      companionThumbRow.appendChild(thumb);
+      this.companionThumbs.push(thumb);
+    });
+    companionThumbSection.appendChild(companionThumbRow);
+    thumbContainer.appendChild(companionThumbSection);
+
+    // Dual cards
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'coop-cards';
+    screen.appendChild(cardsContainer);
+
+    this.heroCard = document.createElement('div');
+    this.heroCard.className = 'coop-card';
+    cardsContainer.appendChild(this.heroCard);
+
     this.companionCard = document.createElement('div');
-    this.companionCard.className = 'coop-companion-card';
-    panel.appendChild(this.companionCard);
+    this.companionCard.className = 'coop-card';
+    cardsContainer.appendChild(this.companionCard);
 
-    const personalitySection = panel.appendChild(this.buildSection('PERSONALITY', 'personality', true));
-    personalitySection.appendChild(this.buildPersonalityRow(options.personalities, this.personalityButtons, options.onSelect));
+    // Personality section
+    this.personalitySectionEl = document.createElement('div');
+    this.personalitySectionEl.className = 'coop-personality-section';
+    screen.appendChild(this.personalitySectionEl);
 
-    const bottom = document.createElement('div');
-    bottom.className = 'coop-bottom';
-    panel.appendChild(bottom);
+    this.personalityLabel = document.createElement('div');
+    this.personalityLabel.className = 'coop-personality-label';
+    this.personalityLabel.textContent = 'COMPANION PERSONALITY';
+    this.personalitySectionEl.appendChild(this.personalityLabel);
 
-    this.descEl = document.createElement('div');
-    this.descEl.className = 'coop-desc';
-    bottom.appendChild(this.descEl);
+    const personalityRow = document.createElement('div');
+    personalityRow.className = 'coop-personality-row';
+    options.personalities.forEach((pers, idx) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'coop-personality-btn';
+      btn.style.setProperty('--pers-color', pers.color);
+      btn.innerHTML = `
+        <span class="icon">${pers.icon}</span>
+        <span class="label" style="color: ${pers.color}">${pers.label}</span>
+      `;
+      btn.addEventListener('click', () => options.onSelect('personality', idx));
+      personalityRow.appendChild(btn);
+      this.personalityBtns.push(btn);
+    });
+    this.personalitySectionEl.appendChild(personalityRow);
 
-    this.instructionEl = document.createElement('div');
-    this.instructionEl.className = 'coop-instructions';
-    bottom.appendChild(this.instructionEl);
+    this.personalityDescEl = document.createElement('div');
+    this.personalityDescEl.className = 'coop-personality-desc';
+    this.personalitySectionEl.appendChild(this.personalityDescEl);
+
+    // Controls
+    const controls = document.createElement('div');
+    controls.className = 'coop-controls';
+    screen.appendChild(controls);
+
+    this.instructionsEl = document.createElement('div');
+    this.instructionsEl.className = 'coop-instructions';
+    controls.appendChild(this.instructionsEl);
 
     const buttons = document.createElement('div');
     buttons.className = 'coop-buttons';
+    controls.appendChild(buttons);
+
     const backBtn = document.createElement('button');
+    backBtn.type = 'button';
     backBtn.className = 'coop-btn';
-    backBtn.textContent = '[ BACK ]';
+    backBtn.textContent = '◄ RETREAT';
     backBtn.addEventListener('click', options.onBack);
-    const startBtn = document.createElement('button');
-    startBtn.className = 'coop-btn';
-    startBtn.textContent = '[ START ]';
-    startBtn.addEventListener('click', options.onConfirm);
-    buttons.append(backBtn, startBtn);
-    bottom.appendChild(buttons);
+    buttons.appendChild(backBtn);
 
-    this.root.appendChild(frame);
-
-    this.sectionTitleMap = {
-      hero: heroSection.querySelector('.coop-section-title') as HTMLDivElement,
-      companion: companionSection.querySelector('.coop-section-title') as HTMLDivElement,
-      personality: personalitySection.querySelector('.coop-section-title') as HTMLDivElement,
-    };
+    this.confirmBtn = document.createElement('button');
+    this.confirmBtn.type = 'button';
+    this.confirmBtn.className = 'coop-btn primary';
+    this.confirmBtn.textContent = 'DESCEND ▼';
+    this.confirmBtn.addEventListener('click', options.onConfirm);
+    buttons.appendChild(this.confirmBtn);
 
     parent.appendChild(this.root);
   }
 
   render(state: CoopSelectOverlayState): void {
-    this.heroButtons.forEach((btn, idx) => btn.classList.toggle('selected', idx === state.heroIndex));
-    this.companionButtons.forEach((btn, idx) => btn.classList.toggle('selected', idx === state.companionIndex));
-    this.personalityButtons.forEach((btn, idx) => btn.classList.toggle('selected', idx === state.personalityIndex));
-    Object.entries(this.sectionTitleMap).forEach(([section, el]) => {
-      el.classList.toggle('focused', section === state.focused);
+    const hero = this.options.heroes[state.heroIndex];
+    const companion = this.options.companions[state.companionIndex];
+    const companionDetail = state.companionDetail;
+    const personality = this.options.personalities[state.personalityIndex];
+
+    // Update hero thumbs
+    this.heroThumbs.forEach((thumb, i) => {
+      thumb.classList.toggle('active', i === state.heroIndex);
     });
-    this.descEl.textContent = state.description;
-    this.instructionEl.textContent = `SELECTING: ${state.focused.toUpperCase()}   ▲▼ SWITCH   ◄► CHANGE   ENTER CONFIRM`;
-    this.pinnedCompanionIndex = state.focused === 'companion' ? state.companionIndex : null;
-    this.updateCompanionCard();
-  }
 
-  private updateCompanionCard(): void {
-    if (!this.companionCard) return;
-    const index = this.hoverCompanionIndex ?? this.pinnedCompanionIndex;
-    if (index === null || !this.companionDetails[index]) {
-      this.companionCard.classList.remove('visible');
-      return;
-    }
-    const detail = this.companionDetails[index];
-    const btn = this.companionButtons[index];
-    if (!btn) {
-      this.companionCard.classList.remove('visible');
-      return;
-    }
-    const rect = btn.getBoundingClientRect();
-    const panelRect = this.panelEl.getBoundingClientRect();
-    const top = rect.bottom - panelRect.top + 6;
-    const left = rect.left - panelRect.left + rect.width / 2 - 120;
-    this.companionCard.style.top = `${top}px`;
-    this.companionCard.style.left = `${left}px`;
-    this.companionCard.innerHTML = this.buildCompanionCard(detail);
-    this.companionCard.classList.add('visible');
-  }
+    // Update companion thumbs
+    this.companionThumbs.forEach((thumb, i) => {
+      thumb.classList.toggle('active', i === state.companionIndex);
+    });
 
-  private buildCompanionCard(detail: CompanionGuide): string {
-    const statsOrder: Array<{ key: keyof CompanionGuide['stats']; label: string }> = [
-      { key: 'offense', label: 'OFFENSE' },
-      { key: 'defense', label: 'DEFENSE' },
-      { key: 'support', label: 'SUPPORT' },
-    ];
-    const statsHtml = statsOrder
-      .map(({ key, label }) => {
-        const value = detail.stats[key];
-        const percent = Math.min(100, Math.round((value / 10) * 100));
-        return `
-          <div class="stat" style="--bar-fill:${percent}%; --bar-color:${detail.color};">
-            <label>${label}</label>
-            <span class="value">${value}/10</span>
-            <div class="bar"></div>
-          </div>
-        `;
-      })
-      .join('');
+    // Update personality buttons
+    this.personalityBtns.forEach((btn, i) => {
+      btn.classList.toggle('active', i === state.personalityIndex);
+    });
 
-    return `
-      <h4 style="color:${detail.color}">${detail.label}</h4>
-      <div class="subtitle">${detail.title.toUpperCase()}</div>
-      <p>${detail.backstory}</p>
-      <div class="ability">
-        <strong style="color:${detail.color}">${detail.abilityName}</strong>
-        <p>${detail.abilityDescription}</p>
+    // Update section labels for focus
+    this.heroThumbLabel.classList.toggle('focused', state.focused === 'hero');
+    this.companionThumbLabel.classList.toggle('focused', state.focused === 'companion');
+    this.personalityLabel.classList.toggle('focused', state.focused === 'personality');
+    this.personalitySectionEl.classList.toggle('focused', state.focused === 'personality');
+
+    // Update hero card
+    this.heroCard.style.setProperty('--card-accent', hero.accentHex);
+    this.heroCard.classList.toggle('focused', state.focused === 'hero');
+    this.heroCard.innerHTML = `
+      <div class="coop-card-header">
+        <div>
+          <div class="coop-card-type">YOUR HERO</div>
+          <span class="coop-card-name">${hero.label}</span>
+        </div>
+        <span class="coop-card-role-badge">${hero.role}</span>
       </div>
-      <div class="stats">${statsHtml}</div>
+      <div class="coop-card-body">
+        <div class="coop-card-left">
+          <div class="coop-card-stats">
+            ${this.renderHeroStat('health', hero.stats.health)}
+            ${this.renderHeroStat('power', hero.stats.power)}
+            ${this.renderHeroStat('speed', hero.stats.speed)}
+            ${this.renderHeroStat('attackSpeed', hero.stats.attackSpeed)}
+          </div>
+          <div class="coop-card-desc">${hero.shortDescription}</div>
+        </div>
+        <div class="coop-card-right">
+          <div class="coop-card-art">
+            ${hero.image ? `<img src="${hero.image}" alt="${hero.label}" />` : ''}
+          </div>
+          <div class="coop-card-peril">${buildSkullDisplay(hero.difficulty)}</div>
+        </div>
+      </div>
+    `;
+
+    // Update companion card
+    this.companionCard.style.setProperty('--card-accent', companionDetail.color);
+    this.companionCard.classList.toggle('focused', state.focused === 'companion');
+    this.companionCard.innerHTML = `
+      <div class="coop-card-header">
+        <div>
+          <div class="coop-card-type">AI COMPANION</div>
+          <span class="coop-card-name">${companionDetail.label}</span>
+        </div>
+        <span class="coop-card-role-badge">${companionDetail.role}</span>
+      </div>
+      <div class="coop-card-body">
+        <div class="coop-card-left">
+          <div class="coop-card-stats">
+            ${this.renderCompanionStat('offense', companionDetail.stats.offense, companionDetail.color)}
+            ${this.renderCompanionStat('defense', companionDetail.stats.defense, companionDetail.color)}
+            ${this.renderCompanionStat('support', companionDetail.stats.support, companionDetail.color)}
+          </div>
+          <div class="coop-card-ability">
+            <strong style="color: ${companionDetail.color}">${companionDetail.abilityName}</strong>
+            ${companionDetail.abilityDescription}
+          </div>
+        </div>
+        <div class="coop-card-right">
+          <div class="coop-card-art">
+            ${companion.image ? `<img src="${companion.image}" alt="${companion.label}" />` : ''}
+          </div>
+          <div class="coop-card-desc" style="text-align: center; font-size: 7px;">${companionDetail.title}</div>
+        </div>
+      </div>
+    `;
+
+    // Update personality description
+    this.personalityDescEl.textContent = state.description;
+
+    // Update confirm button
+    this.confirmBtn.textContent = `DESCEND AS ${hero.label} + ${companionDetail.label} ▼`;
+
+    // Update instructions
+    this.instructionsEl.textContent = `▲▼ SWITCH SECTION · ◄► CHANGE ${state.focused.toUpperCase()} · ENTER CONFIRM`;
+  }
+
+  private renderHeroStat(key: StatKey, value: number): string {
+    const { filled, label } = STAT_ICONS[key];
+    return `
+      <div class="coop-card-stat">
+        <span class="coop-card-stat-label">${label}</span>
+        <span class="coop-card-stat-icons">${buildStatIcons(value, filled)}</span>
+      </div>
+    `;
+  }
+
+  private renderCompanionStat(key: string, value: number, color: string): string {
+    const { filled, label } = COMPANION_STAT_ICONS[key] ?? { filled: '★', label: key.toUpperCase().slice(0, 3) };
+    return `
+      <div class="coop-card-stat">
+        <span class="coop-card-stat-label">${label}</span>
+        <span class="coop-card-stat-icons" style="color: ${color}">${buildCompanionStatIcons(value, filled)}</span>
+      </div>
     `;
   }
 
   destroy(): void {
+    this.ambientAudio.pause();
+    this.ambientAudio.src = '';
+    this.backdrop?.destroy();
     this.root.remove();
-  }
-
-  private buildSection(title: string, section: CoopSection, subdued = false): HTMLDivElement {
-    const sectionEl = document.createElement('div');
-    sectionEl.className = 'coop-section';
-    const label = document.createElement('div');
-    label.className = 'coop-section-title';
-    if (subdued) label.classList.add('secondary');
-    label.textContent = title;
-    sectionEl.appendChild(label);
-    return sectionEl;
-  }
-
-  private buildRow(
-    section: CoopSection,
-    options: CharacterOption[],
-    bucket: HTMLButtonElement[],
-    onSelect: (section: CoopSection, index: number) => void
-  ): HTMLDivElement {
-    const row = document.createElement('div');
-    row.className = 'coop-portrait-row';
-    options.forEach((opt, idx) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'coop-portrait';
-      btn.dataset.index = idx.toString();
-      btn.innerHTML = `
-        <div class="frame ${section === 'companion' ? 'companion' : 'hero'}">
-          ${opt.image ? `<img src="${opt.image}" alt="${opt.label}" />` : '<div class="placeholder"></div>'}
-        </div>
-        <span>${opt.label}</span>
-      `;
-      btn.addEventListener('click', () => onSelect(section, idx));
-      if (section === 'companion') {
-        btn.addEventListener('mouseenter', () => {
-          this.hoverCompanionIndex = idx;
-          this.updateCompanionCard();
-        });
-        btn.addEventListener('mouseleave', () => {
-          this.hoverCompanionIndex = null;
-          this.updateCompanionCard();
-        });
-      }
-      row.appendChild(btn);
-      bucket.push(btn);
-    });
-    return row;
-  }
-
-  private buildPersonalityRow(
-    options: PersonalityOption[],
-    bucket: HTMLButtonElement[],
-    onSelect: (section: CoopSection, index: number) => void
-  ): HTMLDivElement {
-    const row = document.createElement('div');
-    row.className = 'coop-personality-row';
-    options.forEach((opt, idx) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'coop-personality-btn';
-      btn.style.color = opt.color;
-      btn.innerHTML = `<span class="icon">${opt.icon}</span>${opt.label}`;
-      btn.addEventListener('click', () => onSelect('personality', idx));
-      row.appendChild(btn);
-      bucket.push(btn);
-    });
-    return row;
   }
 }

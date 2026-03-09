@@ -2,6 +2,8 @@
 // SoloSelectOverlay.ts — Dungeon-style hero selector (carousel)
 // -----------------------------------------------------------------------------
 
+import { DungeonBackdrop } from './DungeonBackdrop';
+
 export interface SoloHeroStats {
   health: number;
   speed: number;
@@ -55,7 +57,8 @@ const buildStatIcons = (key: StatKey, value: number): string => {
 };
 
 const ensureStyles = (): void => {
-  if (document.getElementById('eerie-dungeon-ui')) return;
+  const existing = document.getElementById('eerie-dungeon-ui');
+  if (existing) existing.remove();
 
   const style = document.createElement('style');
   style.id = 'eerie-dungeon-ui';
@@ -68,51 +71,6 @@ const ensureStyles = (): void => {
       background: #03010a;
       pointer-events: none;
       overflow: hidden;
-    }
-
-    /* Ultra-dark dungeon crypt background – heavy corruption & stone feel */
-    .solo-ui::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        /* Deepest void base */
-        radial-gradient(ellipse 100% 160% at 50% 70%, #03010a 0%, #000000 70%),
-        /* Slow necrotic vein spread – plague corruption */
-        radial-gradient(circle at 20% 30%, rgba(60,10,90,0.28) 0%, transparent 65%),
-        radial-gradient(circle at 80% 80%, rgba(90,10,60,0.24) 0%, transparent 65%),
-        radial-gradient(circle at 50% 50%, rgba(20,5,40,0.35) 0%, transparent 75%);
-      animation: corruption-breathe 28s infinite ease-in-out;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    @keyframes corruption-breathe {
-      0%,100%   { opacity: 0.45; transform: scale(1.02) translate(0,0); }
-      50%       { opacity: 0.75; transform: scale(1.06) translate(3px, -3px); }
-    }
-
-    /* Heavy stone texture + faint dripping cracks */
-    .solo-ui::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        /* Vertical stone seams */
-        repeating-linear-gradient(0deg, transparent 0, transparent 48px, rgba(10,5,20,0.65) 48px, rgba(10,5,20,0.65) 50px),
-        /* Horizontal seams – staggered */
-        repeating-linear-gradient(90deg, transparent 0, transparent 52px, rgba(10,5,20,0.55) 52px, rgba(10,5,20,0.55) 54px),
-        /* Faint dripping corruption */
-        radial-gradient(circle at 50% 80%, rgba(80,20,120,0.12) 0%, transparent 80%);
-      opacity: 0.7;
-      pointer-events: none;
-      z-index: 2;
-      animation: drip-slow 40s infinite linear;
-    }
-
-    @keyframes drip-slow {
-      0%   { background-position: 0 0; }
-      100% { background-position: 0 200px; }
     }
 
     /* Strong vignette – like torchlight barely reaching the center */
@@ -144,6 +102,7 @@ const ensureStyles = (): void => {
 
     .solo-header {
       text-align: center;
+      margin-bottom: -6px;
     }
 
     .solo-header-title {
@@ -158,7 +117,7 @@ const ensureStyles = (): void => {
       letter-spacing: 3px;
       color: #a080b0;
       text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
-      margin-top: 8px;
+      margin-top: 15px;
     }
 
     /* Thumbnails – small, corrupted icons */
@@ -166,11 +125,13 @@ const ensureStyles = (): void => {
       display: flex;
       justify-content: center;
       gap: 14px;
+      margin-top: 40px;
+      margin-bottom: 0;
     }
 
     .solo-thumb {
-      width: 64px;
-      height: 64px;
+      width: 80px;
+      height: 80px;
       border-radius: 10px;
       border: 3px solid #2a1a4c;
       background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
@@ -208,6 +169,7 @@ const ensureStyles = (): void => {
       align-items: center;
       gap: 16px;
       flex: 1;
+      margin-top: -20px;
     }
 
     .solo-arrow {
@@ -376,6 +338,7 @@ const ensureStyles = (): void => {
       display: flex;
       flex-direction: column;
       gap: 10px;
+      margin-top: -20px;
     }
 
     .solo-instructions {
@@ -434,6 +397,7 @@ export class SoloSelectOverlay {
   private onConfirm: () => void;
   private onSelectCb?: (index: number) => void;
   private ambientAudio: HTMLAudioElement;
+  private backdrop?: DungeonBackdrop;
 
   constructor(parent: HTMLElement, options: SoloSelectOverlayOptions) {
     ensureStyles();
@@ -444,9 +408,10 @@ export class SoloSelectOverlay {
     this.root = document.createElement('div');
     this.root.className = 'solo-ui';
     this.root.dataset.soloOverlay = 'true';
+    this.backdrop = new DungeonBackdrop(this.root);
 
     // Dungeon ambient audio
-    this.ambientAudio = new Audio('/assets/sounds/dungeon-ambience-low.mp3');
+    this.ambientAudio = new Audio('/audio/ambient/dungeon_ambient.mp3');
     this.ambientAudio.loop = true;
     this.ambientAudio.volume = 0.2;
     this.ambientAudio.play().catch(() => {}); // autoplay may be blocked
@@ -608,6 +573,7 @@ export class SoloSelectOverlay {
   public destroy(): void {
     this.ambientAudio.pause();
     this.ambientAudio.src = '';
+    this.backdrop?.destroy();
     this.root.remove();
   }
 }
