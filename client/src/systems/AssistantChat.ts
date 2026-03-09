@@ -67,6 +67,11 @@ export class AssistantChat {
     this.setPanelVisibility(!this.visible);
   }
 
+  close(): void {
+    if (!this.visible) return;
+    this.setPanelVisibility(false);
+  }
+
   isVisible(): boolean {
     return this.visible;
   }

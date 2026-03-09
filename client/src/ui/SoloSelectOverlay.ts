@@ -1,266 +1,423 @@
-export interface SoloHeroStat {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
+// -----------------------------------------------------------------------------
+// SoloSelectOverlay.ts — Dungeon-style hero selector (carousel)
+// -----------------------------------------------------------------------------
+
+export interface SoloHeroStats {
+  health: number;
+  speed: number;
+  power: number;
+  attackSpeed: number;
 }
 
 export interface SoloHeroOption {
   label: string;
-  description: string;
+  role: string;
+  shortDescription: string;
+  longDescription: string;
+  accentHex: string;
   image?: string | null;
-  stats: SoloHeroStat[];
+  stats: SoloHeroStats;
+  special: string;
+  difficulty: string;
 }
 
-interface SoloSelectOverlayOptions {
+export interface SoloSelectOverlayOptions {
   heroes: SoloHeroOption[];
-  onSelect: (index: number) => void;
+  onSelect?: (index: number) => void;
   onConfirm: () => void;
   onBack: () => void;
 }
 
-interface TorchSpark {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  decay: number;
-}
+type StatKey = keyof SoloHeroStats;
 
-const CANVAS_W = 384;
-const CANVAS_H = 216;
-const ARCH_LEFT = 74;
-const ARCH_RIGHT = CANVAS_W - 74;
-const ARCH_TOP = 34;
-const ARCH_BOTTOM = CANVAS_H - 26;
-const TILE_W = 16;
-const TILE_H = 10;
+const STAT_ICONS: Record<StatKey, { filled: string; label: string }> = {
+  health: { filled: '♥', label: 'HP' },
+  speed: { filled: '⚡', label: 'SPD' },
+  power: { filled: '⚔', label: 'PWR' },
+  attackSpeed: { filled: '✦', label: 'ATK' },
+};
+
+const DIFFICULTY_SKULLS: Record<string, number> = {
+  Forgiving: 1,
+  Steady: 2,
+  Advanced: 3,
+  Expert: 4,
+};
+
+const buildSkullDisplay = (difficulty: string): string => {
+  return '💀'.repeat(DIFFICULTY_SKULLS[difficulty] ?? 2);
+};
+
+const buildStatIcons = (key: StatKey, value: number): string => {
+  const { filled } = STAT_ICONS[key];
+  const count = Math.round(value * 5);
+  return filled.repeat(count);
+};
 
 const ensureStyles = (): void => {
-  if (document.getElementById('solo-select-redesign')) return;
+  if (document.getElementById('eerie-dungeon-ui')) return;
+
   const style = document.createElement('style');
-  style.id = 'solo-select-redesign';
+  style.id = 'eerie-dungeon-ui';
   style.textContent = `
-    .solo-ui { position:absolute; inset:0; font-family:'Press Start 2P', monospace; color:#f4f0ff; pointer-events:none; text-transform:uppercase; }
-    .solo-bg {
-      position:absolute; inset:0; pointer-events:none;
-      background:linear-gradient(180deg,#1a1d22 0%,#14161b 60%,#0c0d12 100%);
+    .solo-ui {
+      position: absolute;
+      inset: 0;
+      font-family: 'Press Start 2P', monospace;
+      color: #c8c0e8;
+      background: #03010a;
+      pointer-events: none;
+      overflow: hidden;
     }
-    .solo-bg-canvas,
-    .solo-fire-canvas {
-      position:absolute; inset:0; width:100%; height:100%; pointer-events:none; image-rendering:pixelated;
+
+    /* Ultra-dark dungeon crypt background – heavy corruption & stone feel */
+    .solo-ui::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        /* Deepest void base */
+        radial-gradient(ellipse 100% 160% at 50% 70%, #03010a 0%, #000000 70%),
+        /* Slow necrotic vein spread – plague corruption */
+        radial-gradient(circle at 20% 30%, rgba(60,10,90,0.28) 0%, transparent 65%),
+        radial-gradient(circle at 80% 80%, rgba(90,10,60,0.24) 0%, transparent 65%),
+        radial-gradient(circle at 50% 50%, rgba(20,5,40,0.35) 0%, transparent 75%);
+      animation: corruption-breathe 28s infinite ease-in-out;
+      pointer-events: none;
+      z-index: 1;
     }
-    .solo-bg-canvas { z-index:0; }
-    .solo-fire-canvas { z-index:1; }
-    .solo-bg::before, .solo-bg::after {
-      content:''; position:absolute; top:8%; bottom:8%; width:140px;
-      border-radius:60px;
-      background:linear-gradient(180deg, rgba(32,20,58,0.9) 0%, rgba(12,8,20,0.7) 100%);
-      box-shadow:0 0 40px rgba(0,0,0,0.45);
-      opacity:0.35;
+
+    @keyframes corruption-breathe {
+      0%,100%   { opacity: 0.45; transform: scale(1.02) translate(0,0); }
+      50%       { opacity: 0.75; transform: scale(1.06) translate(3px, -3px); }
     }
-    .solo-bg::before { left:6%; }
-    .solo-bg::after { right:6%; }
-    .solo-scanlines {
-      position:absolute; inset:0; pointer-events:none;
-      background:repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px);
-      z-index:1;
+
+    /* Heavy stone texture + faint dripping cracks */
+    .solo-ui::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        /* Vertical stone seams */
+        repeating-linear-gradient(0deg, transparent 0, transparent 48px, rgba(10,5,20,0.65) 48px, rgba(10,5,20,0.65) 50px),
+        /* Horizontal seams – staggered */
+        repeating-linear-gradient(90deg, transparent 0, transparent 52px, rgba(10,5,20,0.55) 52px, rgba(10,5,20,0.55) 54px),
+        /* Faint dripping corruption */
+        radial-gradient(circle at 50% 80%, rgba(80,20,120,0.12) 0%, transparent 80%);
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: 2;
+      animation: drip-slow 40s infinite linear;
     }
-    .solo-vignette {
-      position:absolute; inset:0; pointer-events:none; z-index:1;
-      background:radial-gradient(ellipse 80% 80% at 50% 50%, transparent 45%, rgba(0,0,0,0.75) 100%);
+
+    @keyframes drip-slow {
+      0%   { background-position: 0 0; }
+      100% { background-position: 0 200px; }
     }
+
+    /* Strong vignette – like torchlight barely reaching the center */
+    .solo-ui .solo-screen {
+      position: relative;
+      z-index: 5;
+      box-shadow: inset 0 0 220px #000, inset 0 0 80px rgba(40,20,80,0.15);
+      animation: torch-dim 12s infinite alternate;
+    }
+
+    @keyframes torch-dim {
+      0%,100% { box-shadow: inset 0 0 220px #000, inset 0 0 80px rgba(40,20,80,0.15); }
+      50%     { box-shadow: inset 0 0 260px #000, inset 0 0 100px rgba(60,20,100,0.2); }
+    }
+
     .solo-screen {
-      position:relative; z-index:5;
-      width:min(1080px, 95vw);
-      margin:0 auto;
-      padding:48px 32px 36px;
-      display:flex; flex-direction:column; gap:28px;
-      pointer-events:auto;
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: auto;
+      min-height: 100vh;
+      box-sizing: border-box;
+      justify-content: center;
     }
-    .solo-header { text-align:center; display:flex; flex-direction:column; gap:12px; }
+
+    .solo-header {
+      text-align: center;
+    }
+
     .solo-header-title {
-      font-size:clamp(18px, 2.2vw, 28px);
-      letter-spacing:8px;
-      color:#f8ecff;
-      text-shadow:0 0 12px rgba(210,150,255,0.5), 3px 3px 0 #08040a;
+      font-size: 24px;
+      letter-spacing: 5px;
+      color: #e0d8ff;
+      text-shadow: 0 0 14px rgba(80,40,140,0.7), 0 0 28px rgba(120,20,80,0.4), 3px 3px 0 #03010a;
     }
-    .solo-header-rule {
-      display:flex; align-items:center; gap:0; width:420px; max-width:80vw; margin:0 auto;
-    }
-    .solo-header-rule-line { flex:1; height:1px; background:linear-gradient(90deg, transparent, rgba(90,72,118,0.9)); }
-    .solo-header-rule-line.r { background:linear-gradient(90deg, rgba(90,72,118,0.9), transparent); }
-    .solo-header-gem {
-      width:10px; height:10px; transform:rotate(45deg);
-      background:#f5b45f;
-      box-shadow:0 0 12px rgba(245,180,95,0.9);
-      animation:solo-gemPulse 2.4s ease-in-out infinite alternate;
-    }
-    @keyframes solo-gemPulse {
-      from { box-shadow:0 0 8px rgba(245,180,95,0.5); }
-      to { box-shadow:0 0 20px rgba(255,210,130,1), 0 0 32px rgba(180,90,40,0.5); }
-    }
+
     .solo-header-sub {
-      font-size:9px; letter-spacing:6px; color:#6d5e86;
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #a080b0;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
+      margin-top: 8px;
     }
-    .solo-hero-row {
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-      gap:18px;
+
+    /* Thumbnails – small, corrupted icons */
+    .solo-thumbs {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
     }
-    .solo-portrait {
-      position:relative;
-      border:none;
-      background:rgba(8,10,20,0.85);
-      border-radius:16px;
-      padding:18px 12px 16px;
-      cursor:pointer;
-      display:flex;
-      flex-direction:column;
-      gap:12px;
-      align-items:center;
-      color:#8b86a8;
-      transition:transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-      border:1px solid rgba(255,255,255,0.08);
-      pointer-events:auto;
+
+    .solo-thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 10px;
+      border: 3px solid #2a1a4c;
+      background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
     }
-    .solo-portrait::before {
-      content:''; position:absolute; inset:6px;
-      border-radius:12px;
-      border:1px dashed rgba(255,255,255,0.05);
-      pointer-events:none;
+
+    .solo-thumb img {
+      width: 85%;
+      height: 85%;
+      image-rendering: pixelated;
+      object-fit: contain;
     }
-    .solo-portrait:hover,
-    .solo-portrait.selected {
-      transform:translateY(-4px);
-      border-color:rgba(255,210,120,0.4);
-      box-shadow:0 10px 26px rgba(0,0,0,0.45);
-      color:#f4f0ff;
+
+    .solo-thumb:hover {
+      border-color: #4a3a7c;
+      transform: scale(1.08);
     }
-    .solo-portrait .frame {
-      width:96px; height:96px;
-      border-radius:14px;
-      background:linear-gradient(160deg,#141629,#07060d);
-      border:2px solid rgba(255,255,255,0.07);
-      display:flex; align-items:center; justify-content:center;
-      box-shadow:inset 0 3px 12px rgba(0,0,0,0.65);
+
+    .solo-thumb.active {
+      border-color: var(--thumb-accent, #a080c0);
+      box-shadow: 0 0 16px var(--thumb-accent, rgba(160,128,192,0.4)), 0 6px 16px rgba(0,0,0,0.8);
+      transform: scale(1.12);
     }
-    .solo-portrait img { width:64px; height:64px; image-rendering:pixelated; }
-    .solo-portrait span { font-size:11px; letter-spacing:0.16em; }
-    .solo-detail {
-      display:flex;
-      gap:32px;
-      align-items:flex-start;
-      background:rgba(5,8,18,0.9);
-      border:1px solid rgba(90,70,130,0.5);
-      border-radius:20px;
-      padding:28px 32px;
-      box-shadow:0 20px 50px rgba(0,0,0,0.55);
-      flex-wrap:wrap;
+
+    /* Carousel & main card – darker, heavier */
+    .solo-carousel {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
     }
-    .solo-hero-art {
-      width:220px;
-      height:220px;
-      border-radius:18px;
-      background:radial-gradient(circle at 50% 30%, rgba(255,200,150,0.12), transparent 70%), linear-gradient(160deg,#0c0f1b,#05030a);
-      border:2px solid rgba(255,255,255,0.08);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      box-shadow:inset 0 -10px 18px rgba(0,0,0,0.6);
+
+    .solo-arrow {
+      width: 56px;
+      height: 100px;
+      background: linear-gradient(180deg, #1a1428 0%, #0e0a14 100%);
+      border: 3px solid #3a2a5c;
+      border-radius: 10px;
+      color: #a080c0;
+      font-size: 28px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.7);
     }
-    .solo-hero-art img { width:120px; height:120px; image-rendering:pixelated; display:block; }
-    .solo-hero-art .placeholder { width:74px; height:74px; background:rgba(255,255,255,0.12); border-radius:10px; }
-    .solo-info-card {
-      flex:1;
-      min-width:280px;
-      background:rgba(8,12,24,0.92);
-      border:1px solid rgba(255,255,255,0.08);
-      border-radius:16px;
-      padding:20px 22px;
-      display:flex;
-      flex-direction:column;
-      gap:18px;
+
+    .solo-arrow:hover {
+      background: linear-gradient(180deg, #2a2040 0%, #1a1428 100%);
+      border-color: #5a4a9e;
+      color: #d0c8ff;
+      box-shadow: 0 0 16px rgba(80,40,140,0.4);
     }
-    .solo-info-card h4 {
-      font-size:15px;
-      letter-spacing:0.2em;
-      color:#74fdd4;
+
+    .solo-arrow:active {
+      transform: scale(0.95);
     }
-    .solo-info-card p {
-      font-size:11px;
-      color:#cfd6ff;
-      letter-spacing:0.1em;
-      line-height:1.7;
-      text-transform:none;
+
+    .solo-card {
+      flex: 1;
+      background: linear-gradient(135deg, #1a1428 0%, #12101c 50%, #0a0814 100%);
+      border: 3px solid var(--card-accent, #3a2a5c);
+      border-radius: 14px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.03);
+      overflow: hidden;
+      transition: all 0.3s ease;
     }
-    .solo-stats { display:flex; flex-direction:column; gap:12px; }
-    .solo-stat {
-      display:flex;
-      align-items:center;
-      gap:12px;
+
+    .solo-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 2px solid rgba(255,255,255,0.07);
     }
-    .solo-stat label {
-      width:80px;
-      font-size:10px;
-      color:#8b95b5;
-      letter-spacing:0.2em;
+
+    .solo-card-name {
+      font-size: 15px;
+      letter-spacing: 2.8px;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.9);
     }
-    .solo-stat .bar {
-      flex:1;
-      height:10px;
-      background:#0b1424;
-      border:1px solid rgba(255,255,255,0.15);
-      position:relative;
-      overflow:hidden;
-      border-radius:10px;
+
+    .solo-card-role-badge {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 5px;
+      border: 2px solid var(--card-accent);
+      background: rgba(0,0,0,0.7);
+      color: var(--card-accent);
     }
-    .solo-stat .bar .fill {
-      position:absolute; top:0; left:0; height:100%; width:0%;
-      background:var(--bar-color,#f5d0fe);
-      transition:width 0.18s ease;
+
+    .solo-card-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
     }
-    .solo-stat .value {
-      width:40px;
-      text-align:right;
-      font-size:10px;
-      color:#f8fbff;
+
+    .solo-card-left {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
+
+    .solo-card-right {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .solo-card-art {
+      aspect-ratio: 1;
+      background: linear-gradient(180deg, #0a0615 0%, #040410 100%);
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+    }
+
+    .solo-card-art img {
+      width: 85%;
+      height: 85%;
+      image-rendering: pixelated;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.9));
+    }
+
+    .solo-card-peril {
+      text-align: center;
+      font-size: 18px;
+      text-shadow: 0 0 8px black;
+      padding: 6px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 5px;
+    }
+
+    .solo-card-stats {
+      background: rgba(0,0,0,0.5);
+      border-radius: 6px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .solo-card-stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .solo-card-stat-label {
+      width: 32px;
+      color: #a0a0a0;
+      letter-spacing: 1px;
+    }
+
+    .solo-card-stat-icons {
+      flex: 1;
+      letter-spacing: 4px;
+      color: var(--card-accent);
+      font-size: 15px;
+      text-shadow: 0 0 6px currentColor;
+    }
+
+    .solo-card-special {
+      font-size: 10px;
+      color: #ffeb99;
+      text-transform: none;
+      line-height: 1.6;
+      letter-spacing: 0.4px;
+      padding: 8px 10px;
+      background: rgba(255,220,100,0.06);
+      border-radius: 5px;
+      border-left: 4px solid #ffeb99;
+    }
+
+    .solo-card-desc {
+      font-size: 10px;
+      color: #b8b0d8;
+      text-transform: none;
+      line-height: 1.6;
+      letter-spacing: 0.4px;
+    }
+
+    /* Controls */
+    .solo-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     .solo-instructions {
-      text-align:center;
-      font-size:10px;
-      letter-spacing:0.16em;
-      color:#8e86b0;
+      text-align: center;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #706890;
     }
+
     .solo-buttons {
-      display:flex;
-      justify-content:space-between;
-      gap:28px;
-      flex-wrap:wrap;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
     }
+
     .solo-btn {
-      flex:1;
-      min-width:200px;
-      font-family:'Press Start 2P', monospace;
-      font-size:11px;
-      padding:14px 0;
-      background:rgba(8,12,28,0.9);
-      border:2px solid rgba(90,120,190,0.85);
-      color:#f0f4ff;
-      letter-spacing:0.2em;
-      cursor:pointer;
-      box-shadow:0 6px 18px rgba(0,0,0,0.55);
-      transition:background 0.15s ease, box-shadow 0.15s ease;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      padding: 12px 24px;
+      background: linear-gradient(180deg, #2a1f50 0%, #1a1438 50%, #0f0b24 100%);
+      border: 2px solid #4a3a8e;
+      border-radius: 6px;
+      color: #d0c8f0;
+      cursor: pointer;
+      transition: all 0.15s ease;
     }
-    .solo-btn:hover { background:rgba(14,20,40,0.95); box-shadow:0 10px 22px rgba(0,0,0,0.55); }
-    @media (max-width:900px) {
-      .solo-detail { flex-direction:column; align-items:center; }
-      .solo-hero-art { width:180px; height:180px; }
+
+    .solo-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(80,60,140,0.5);
     }
-    @media (max-width:640px) {
-      .solo-buttons { flex-direction:column; }
-      .solo-btn { width:100%; }
+
+    .solo-btn.primary {
+      background: linear-gradient(180deg, #6a2030 0%, #4a1520 50%, #2a0a10 100%);
+      border-color: #c03040;
+      color: #ff6070;
+      box-shadow: 0 0 16px rgba(180,40,60,0.5);
+    }
+
+    .solo-btn.primary:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 28px rgba(200,50,70,0.7), 0 0 50px rgba(140,20,40,0.4);
     }
   `;
   document.head.appendChild(style);
@@ -268,444 +425,189 @@ const ensureStyles = (): void => {
 
 export class SoloSelectOverlay {
   private root: HTMLDivElement;
-  private heroButtons: HTMLButtonElement[] = [];
-  private heroImage: HTMLImageElement;
-  private heroPlaceholder: HTMLDivElement;
-  private nameEl: HTMLHeadingElement;
-  private descEl: HTMLParagraphElement;
-  private statRows: Array<{ label: HTMLLabelElement; fill: HTMLDivElement; value: HTMLSpanElement }>;
+  private thumbs: HTMLButtonElement[] = [];
+  private cardEl!: HTMLDivElement;
   private options: SoloHeroOption[];
-  private instructionsEl: HTMLDivElement;
-  private bgCanvas: HTMLCanvasElement;
-  private fireCanvas: HTMLCanvasElement;
-  private bgCtx: CanvasRenderingContext2D | null;
-  private fireCtx: CanvasRenderingContext2D | null;
-  private animationFrame?: number;
-  private phase = 0;
-  private sparks: TorchSpark[] = [];
-  private torchPositions: Array<{ x: number; y: number }> = [
-    { x: 60, y: 70 },
-    { x: CANVAS_W - 60, y: 70 },
-  ];
+  private instructionsEl!: HTMLDivElement;
+  private confirmBtn!: HTMLButtonElement;
+  private selectedIndex: number = 0;
+  private onConfirm: () => void;
+  private onSelectCb?: (index: number) => void;
+  private ambientAudio: HTMLAudioElement;
 
   constructor(parent: HTMLElement, options: SoloSelectOverlayOptions) {
     ensureStyles();
     this.options = options.heroes;
+    this.onConfirm = options.onConfirm;
+    this.onSelectCb = options.onSelect;
+
     this.root = document.createElement('div');
-    this.root.dataset.soloOverlay = 'true';
     this.root.className = 'solo-ui';
+    this.root.dataset.soloOverlay = 'true';
 
-    const bg = document.createElement('div');
-    bg.className = 'solo-bg';
-    this.root.appendChild(bg);
-    this.bgCanvas = document.createElement('canvas');
-    this.bgCanvas.width = CANVAS_W;
-    this.bgCanvas.height = CANVAS_H;
-    this.bgCanvas.className = 'solo-bg-canvas';
-    this.bgCtx = this.bgCanvas.getContext('2d');
-    this.root.appendChild(this.bgCanvas);
-
-    this.fireCanvas = document.createElement('canvas');
-    this.fireCanvas.width = CANVAS_W;
-    this.fireCanvas.height = CANVAS_H;
-    this.fireCanvas.className = 'solo-fire-canvas';
-    this.fireCtx = this.fireCanvas.getContext('2d');
-    this.root.appendChild(this.fireCanvas);
-
-    const scanlines = document.createElement('div');
-    scanlines.className = 'solo-scanlines';
-    this.root.appendChild(scanlines);
-
-    const vignette = document.createElement('div');
-    vignette.className = 'solo-vignette';
-    this.root.appendChild(vignette);
+    // Dungeon ambient audio
+    this.ambientAudio = new Audio('/assets/sounds/dungeon-ambience-low.mp3');
+    this.ambientAudio.loop = true;
+    this.ambientAudio.volume = 0.2;
+    this.ambientAudio.play().catch(() => {}); // autoplay may be blocked
 
     const screen = document.createElement('div');
     screen.className = 'solo-screen';
     this.root.appendChild(screen);
 
+    // Header
     const header = document.createElement('div');
     header.className = 'solo-header';
     header.innerHTML = `
       <div class="solo-header-title">CHOOSE YOUR HERO</div>
-      <div class="solo-header-rule">
-        <div class="solo-header-rule-line"></div>
-        <div class="solo-header-gem"></div>
-        <div class="solo-header-rule-line r"></div>
-      </div>
-      <div class="solo-header-sub">SELECT YOUR CHAMPION</div>
+      <div class="solo-header-sub">PREPARE FOR THE DESCENT</div>
     `;
     screen.appendChild(header);
 
-    const heroRow = document.createElement('div');
-    heroRow.className = 'solo-hero-row';
-    screen.appendChild(heroRow);
+    // Thumbnail row - 4 character boxes at top
+    const thumbRow = document.createElement('div');
+    thumbRow.className = 'solo-thumbs';
+    screen.appendChild(thumbRow);
 
     options.heroes.forEach((hero, idx) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'solo-portrait';
-      const frameEl = document.createElement('div');
-      frameEl.className = 'frame';
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'solo-thumb';
+      thumb.style.setProperty('--thumb-accent', hero.accentHex);
       if (hero.image) {
-        const img = document.createElement('img');
-        img.src = hero.image;
-        img.alt = hero.label;
-        frameEl.appendChild(img);
-      } else {
-        const ph = document.createElement('div');
-        ph.className = 'placeholder';
-        ph.style.width = '40px';
-        ph.style.height = '40px';
-        ph.style.background = 'rgba(255,255,255,0.2)';
-        frameEl.appendChild(ph);
+        thumb.innerHTML = `<img src="${hero.image}" alt="${hero.label}" />`;
       }
-      const label = document.createElement('span');
-      label.textContent = hero.label;
-      btn.append(frameEl, label);
-      btn.addEventListener('click', () => options.onSelect(idx));
-      heroRow.appendChild(btn);
-      this.heroButtons.push(btn);
+      thumb.addEventListener('click', () => this.selectHero(idx));
+      thumbRow.appendChild(thumb);
+      this.thumbs.push(thumb);
     });
 
-    const details = document.createElement('div');
-    details.className = 'solo-detail';
-    screen.appendChild(details);
+    // Carousel with arrows and big card
+    const carousel = document.createElement('div');
+    carousel.className = 'solo-carousel';
+    screen.appendChild(carousel);
 
-    const art = document.createElement('div');
-    art.className = 'solo-hero-art';
-    this.heroImage = document.createElement('img');
-    this.heroImage.alt = '';
-    this.heroPlaceholder = document.createElement('div');
-    this.heroPlaceholder.className = 'placeholder';
-    art.append(this.heroImage, this.heroPlaceholder);
-    details.appendChild(art);
+    // Left arrow
+    const leftArrow = document.createElement('button');
+    leftArrow.type = 'button';
+    leftArrow.className = 'solo-arrow';
+    leftArrow.innerHTML = '◄';
+    leftArrow.addEventListener('click', () => this.navigate(-1));
+    carousel.appendChild(leftArrow);
 
-    const card = document.createElement('div');
-    card.className = 'solo-info-card';
-    this.nameEl = document.createElement('h4');
-    this.descEl = document.createElement('p');
-    card.append(this.nameEl, this.descEl);
-    const statsList = document.createElement('div');
-    statsList.className = 'solo-stats';
-    const statTemplateCount = options.heroes[0]?.stats.length ?? 0;
-    this.statRows = [];
-    for (let i = 0; i < statTemplateCount; i += 1) {
-      const stat = document.createElement('div');
-      stat.className = 'solo-stat';
-      const label = document.createElement('label');
-      const bar = document.createElement('div');
-      bar.className = 'bar';
-      const fill = document.createElement('div');
-      fill.className = 'fill';
-      bar.appendChild(fill);
-      const value = document.createElement('span');
-      value.className = 'value';
-      stat.append(label, bar, value);
-      statsList.appendChild(stat);
-      this.statRows.push({ label, fill, value });
-    }
-    card.appendChild(statsList);
-    details.appendChild(card);
+    // Main big card
+    this.cardEl = document.createElement('div');
+    this.cardEl.className = 'solo-card';
+    carousel.appendChild(this.cardEl);
+
+    // Right arrow
+    const rightArrow = document.createElement('button');
+    rightArrow.type = 'button';
+    rightArrow.className = 'solo-arrow';
+    rightArrow.innerHTML = '►';
+    rightArrow.addEventListener('click', () => this.navigate(1));
+    carousel.appendChild(rightArrow);
+
+    // Controls
+    const controls = document.createElement('div');
+    controls.className = 'solo-controls';
+    screen.appendChild(controls);
 
     this.instructionsEl = document.createElement('div');
     this.instructionsEl.className = 'solo-instructions';
-    screen.appendChild(this.instructionsEl);
+    controls.appendChild(this.instructionsEl);
 
     const buttons = document.createElement('div');
     buttons.className = 'solo-buttons';
-    const backBtn = document.createElement('button');
-    backBtn.className = 'solo-btn';
-    backBtn.type = 'button';
-    backBtn.textContent = '[ BACK ]';
-    backBtn.addEventListener('click', options.onBack);
-    const confirmBtn = document.createElement('button');
-    confirmBtn.className = 'solo-btn';
-    confirmBtn.type = 'button';
-    confirmBtn.textContent = '[ START ]';
-    confirmBtn.addEventListener('click', options.onConfirm);
-    buttons.append(backBtn, confirmBtn);
-    screen.appendChild(buttons);
+    controls.appendChild(buttons);
 
-    this.drawHallwayBase();
-    this.startTorchLoop();
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'solo-btn';
+    backBtn.textContent = '◄ RETREAT';
+    backBtn.addEventListener('click', options.onBack);
+    buttons.appendChild(backBtn);
+
+    this.confirmBtn = document.createElement('button');
+    this.confirmBtn.type = 'button';
+    this.confirmBtn.className = 'solo-btn primary';
+    this.confirmBtn.textContent = 'DESCEND ▼';
+    this.confirmBtn.addEventListener('click', this.onConfirm);
+    buttons.appendChild(this.confirmBtn);
 
     parent.appendChild(this.root);
+
+    // Initial render
+    this.selectHero(0);
   }
 
-  render(index: number): void {
+  private navigate(dir: number): void {
+    const newIndex = (this.selectedIndex + dir + this.options.length) % this.options.length;
+    this.selectHero(newIndex);
+  }
+
+  private selectHero(index: number): void {
+    this.selectedIndex = index;
     const hero = this.options[index];
-    if (!hero) return;
-    this.heroButtons.forEach((btn, idx) => btn.classList.toggle('selected', idx === index));
-    this.nameEl.textContent = hero.label;
-    this.descEl.textContent = hero.description;
-    if (hero.image) {
-      this.heroImage.src = hero.image;
-      this.heroImage.style.display = 'block';
-      this.heroPlaceholder.style.display = 'none';
-    } else {
-      this.heroImage.style.display = 'none';
-      this.heroPlaceholder.style.display = 'block';
-    }
-    hero.stats.forEach((stat, idx) => {
-      const row = this.statRows[idx];
-      if (!row) return;
-      row.label.textContent = stat.label;
-      row.fill.style.width = `${Math.min(100, (stat.value / stat.max) * 100)}%`;
-      row.fill.style.setProperty('--bar-color', stat.color);
-      row.value.textContent = stat.value.toString();
+
+    // Update thumbs
+    this.thumbs.forEach((thumb, i) => {
+      thumb.classList.toggle('active', i === index);
     });
-    this.instructionsEl.textContent = `SELECTING: ${hero.label}   ◄► CHANGE   ENTER CONFIRM`;
+
+    // Update card
+    this.cardEl.style.setProperty('--card-accent', hero.accentHex);
+    this.cardEl.innerHTML = `
+      <div class="solo-card-header">
+        <span class="solo-card-name">${hero.label}</span>
+        <span class="solo-card-role-badge">${hero.role}</span>
+      </div>
+      <div class="solo-card-body">
+        <div class="solo-card-left">
+          <div class="solo-card-stats">
+            ${this.renderStat('health', hero.stats.health)}
+            ${this.renderStat('power', hero.stats.power)}
+            ${this.renderStat('speed', hero.stats.speed)}
+            ${this.renderStat('attackSpeed', hero.stats.attackSpeed)}
+          </div>
+          <div class="solo-card-special">${hero.special}</div>
+          <div class="solo-card-desc">${hero.shortDescription}</div>
+        </div>
+        <div class="solo-card-right">
+          <div class="solo-card-art">
+            ${hero.image ? `<img src="${hero.image}" alt="${hero.label}" />` : ''}
+          </div>
+          <div class="solo-card-peril">${buildSkullDisplay(hero.difficulty)}</div>
+        </div>
+      </div>
+    `;
+
+    // Update confirm button text only (keep red styling)
+    this.confirmBtn.textContent = `DESCEND AS ${hero.label} ▼`;
+
+    // Update instructions
+    this.instructionsEl.textContent = '◄ ► BROWSE HEROES · ENTER TO DESCEND';
+
+    // Callback
+    this.onSelectCb?.(index);
   }
 
-  destroy(): void {
-    if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
-    this.sparks = [];
+  private renderStat(key: StatKey, value: number): string {
+    return `
+      <div class="solo-card-stat">
+        <span class="solo-card-stat-label">${STAT_ICONS[key].label}</span>
+        <span class="solo-card-stat-icons">${buildStatIcons(key, value)}</span>
+      </div>
+    `;
+  }
+
+  public render(index: number): void {
+    this.selectHero(index);
+  }
+
+  public destroy(): void {
+    this.ambientAudio.pause();
+    this.ambientAudio.src = '';
     this.root.remove();
   }
-
-  private drawHallwayBase(): void {
-    if (!this.bgCtx) return;
-    const ctx = this.bgCtx;
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-    gradient.addColorStop(0, '#26282f');
-    gradient.addColorStop(0.4, '#1c1d24');
-    gradient.addColorStop(1, '#0d0d13');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-    ctx.fillStyle = '#2f3239';
-    ctx.fillRect(0, 0, 48, CANVAS_H);
-    ctx.fillRect(CANVAS_W - 48, 0, 48, CANVAS_H);
-
-    for (let row = 0; row < 18; row += 1) {
-      const height = 6;
-      const width = CANVAS_W - row * 18;
-      if (width <= 0) continue;
-      const x = (CANVAS_W - width) / 2;
-      const y = CANVAS_H - row * 8 - 20;
-      ctx.fillStyle = row % 2 === 0 ? '#3d414a' : '#2c2f36';
-      ctx.fillRect(x, y, width, height);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(x, y, width, 1);
-    }
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < CANVAS_W; i += 32) {
-      ctx.beginPath();
-      ctx.moveTo(i, 0);
-      ctx.lineTo(i - 40, CANVAS_H);
-      ctx.stroke();
-    }
-
-    const leftWall = [
-      { x: 0, y: 0 },
-      { x: ARCH_LEFT, y: ARCH_TOP },
-      { x: ARCH_LEFT, y: ARCH_BOTTOM },
-      { x: 0, y: CANVAS_H },
-    ];
-    const rightWall = [
-      { x: CANVAS_W, y: 0 },
-      { x: ARCH_RIGHT, y: ARCH_TOP },
-      { x: ARCH_RIGHT, y: ARCH_BOTTOM },
-      { x: CANVAS_W, y: CANVAS_H },
-    ];
-    const ceiling = [
-      { x: 0, y: 0 },
-      { x: CANVAS_W, y: 0 },
-      { x: ARCH_RIGHT, y: ARCH_TOP },
-      { x: ARCH_LEFT, y: ARCH_TOP },
-    ];
-    const floor = [
-      { x: 0, y: CANVAS_H },
-      { x: CANVAS_W, y: CANVAS_H },
-      { x: ARCH_RIGHT, y: ARCH_BOTTOM },
-      { x: ARCH_LEFT, y: ARCH_BOTTOM },
-    ];
-
-    this.drawStoneSection(ctx, leftWall, { hue: 220, lightness: 26, grain: 4, cracks: 0.2 });
-    this.drawStoneSection(ctx, rightWall, { hue: 220, lightness: 26, grain: 4, cracks: 0.2 });
-    this.drawStoneSection(ctx, ceiling, { hue: 220, lightness: 22, grain: 3, cracks: 0.18, tileW: 18, tileH: 9 });
-    this.drawStoneSection(ctx, floor, { hue: 215, lightness: 32, grain: 6, cracks: 0.28, tileW: 18, tileH: 10 });
-
-    ctx.fillStyle = '#0b0a0f';
-    ctx.beginPath();
-    ctx.moveTo(ARCH_LEFT, ARCH_TOP);
-    ctx.lineTo(ARCH_RIGHT, ARCH_TOP);
-    ctx.lineTo(ARCH_RIGHT, ARCH_BOTTOM);
-    ctx.lineTo(ARCH_LEFT, ARCH_BOTTOM);
-    ctx.closePath();
-    ctx.fill();
-
-    const floorGlow = ctx.createLinearGradient(CANVAS_W / 2, ARCH_BOTTOM - 20, CANVAS_W / 2, CANVAS_H);
-    floorGlow.addColorStop(0, 'rgba(255,255,255,0.05)');
-    floorGlow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = floorGlow;
-    ctx.beginPath();
-    ctx.moveTo(ARCH_LEFT, ARCH_BOTTOM);
-    ctx.lineTo(ARCH_RIGHT, ARCH_BOTTOM);
-    ctx.lineTo(CANVAS_W, CANVAS_H);
-    ctx.lineTo(0, CANVAS_H);
-    ctx.closePath();
-    ctx.fill();
-
-    this.drawTorchSconces(ctx);
-  }
-
-  private startTorchLoop(): void {
-    const loop = (): void => {
-      this.phase += 0.07;
-      if (Math.random() < 0.3) this.spawnSpark();
-      this.updateSparks();
-      this.drawTorches();
-      this.animationFrame = requestAnimationFrame(loop);
-    };
-    loop();
-  }
-
-  private drawTorches(): void {
-    if (!this.fireCtx) return;
-    const ctx = this.fireCtx;
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    this.torchPositions.forEach(({ x, y }, idx) => {
-      this.drawTorchFlame(ctx, x, y, idx);
-    });
-    ctx.fillStyle = 'rgba(255,180,90,0.25)';
-    this.sparks.forEach((spark) => {
-      ctx.globalAlpha = spark.life;
-      ctx.fillRect(Math.round(spark.x), Math.round(spark.y), 2, 2);
-    });
-    ctx.globalAlpha = 1;
-  }
-
-  private drawTorchFlame(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    idx: number,
-  ): void {
-    const wobble = Math.sin(this.phase * 1.4 + idx * 0.8);
-    const flameColors = ['#fff2c1', '#ffd27a', '#ff9f3b', '#cc5018'];
-    let offsetY = y - 6;
-    flameColors.forEach((color, i) => {
-      const height = 8 - i;
-      const width = 18 - i * 3 + wobble * (1.2 - i * 0.2);
-      ctx.fillStyle = color;
-      ctx.fillRect(Math.round(x - width / 2), Math.round(offsetY), Math.round(width), height);
-      offsetY -= height - 2;
-    });
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.fillRect(x - 1, offsetY - 2, 2, 3);
-  }
-
-  private spawnSpark(): void {
-    const torch = this.torchPositions[Math.floor(Math.random() * this.torchPositions.length)];
-    const spark: TorchSpark = {
-      x: torch.x + (Math.random() - 0.5) * 10,
-      y: torch.y - 4,
-      vx: (Math.random() - 0.5) * 0.4,
-      vy: -(Math.random() * 0.7 + 0.2),
-      life: 1,
-      decay: 0.02 + Math.random() * 0.02,
-    };
-    this.sparks.push(spark);
-  }
-
-  private updateSparks(): void {
-    this.sparks = this.sparks.filter((spark) => {
-      spark.x += spark.vx;
-      spark.y += spark.vy;
-      spark.life -= spark.decay;
-      return spark.life > 0;
-    });
-  }
-  private drawStoneSection(
-    ctx: CanvasRenderingContext2D,
-    poly: Array<{ x: number; y: number }>,
-    opts: { hue: number; lightness: number; grain: number; cracks: number; tileW?: number; tileH?: number },
-  ): void {
-    const { hue, lightness, grain, cracks, tileW = TILE_W, tileH = TILE_H } = opts;
-
-    ctx.fillStyle = `hsl(${hue}, 8%, ${lightness}%)`;
-    this.fillPolygon(ctx, poly);
-
-    const bounds = this.polygonBounds(poly);
-    for (let y = bounds.minY - tileH; y <= bounds.maxY + tileH; y += tileH) {
-      for (let x = bounds.minX - tileW; x <= bounds.maxX + tileW; x += tileW) {
-        const cx = x + tileW / 2;
-        const cy = y + tileH / 2;
-        if (!this.pointInPolygon(cx, cy, poly)) continue;
-        const noise = this.seededNoise(cx * 12 + cy * 7);
-        const shade = lightness + (noise - 0.5) * grain;
-        ctx.fillStyle = `hsl(${hue}, 7%, ${Math.max(12, shade)}%)`;
-        ctx.fillRect(x + 0.5, y + 0.5, tileW - 1, tileH - 1);
-
-        if (noise > 0.8 && this.seededNoise(cx + cy * 3) < cracks) {
-          ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-          ctx.beginPath();
-          ctx.moveTo(x + tileW * this.seededNoise(cx + 3), y + tileH * this.seededNoise(cy + 7));
-          ctx.lineTo(x + tileW * this.seededNoise(cx + 11), y + tileH * this.seededNoise(cy + 5));
-          ctx.stroke();
-        }
-      }
-    }
-  }
-
-  private fillPolygon(ctx: CanvasRenderingContext2D, poly: Array<{ x: number; y: number }>): void {
-    ctx.beginPath();
-    ctx.moveTo(poly[0].x, poly[0].y);
-    for (let i = 1; i < poly.length; i += 1) {
-      ctx.lineTo(poly[i].x, poly[i].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  private pointInPolygon(x: number, y: number, poly: Array<{ x: number; y: number }>): boolean {
-    let inside = false;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const xi = poly[i].x;
-      const yi = poly[i].y;
-      const xj = poly[j].x;
-      const yj = poly[j].y;
-      const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-
-  private polygonBounds(poly: Array<{ x: number; y: number }>): { minX: number; maxX: number; minY: number; maxY: number } {
-    let minX = Number.POSITIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    poly.forEach((pt) => {
-      minX = Math.min(minX, pt.x);
-      minY = Math.min(minY, pt.y);
-      maxX = Math.max(maxX, pt.x);
-      maxY = Math.max(maxY, pt.y);
-    });
-    return { minX, maxX, minY, maxY };
-  }
-
-  private seededNoise(seed: number): number {
-    const x = Math.sin(seed * 0.001 + seed * 0.0031) * 43758.5453;
-    return x - Math.floor(x);
-  }
-
-  private drawTorchSconces(ctx: CanvasRenderingContext2D): void {
-    this.torchPositions.forEach(({ x, y }) => {
-      ctx.fillStyle = '#1f1711';
-      ctx.fillRect(x - 3, y - 10, 6, 60);
-      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x - 4, y - 12, 8, 64);
-      ctx.fillStyle = '#120b07';
-      ctx.fillRect(x - 6, y + 48, 12, 6);
-    });
-  }
-
 }

@@ -4,7 +4,7 @@ import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 import { CoopState } from '../systems/CoopState';
-import { SoloSelectOverlay, type SoloHeroOption, type SoloHeroStat } from '../ui/SoloSelectOverlay';
+import { SoloSelectOverlay, type SoloHeroOption, type SoloHeroStats } from '../ui/SoloSelectOverlay';
 import { FRAME_URLS } from '../utils/assetManifest';
 
 const CHARACTER_ORDER: CharacterType[] = [
@@ -13,6 +13,50 @@ const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Mage,
   CharacterType.Paladin,
 ];
+
+interface HeroMeta {
+  role: string;
+  accentHex: string;
+  shortDescription: string;
+  longDescription: string;
+  special: string;
+  difficulty: string;
+}
+
+const HERO_CARD_META: Record<CharacterType, HeroMeta> = {
+  [CharacterType.Knight]: {
+    role: 'Vanguard',
+    accentHex: '#f4c56d',
+    shortDescription: 'Shielded frontline champion built to weather hits.',
+    longDescription: 'A steadfast knight who turns every advance into momentum. Heavy armor and disciplined strikes keep the squad anchored while others push ahead.',
+    special: 'Bulwark Entry: Begins each expedition with a barrier that blocks one lethal blow.',
+    difficulty: 'Forgiving',
+  },
+  [CharacterType.Rogue]: {
+    role: 'Skirmisher',
+    accentHex: '#5fe0ae',
+    shortDescription: 'Blinding speed, evasive momentum, precision knives.',
+    longDescription: 'A darting duelist who controls the pace of battle. She thrives on spacing, weaving through danger to carve foes before they can react.',
+    special: 'Shadow Dash: Gain a burst of speed after every dodge, letting you reposition instantly.',
+    difficulty: 'Advanced',
+  },
+  [CharacterType.Mage]: {
+    role: 'Arcanist',
+    accentHex: '#8ec9ff',
+    shortDescription: 'Glass cannon caster with reality-bending volleys.',
+    longDescription: 'Fragile but unstoppable once channeling. The mage floods the arena with piercing spells that delete threats in carefully lined volleys.',
+    special: 'Arc Burst: Charged projectiles explode on impact, splashing damage in a small radius.',
+    difficulty: 'Expert',
+  },
+  [CharacterType.Paladin]: {
+    role: 'Warden',
+    accentHex: '#f892d2',
+    shortDescription: 'Holy tank who sustains the line with radiant strikes.',
+    longDescription: 'A relentless guardian that turns endurance into offense. Swinging wide arcs, the paladin sustains allies by outlasting anything in the path.',
+    special: 'Sanctified Roar: Emits a pulse that weakens nearby foes after blocking damage.',
+    difficulty: 'Steady',
+  },
+};
 
 export class PlayerSelectScene extends Phaser.Scene {
   private selectedIndex = 0;
@@ -73,17 +117,32 @@ export class PlayerSelectScene extends Phaser.Scene {
 
   private buildHeroOption(type: CharacterType): SoloHeroOption {
     const cfg = CHARACTER_CONFIGS[type];
-    const stats: SoloHeroStat[] = [
-      { label: 'HP', value: cfg.maxHP, max: 8, color: '#ff6666' },
-      { label: 'SPD', value: cfg.speed, max: 145, color: '#44a0ff' },
-      { label: 'DMG', value: cfg.damage, max: 2, color: '#ff9933' },
-      { label: 'RATE', value: 420 - cfg.fireRate, max: 420, color: '#33cc77' },
-    ];
+    const meta = HERO_CARD_META[type];
+    const stats = this.buildHeroStats(cfg);
     return {
       label: cfg.label.toUpperCase(),
-      description: cfg.desc,
+      role: meta.role,
+      shortDescription: meta.shortDescription,
+      longDescription: meta.longDescription,
+      accentHex: meta.accentHex,
       image: this.resolvePortraitUrl(cfg.spriteKey) ?? null,
       stats,
+      special: meta.special,
+      difficulty: meta.difficulty,
+    };
+  }
+
+  private buildHeroStats(cfg: (typeof CHARACTER_CONFIGS)[CharacterType]): SoloHeroStats {
+    const normalize = (value: number, min: number, max: number): number => {
+      if (max - min <= 0) return 0;
+      return Phaser.Math.Clamp((value - min) / (max - min), 0, 1);
+    };
+    const firePerSecond = 1000 / cfg.fireRate;
+    return {
+      health: normalize(cfg.maxHP, 3, 8),
+      speed: normalize(cfg.speed, 80, 150),
+      power: normalize(cfg.damage, 0.6, 2.2),
+      attackSpeed: normalize(firePerSecond, 2.3, 5.5),
     };
   }
 
@@ -140,4 +199,3 @@ export class PlayerSelectScene extends Phaser.Scene {
     this.input.keyboard?.removeAllListeners();
   }
 }
-

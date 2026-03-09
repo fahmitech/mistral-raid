@@ -178,6 +178,7 @@ export interface SaveData {
   character: CharacterType;
   state: GameStateData;
   savedAt: number;
+  discoveredLore?: string[];
 }
 
 export interface OptionsData {

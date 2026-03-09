@@ -178,8 +178,14 @@ export class LevelHUDOverlay {
     this.weaponEl.textContent = `WEAPON [I]: ${stats.weaponLabel}`;
   }
 
-  setHintVisible(visible: boolean): void {
-    this.hintEl.style.display = visible ? 'inline-flex' : 'none';
+  setHint(text: string | null): void {
+    if (!text) {
+      this.hintEl.style.display = 'none';
+      this.hintEl.textContent = '';
+      return;
+    }
+    this.hintEl.textContent = text;
+    this.hintEl.style.display = 'inline-flex';
   }
 
   setDashCharges(charges: number): void {

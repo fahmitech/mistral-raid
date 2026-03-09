@@ -14,11 +14,16 @@ export const SaveSystem = {
   hasSave(): boolean {
     return localStorage.getItem(SAVE_KEY) !== null;
   },
-  save(character: SaveData['character'], state: SaveData['state']): void {
+  save(character: SaveData['character'], state: SaveData['state'], discoveredLore?: string[]): void {
+    const loreIds =
+      Array.isArray(discoveredLore) && discoveredLore.length > 0
+        ? Array.from(new Set(discoveredLore.filter((id) => typeof id === 'string')))
+        : undefined;
     const data: SaveData = {
       character,
       state,
       savedAt: Date.now(),
+      discoveredLore: loreIds,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   },

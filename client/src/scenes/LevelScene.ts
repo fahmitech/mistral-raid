@@ -31,7 +31,7 @@ import {
   TileType,
 } from '../config/types';
 import { GameState } from '../core/GameState';
-import { MazeData, MazeGenerator } from '../core/MazeGenerator';
+import { MazeData, MazeGenerator, type Room } from '../core/MazeGenerator';
 import { getLevelData } from '../core/LevelConfig';
 import { EnemyFactory } from '../core/EnemyFactory';
 import { BossFactory } from '../core/BossFactory';
@@ -58,6 +58,10 @@ import { DifficultyManager } from '../systems/DifficultyManager';
 import { CritSystem } from '../systems/CritSystem';
 import { BuffManager } from '../systems/BuffManager';
 import { LevelHUDOverlay } from '../ui/LevelHUDOverlay';
+import { JournalOverlay } from '../ui/JournalOverlay';
+import { getLoreEntry, type LoreEntry, type LoreEntryId } from '../content/loreEntries';
+import { LevelKey } from '../entities/LevelKey';
+import { LevelDoor, type LevelDoorOptions } from '../entities/LevelDoor';
 
 import { MusicLayer } from '../types/AudioTypes';
 import type { ServerMessage } from '../types/arena';
@@ -65,6 +69,60 @@ import type { ServerMessage } from '../types/arena';
 // Persists across scene.restart() calls so retries reuse the exact same map and enemy positions.
 interface EnemySpawnRecord { x: number; y: number; config: EnemyConfig; }
 let _checkpoint: { maze: MazeData; spawns: EnemySpawnRecord[]; level: number } | null = null;
+
+interface LoreInteractable {
+  id: LoreEntryId;
+  marker: Phaser.GameObjects.Rectangle;
+  bounds: Phaser.Geom.Rectangle;
+  pulse: Phaser.Tweens.Tween;
+}
+
+interface GateLetter {
+  id: LoreEntryId;
+  sprite: Phaser.GameObjects.Sprite;
+  bounds: Phaser.Geom.Rectangle;
+  prompt: Phaser.GameObjects.Text;
+}
+
+interface GateVisualConfig {
+  hintId: LoreEntryId;
+  keyStrategy: 'northAlcove' | 'floodedCrypt' | 'collapsedBeam' | 'shatteredObelisk';
+  letterStrategy: 'startSide' | 'wardDesk' | 'forgeEdge' | 'riftCarving';
+  doorTextures: { closed: string; open: string; tint?: number };
+  glow?: { color: number; width: number; height: number; alpha: number };
+}
+
+const GATE_CONFIGS: Record<number, GateVisualConfig> = {
+  1: {
+    hintId: 'level1_key_hint',
+    keyStrategy: 'northAlcove',
+    letterStrategy: 'startSide',
+    // Placeholder sprite keys for the rusted quarantine gate; replace when bespoke art lands.
+    doorTextures: { closed: 'door_lvl1_closed', open: 'door_lvl1_open', tint: 0xb87333 },
+    glow: { color: 0x7c3aed, width: 22, height: 40, alpha: 0.18 },
+  },
+  2: {
+    hintId: 'level2_key_hint',
+    keyStrategy: 'floodedCrypt',
+    letterStrategy: 'wardDesk',
+    doorTextures: { closed: 'door_lvl2_closed', open: 'door_lvl2_open', tint: 0x94a3b8 },
+    glow: { color: 0x7dd3a7, width: 24, height: 42, alpha: 0.22 },
+  },
+  3: {
+    hintId: 'level3_key_hint',
+    keyStrategy: 'collapsedBeam',
+    letterStrategy: 'forgeEdge',
+    doorTextures: { closed: 'door_lvl3_closed', open: 'door_lvl3_open', tint: 0x9a3412 },
+    glow: { color: 0xf97316, width: 26, height: 38, alpha: 0.2 },
+  },
+  4: {
+    hintId: 'level4_key_hint',
+    keyStrategy: 'shatteredObelisk',
+    letterStrategy: 'riftCarving',
+    doorTextures: { closed: 'door_lvl4_closed', open: 'door_lvl4_open', tint: 0x8b5cf6 },
+    glow: { color: 0xc084fc, width: 28, height: 52, alpha: 0.3 },
+  },
+};
 
 export class LevelScene extends Phaser.Scene {
   private levelData!: LevelData;
@@ -145,6 +203,32 @@ export class LevelScene extends Phaser.Scene {
   private companionSpeakBubble?: Phaser.GameObjects.Container;
   private companionSpeakTimer?: Phaser.Time.TimerEvent;
 
+  private journalOverlay?: JournalOverlay;
+  private loreInteractables: LoreInteractable[] = [];
+  private pendingLoreEntries: LoreEntry[] = [];
+  private loreTriggered = new Set<LoreEntryId>();
+  private loreOverlayOpen = false;
+  private lorePauseActive = false;
+  private pausedTimeScale = 1;
+  private physicsPausedForLore = false;
+  private tweensPausedForLore = false;
+  private animsPausedForLore = false;
+  private gateLetter?: GateLetter;
+  private gateKey?: LevelKey;
+  private gateDoor?: LevelDoor;
+  private gateDoorCollider?: Phaser.Physics.Arcade.Collider;
+  private gateDoorOverlap?: Phaser.Physics.Arcade.Collider;
+  private gateDecor: Phaser.GameObjects.GameObject[] = [];
+  private gateKeyPrompt?: Phaser.GameObjects.Text;
+  private gateDoorPrompt?: Phaser.GameObjects.Text;
+  private gateState = {
+    active: false,
+    letterRead: false,
+    keyCollected: false,
+    hintId: null as LoreEntryId | null,
+  };
+  private doorPromptResetTimer?: Phaser.Time.TimerEvent;
+
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
@@ -203,6 +287,13 @@ export class LevelScene extends Phaser.Scene {
     this.damageLog = [];
     this.lastFootstepAt = 0;
     this.lastTelemetryUpdate = 0;
+    this.resetGateState();
+    this.pendingLoreEntries = [];
+    this.loreTriggered.clear();
+    this.loreOverlayOpen = false;
+    this.lorePauseActive = false;
+    this.clearLoreInteractables();
+    this.resumeFromLorePause(true);
 
     // Start dungeon ambient music
     AudioManager.playMusic(this, 'dungeon_ambient');
@@ -269,6 +360,7 @@ export class LevelScene extends Phaser.Scene {
     if (this.companion) this.setupCompanionCollisions();
     this.setupCamera();
     this.createHUD();
+    this.setupLoreHotspots();
 
     this.lighting = new LightingSystem(this, this.levelData.fogDensity);
     this.lighting.setTorches(this.maze.torchSpawns.map((t) => ({ x: t.x * TILE_SIZE + 8, y: t.y * TILE_SIZE + 8 })));
@@ -295,6 +387,7 @@ export class LevelScene extends Phaser.Scene {
       'floor_stairs'
     );
     this.stairsSprite.setVisible(false).setDepth(2);
+    this.setupLevelGate();
 
     this.stairsCheck = this.time.addEvent({
       delay: 300,
@@ -532,6 +625,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.loreOverlayOpen) return;
     if (pointer.rightButtonDown()) {
       this.tryShield();
     }
@@ -587,6 +681,14 @@ export class LevelScene extends Phaser.Scene {
     this.audioDebugText = undefined;
     this.hudOverlay?.destroy();
     this.hudOverlay = undefined;
+    this.journalOverlay?.destroy();
+    this.journalOverlay = undefined;
+    this.clearGateObjects();
+    this.clearLoreInteractables();
+    this.pendingLoreEntries = [];
+    this.loreTriggered.clear();
+    this.loreOverlayOpen = false;
+    this.resumeFromLorePause(true);
 
     this.wallShadows?.destroy();
     this.wallShadows = undefined;
@@ -838,6 +940,9 @@ export class LevelScene extends Phaser.Scene {
     const parent = canvas?.parentElement;
     if (!parent || !canvas) throw new Error('LevelScene: canvas parentElement missing');
     this.hudOverlay = new LevelHUDOverlay(parent, canvas);
+    this.journalOverlay?.destroy();
+    this.journalOverlay = new JournalOverlay(parent, canvas);
+    this.journalOverlay.onRequestClose(() => this.handleLoreCloseRequest());
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
     this.hudOverlay.updateStats({
@@ -849,7 +954,7 @@ export class LevelScene extends Phaser.Scene {
       score: GameState.get().getData().score,
       weaponLabel: WEAPON_LABELS[this.currentWeaponType] ?? 'SWORD',
     });
-    this.hudOverlay.setHintVisible(false);
+    this.hudOverlay.setHint(null);
     this.hudOverlay.setDashCharges(GameState.get().getDashCharges());
     this.hudOverlay.setShieldReady(true);
     this.hudOverlay.setCompanionBadge(null);
@@ -1148,12 +1253,29 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleInput(time: number): void {
+    if (this.loreOverlayOpen) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
+
     if (!this.player.body) {
       this.physics.world.enable(this.player);
       this.player.initPhysics();
     }
 
     const move = new Phaser.Math.Vector2(0, 0);
+    const moveIntent =
+      !!this.cursors.left?.isDown ||
+      this.keys.A.isDown ||
+      !!this.cursors.right?.isDown ||
+      this.keys.D.isDown ||
+      !!this.cursors.up?.isDown ||
+      this.keys.W.isDown ||
+      !!this.cursors.down?.isDown ||
+      this.keys.S.isDown;
+    if (moveIntent && this.assistantChat?.isVisible()) {
+      this.assistantChat.close();
+    }
     if (this.cursors.left?.isDown || this.keys.A.isDown) move.x -= 1;
     if (this.cursors.right?.isDown || this.keys.D.isDown) move.x += 1;
     if (this.cursors.up?.isDown || this.keys.W.isDown) move.y -= 1;
@@ -1290,6 +1412,7 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.updatePickupHint();
+    this.updateGatePrompts();
   }
 
   private updateDebug(time: number): void {
@@ -1597,12 +1720,35 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private tryInteract(): void {
+    if (this.loreOverlayOpen) {
+      this.handleLoreCloseRequest();
+      return;
+    }
+
+    const gateLetter = this.getNearbyGateLetter();
+    if (gateLetter) {
+      this.handleGateLetterInteract(gateLetter);
+      return;
+    }
+
+    if (this.isPlayerNearGateKey()) {
+      this.collectGateKey();
+      return;
+    }
+
     const item = this.getInteractiveItem();
-    if (!item) return;
-    if (item.isChest) {
-      this.openChest(item);
-    } else {
-      this.collectItem(item);
+    if (item) {
+      if (item.isChest) {
+        this.openChest(item);
+      } else {
+        this.collectItem(item);
+      }
+      return;
+    }
+
+    const lore = this.getNearbyLoreInteractable();
+    if (lore) {
+      this.consumeLoreInteractable(lore);
     }
   }
 
@@ -1619,9 +1765,71 @@ export class LevelScene extends Phaser.Scene {
     return null;
   }
 
+  private getNearbyGateLetter(): GateLetter | null {
+    if (!this.gateLetter) return null;
+    const bounds = this.player.getBounds();
+    const playerRect = new Phaser.Geom.Rectangle(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
+    if (Phaser.Geom.Rectangle.Overlaps(playerRect, this.gateLetter.bounds)) {
+      return this.gateLetter;
+    }
+    return null;
+  }
+
+  private isPlayerNearGateKey(): boolean {
+    if (!this.player || !this.gateKey || !this.gateKey.active) return false;
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.gateKey.x, this.gateKey.y);
+    return dist <= TILE_SIZE;
+  }
+
   private updatePickupHint(): void {
+    if (this.getNearbyGateLetter() || this.isPlayerNearGateKey()) {
+      this.hudOverlay?.setHint(null);
+      return;
+    }
     const item = this.getInteractiveItem();
-    this.hudOverlay?.setHintVisible(!!item);
+    if (item) {
+      this.hudOverlay?.setHint('[E] Pick up');
+      return;
+    }
+    const lore = this.getNearbyLoreInteractable();
+    if (lore) {
+      this.hudOverlay?.setHint('[E] Read');
+      return;
+    }
+    this.hudOverlay?.setHint(null);
+  }
+
+  private updateGatePrompts(): void {
+    if (this.gateLetter && this.player) {
+      const dist = Phaser.Math.Distance.Between(
+        this.gateLetter.sprite.x,
+        this.gateLetter.sprite.y,
+        this.player.x,
+        this.player.y
+      );
+      this.gateLetter.prompt.setVisible(dist <= TILE_SIZE);
+    }
+    if (this.gateKey && this.gateKeyPrompt && this.player) {
+      const dist = Phaser.Math.Distance.Between(this.gateKey.x, this.gateKey.y, this.player.x, this.player.y);
+      this.gateKeyPrompt.setVisible(dist <= TILE_SIZE * 0.9);
+    }
+    if (this.gateDoor && this.gateDoorPrompt && this.player) {
+      const dist = Phaser.Math.Distance.Between(this.gateDoor.x, this.gateDoor.y - 10, this.player.x, this.player.y);
+      if (dist <= TILE_SIZE * 1.2) {
+        this.gateDoorPrompt.setVisible(true);
+        const locked = this.gateDoor.isLocked();
+        const forced = !!this.doorPromptResetTimer;
+        if (locked && !forced) {
+          this.gateDoorPrompt.setText('LOCKED');
+          this.gateDoorPrompt.setColor('#f87171');
+        } else if (!locked) {
+          this.gateDoorPrompt.setText('[E] ENTER');
+          this.gateDoorPrompt.setColor('#fef3c7');
+        }
+      } else {
+        this.gateDoorPrompt.setVisible(false);
+      }
+    }
   }
 
   private checkAutoCollect(): void {
@@ -1974,7 +2182,10 @@ export class LevelScene extends Phaser.Scene {
     this.activeAudioLayer = 'ambient';
     AudioManager.playMusic(this, 'dungeon_ambient');
     this.spawnCoinExplosion(boss.x, boss.y);
-    if (this.stairsSprite) {
+    if (this.isGateLevel()) {
+      this.stairsSprite?.setVisible(false);
+      this.stairsActive = false;
+    } else if (this.stairsSprite) {
       this.stairsSprite.setVisible(true);
       this.stairsActive = true;
     }
@@ -1990,12 +2201,583 @@ export class LevelScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(20);
     this.time.delayedCall(1200, () => text.destroy());
-    SaveSystem.save(GameState.get().getData().character, GameState.get().getData());
+    const gsSnapshot = GameState.get().getData();
+    SaveSystem.save(gsSnapshot.character, gsSnapshot, GameState.getDiscoveredLoreIds());
+    this.handleLoreAfterBoss();
 
     if (this.levelData.level === 5) {
       this.time.delayedCall(2500, () => {
         this.scene.start('VictoryScene');
       });
+    }
+  }
+
+  private setupLoreHotspots(): void {
+    this.clearLoreInteractables();
+    if (!this.maze) return;
+    if (this.currentLevel === 1) {
+      const room = this.pickRoomNearStart(0);
+      if (room) this.addLoreInteractable('day3_note', room, 'corner');
+    } else if (this.currentLevel === 2) {
+      const room = this.pickRoomNearStart(1) ?? this.pickRoomNearStart(0);
+      if (room) this.addLoreInteractable('vael_page34', room, 'corner');
+    } else if (this.currentLevel === 3) {
+      const room = this.pickCentralRoom() ?? this.pickRoomNearStart(2);
+      if (room) this.addLoreInteractable('forge_year22', room, 'center');
+    }
+  }
+
+  private setupLevelGate(): void {
+    if (!this.isGateLevel()) return;
+    const config = this.getGateConfigForLevel(this.currentLevel);
+    if (!config) return;
+    const positions = this.findGatePositions(config);
+    if (!positions) return;
+    this.clearGateObjects();
+    this.gateState = {
+      active: true,
+      letterRead: false,
+      keyCollected: false,
+      hintId: config.hintId,
+    };
+    this.spawnGateLetter(positions.letter, config);
+    this.spawnGateKey(positions.key);
+    this.spawnGateDoor(positions.door, config);
+    this.stairsSprite?.setVisible(false);
+  }
+
+  private isGateLevel(level = this.currentLevel): boolean {
+    return level >= 1 && level <= 4;
+  }
+
+  private getGateConfigForLevel(level: number): GateVisualConfig | null {
+    return GATE_CONFIGS[level] ?? null;
+  }
+
+  private findGatePositions(config: GateVisualConfig): { letter: Phaser.Math.Vector2; key: Phaser.Math.Vector2; door: Phaser.Math.Vector2 } | null {
+    if (!this.maze) return null;
+    const letterPoint = this.resolveLetterPosition(config.letterStrategy);
+    const keyPoint = this.resolveKeyPosition(config.keyStrategy) ?? letterPoint?.clone();
+    if (!letterPoint || !keyPoint) return null;
+    const doorPoint = this.tileToWorld(this.maze.stairs.x, this.maze.stairs.y, true);
+    return { letter: letterPoint, key: keyPoint, door: doorPoint };
+  }
+
+  private resolveLetterPosition(strategy: GateVisualConfig['letterStrategy']): Phaser.Math.Vector2 | null {
+    if (!this.maze) return null;
+    if (strategy === 'startSide') {
+      const room = this.pickRoomNearStart(0) ?? this.maze.startRoom;
+      return this.tileToWorld(room.x + 1, room.y + 1);
+    }
+    if (strategy === 'wardDesk') {
+      const room = this.pickRoomByDistance({ x: this.maze.startRoom.cx + 4, y: this.maze.startRoom.cy + 6 }, 1) ?? this.maze.startRoom;
+      return this.tileToWorld(room.cx, room.y + 1);
+    }
+    if (strategy === 'forgeEdge') {
+      const room = this.pickTreasureRoom() ?? this.pickCentralRoom() ?? this.maze.startRoom;
+      return this.tileToWorld(room.cx - 1, room.y + 1);
+    }
+    const riftRoom = this.maze.bossRoom ?? this.pickFarRoom();
+    return this.tileToWorld(riftRoom.cx, riftRoom.y + 1);
+  }
+
+  private resolveKeyPosition(strategy: GateVisualConfig['keyStrategy']): Phaser.Math.Vector2 | null {
+    if (!this.maze) return null;
+    if (strategy === 'northAlcove') {
+      const room = this.getExtremeRoom('y', 'min');
+      return this.tileToWorld(room.x + 1, Math.max(room.y + 1, 2));
+    }
+    if (strategy === 'floodedCrypt') {
+      const room = this.pickSecretRoom() ?? this.getExtremeRoom('y', 'max');
+      return this.tileToWorld(room.cx, room.y + room.h - 2);
+    }
+    if (strategy === 'collapsedBeam') {
+      const room = this.getExtremeRoom('x', 'max');
+      return this.tileToWorld(room.x + room.w - 2, room.cy);
+    }
+    const room = this.maze.bossRoom ?? this.getExtremeRoom('x', 'max');
+    return this.tileToWorld(room.cx - 1, room.cy + 1);
+  }
+
+  private spawnGateLetter(position: Phaser.Math.Vector2, config: GateVisualConfig): void {
+    this.gateLetter?.sprite.destroy();
+    const texture = this.ensureLetterTexture();
+    const sprite = this.add.sprite(position.x, position.y, texture).setDepth(6);
+    sprite.setScale(0.25);
+    const tint =
+      config.hintId === 'level1_key_hint'
+        ? 0xc08457
+        : config.hintId === 'level2_key_hint'
+          ? 0x9ca3af
+          : config.hintId === 'level3_key_hint'
+            ? 0xf97316
+            : 0xc4b5fd;
+    sprite.setTint(tint);
+    this.tweens.killTweensOf(sprite);
+    this.gateLetter = {
+      id: config.hintId,
+      sprite,
+      bounds: new Phaser.Geom.Rectangle(position.x - 8, position.y - 8, 16, 16),
+      prompt: this.add
+        .text(position.x, position.y - 14, '[E] READ', {
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '6px',
+          color: '#fef3c7',
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(7)
+        .setVisible(false),
+    };
+  }
+
+  private spawnGateKey(position: Phaser.Math.Vector2): void {
+    this.gateKey?.destroy();
+    this.gateKeyPrompt?.destroy();
+    this.gateKey = new LevelKey(this, position.x, position.y);
+    this.gateKeyPrompt = this.add
+      .text(position.x, position.y - 14, '[E] TAKE KEY', {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '6px',
+        color: '#fde68a',
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(7)
+      .setVisible(false);
+  }
+
+  private spawnGateDoor(position: Phaser.Math.Vector2, config: GateVisualConfig): void {
+    this.gateDoor?.destroy();
+    this.gateDoorCollider?.destroy();
+    this.gateDoorOverlap?.destroy();
+    const doorTextures = this.resolveDoorTextures(config);
+    this.gateDoor = new LevelDoor(this, position.x, position.y, doorTextures);
+    this.gateDoorCollider = this.physics.add.collider(this.player, this.gateDoor, () => {
+      if (this.gateDoor?.isLocked()) this.showDoorLockedHint();
+    });
+    this.gateDoorOverlap = this.physics.add.overlap(this.player, this.gateDoor, () => this.handleGateDoorOverlap());
+    if (config.glow) {
+      const glow = this.add.rectangle(
+        position.x,
+        position.y - 18,
+        config.glow.width,
+        config.glow.height,
+        config.glow.color,
+        config.glow.alpha
+      );
+      glow.setDepth(5);
+      this.tweens.add({
+        targets: glow,
+        alpha: config.glow.alpha * 1.4,
+        duration: 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      this.gateDecor.push(glow);
+    }
+    this.gateDoorPrompt?.destroy();
+    this.gateDoorPrompt = this.add
+      .text(position.x, position.y - 30, 'LOCKED', {
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: '7px',
+        color: '#f87171',
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(8)
+      .setVisible(false);
+  }
+
+  private resolveDoorTextures(config: GateVisualConfig): LevelDoorOptions {
+    const closed = this.textures.exists(config.doorTextures.closed) ? config.doorTextures.closed : 'door_closed';
+    const open = this.textures.exists(config.doorTextures.open) ? config.doorTextures.open : 'door_open';
+    return {
+      closedTexture: closed,
+      openTexture: open,
+      tint: config.doorTextures.tint,
+    };
+  }
+
+  private ensureLetterTexture(): string {
+    const key = 'ui_letter_envelope';
+    if (this.textures.exists(key)) return key;
+    const gfx = this.make.graphics({ x: 0, y: 0 });
+    gfx.setVisible(false);
+    const w = 96;
+    const h = 64;
+    const border = 4;
+
+    // Base envelope body
+    gfx.fillStyle(0xb8934a, 1);
+    gfx.fillRoundedRect(border, border, w - border * 2, h - border * 2, 6);
+
+    // Surface gradient (simple bands to mimic CSS gradient)
+    gfx.fillStyle(0xc9a35a, 0.35);
+    gfx.fillRect(border + 2, border + 2, w - border * 4, (h - border * 2) / 2);
+    gfx.fillStyle(0x8a5f2c, 0.2);
+    gfx.fillRect(border + 2, border + (h - border * 2) / 2, w - border * 4, (h - border * 2) / 2);
+
+    // Outline
+    gfx.lineStyle(2, 0x4a3418, 1);
+    gfx.strokeRoundedRect(border, border, w - border * 2, h - border * 2, 6);
+
+    const midX = w / 2;
+    const midY = h / 2 + 2;
+
+    // Top flap
+    gfx.fillStyle(0x9e7432, 1);
+    gfx.beginPath();
+    gfx.moveTo(border, border);
+    gfx.lineTo(midX, midY);
+    gfx.lineTo(w - border, border);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.lineStyle(1.5, 0x4a3418, 0.9);
+    gfx.strokePath();
+
+    // Bottom flap
+    gfx.fillStyle(0xa47835, 1);
+    gfx.beginPath();
+    gfx.moveTo(border, h - border);
+    gfx.lineTo(midX, midY + 6);
+    gfx.lineTo(w - border, h - border);
+    gfx.closePath();
+    gfx.fillPath();
+    gfx.lineStyle(1.5, 0x4a3418, 0.85);
+    gfx.strokePath();
+
+    // Left flap
+    gfx.fillStyle(0xa88040, 1);
+    gfx.beginPath();
+    gfx.moveTo(border, border);
+    gfx.lineTo(midX, midY);
+    gfx.lineTo(border, h - border);
+    gfx.closePath();
+    gfx.fillPath();
+
+    // Right flap
+    gfx.beginPath();
+    gfx.moveTo(w - border, border);
+    gfx.lineTo(midX, midY);
+    gfx.lineTo(w - border, h - border);
+    gfx.closePath();
+    gfx.fillPath();
+
+    // Crease lines
+    gfx.lineStyle(2, 0x7a5a24, 0.6);
+    gfx.beginPath();
+    gfx.moveTo(border + 10, border + 8);
+    gfx.lineTo(midX, midY);
+    gfx.lineTo(w - border - 10, border + 8);
+    gfx.strokePath();
+    gfx.beginPath();
+    gfx.moveTo(border + 10, h - border - 8);
+    gfx.lineTo(midX, midY);
+    gfx.lineTo(w - border - 10, h - border - 8);
+    gfx.strokePath();
+
+    // Seal
+    gfx.fillStyle(0x8b1a1a, 1);
+    gfx.fillCircle(midX, midY + 2, 6);
+    gfx.lineStyle(2, 0x4a0e0e, 1);
+    gfx.strokeCircle(midX, midY + 2, 6);
+
+    // Checkerboard highlight
+    gfx.fillStyle(0xc9a35a, 0.35);
+    for (let y = border + 4; y < border + 20; y += 4) {
+      for (let x = border + 4; x < border + 30; x += 8) {
+        gfx.fillRect(x, y, 4, 4);
+      }
+    }
+
+    gfx.generateTexture(key, w, h);
+    gfx.destroy();
+    return key;
+  }
+
+  private handleGateLetterInteract(letter: GateLetter): void {
+    if (!this.gateState.active) return;
+    this.triggerLoreEntry(letter.id);
+    this.gateState.letterRead = true;
+    letter.prompt.destroy();
+    letter.sprite.destroy();
+    this.gateLetter = undefined;
+  }
+
+  private collectGateKey(): void {
+    if (!this.gateState.active || !this.gateKey || this.gateState.keyCollected) return;
+    if (!this.gateState.letterRead) {
+      ScoreSystem.floatingText(this, this.gateKey.x, this.gateKey.y - 10, 'READ THE NOTE', '#f87171');
+      return;
+    }
+    this.gateKey.collect();
+    this.gateState.keyCollected = true;
+    ScoreSystem.floatingText(this, this.gateKey.x, this.gateKey.y - 10, 'KEY RECOVERED', '#fef3c7');
+    AudioManager.get().pickup();
+    this.gateKeyPrompt?.destroy();
+    this.gateKeyPrompt = undefined;
+    this.gateKey = undefined;
+    this.unlockGateDoor();
+  }
+
+  private unlockGateDoor(): void {
+    if (!this.gateDoor) return;
+    this.gateDoor.open();
+    this.gateDoorCollider?.destroy();
+    this.gateDoorCollider = undefined;
+    AudioManager.playSFX(this, 'door_open');
+    ScoreSystem.floatingText(this, this.gateDoor.x, this.gateDoor.y - 18, 'GATE OPEN', '#fde68a');
+    this.gateDoorPrompt?.setText('[E] ENTER');
+    this.gateDoorPrompt?.setColor('#fef3c7');
+  }
+
+  private handleGateDoorOverlap(): void {
+    if (!this.gateState.active || !this.gateDoor || this.gateDoor.isLocked()) return;
+    if (this.levelCompleting) return;
+    this.handleLevelComplete();
+  }
+
+  private showDoorLockedHint(): void {
+    if (!this.gateDoorPrompt) return;
+    this.gateDoorPrompt.setText('LOCKED — FIND KEY');
+    this.gateDoorPrompt.setColor('#f87171');
+    this.gateDoorPrompt.setVisible(true);
+    this.doorPromptResetTimer?.remove(false);
+    this.doorPromptResetTimer = this.time.delayedCall(2000, () => {
+      if (!this.gateDoorPrompt) return;
+      this.gateDoorPrompt.setText('LOCKED');
+      this.gateDoorPrompt.setColor('#f87171');
+      this.doorPromptResetTimer = undefined;
+    });
+  }
+
+  private clearGateObjects(): void {
+    this.gateLetter?.sprite.destroy();
+    this.gateLetter?.prompt.destroy();
+    this.gateLetter = undefined;
+    this.gateKey?.destroy();
+    this.gateKey = undefined;
+    this.gateDoorCollider?.destroy();
+    this.gateDoorCollider = undefined;
+    this.gateDoorOverlap?.destroy();
+    this.gateDoorOverlap = undefined;
+    this.gateDoor?.destroy();
+    this.gateDoor = undefined;
+    this.gateDecor.forEach((obj) => obj.destroy());
+    this.gateDecor = [];
+    this.gateDoorPrompt?.destroy();
+    this.gateDoorPrompt = undefined;
+    this.gateKeyPrompt?.destroy();
+    this.gateKeyPrompt = undefined;
+    this.doorPromptResetTimer?.remove(false);
+    this.doorPromptResetTimer = undefined;
+  }
+
+  private resetGateState(): void {
+    this.clearGateObjects();
+    this.gateState = {
+      active: false,
+      letterRead: false,
+      keyCollected: false,
+      hintId: null,
+    };
+  }
+
+  private pickRoomNearStart(skip: number): Room | null {
+    const anchor = { x: this.maze.startRoom.cx, y: this.maze.startRoom.cy };
+    return this.pickRoomByDistance(anchor, skip);
+  }
+
+  private pickCentralRoom(): Room | null {
+    const anchor = { x: this.maze.width / 2, y: this.maze.height / 2 };
+    return this.pickRoomByDistance(anchor, 0);
+  }
+
+  private pickRoomByDistance(anchor: { x: number; y: number }, skip: number): Room | null {
+    const rooms = this.maze.rooms
+      .filter((room) => (room.type === RoomType.Normal || room.type === RoomType.Secret) && room !== this.maze.startRoom)
+      .sort(
+        (a, b) =>
+          this.distanceSq(a.cx, a.cy, anchor.x, anchor.y) - this.distanceSq(b.cx, b.cy, anchor.x, anchor.y)
+      );
+    return rooms[skip] ?? null;
+  }
+
+  private pickSecretRoom(): Room | null {
+    return this.maze.rooms.find((room) => room.type === RoomType.Secret) ?? null;
+  }
+
+  private pickTreasureRoom(): Room | null {
+    return this.maze.rooms.find((room) => room.type === RoomType.Treasure) ?? null;
+  }
+
+  private pickFarRoom(): Room | null {
+    const origin = this.maze.startRoom;
+    const rooms = this.maze.rooms
+      .filter((room) => room !== origin)
+      .sort(
+        (a, b) =>
+          this.distanceSq(b.cx, b.cy, origin.cx, origin.cy) -
+          this.distanceSq(a.cx, a.cy, origin.cx, origin.cy)
+      );
+    return rooms[0] ?? null;
+  }
+
+  private getExtremeRoom(axis: 'x' | 'y', dir: 'min' | 'max'): Room {
+    const rooms = this.maze.rooms.filter((room) => room.type !== RoomType.Boss);
+    let chosen = rooms[0] ?? this.maze.startRoom;
+    let best = chosen ? chosen[axis === 'x' ? 'cx' : 'cy'] : 0;
+    rooms.forEach((room) => {
+      const value = room[axis === 'x' ? 'cx' : 'cy'];
+      if (dir === 'min' ? value < best : value > best) {
+        best = value;
+        chosen = room;
+      }
+    });
+    return chosen;
+  }
+
+  private tileToWorld(tileX: number, tileY: number, alignBottom = false): Phaser.Math.Vector2 {
+    const x = tileX * TILE_SIZE + TILE_SIZE / 2;
+    const y = tileY * TILE_SIZE + (alignBottom ? TILE_SIZE : TILE_SIZE / 2);
+    return new Phaser.Math.Vector2(x, y);
+  }
+
+  private distanceSq(ax: number, ay: number, bx: number, by: number): number {
+    const dx = ax - bx;
+    const dy = ay - by;
+    return dx * dx + dy * dy;
+  }
+
+  private addLoreInteractable(id: LoreEntryId, room: Room, preference: 'corner' | 'center'): void {
+    const tileX = preference === 'corner' ? room.x + 1 : room.cx;
+    const tileY = preference === 'corner' ? room.y + 1 : room.cy;
+    const x = tileX * TILE_SIZE + TILE_SIZE / 2;
+    const y = tileY * TILE_SIZE + TILE_SIZE / 2;
+    const marker = this.add.rectangle(x, y, 14, 10, 0xf6e6c6, 0.95).setDepth(6);
+    marker.setStrokeStyle(1, 0x2a1c18, 0.85);
+    const pulse = this.tweens.add({
+      targets: marker,
+      alpha: { from: 0.6, to: 1 },
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    const bounds = new Phaser.Geom.Rectangle(x - 14, y - 10, 28, 20);
+    this.loreInteractables.push({ id, marker, bounds, pulse });
+  }
+
+  private clearLoreInteractables(): void {
+    this.loreInteractables.forEach((entry) => {
+      entry.pulse.stop();
+      entry.marker.destroy();
+    });
+    this.loreInteractables = [];
+  }
+
+  private getNearbyLoreInteractable(): LoreInteractable | null {
+    if (!this.player) return null;
+    const bounds = this.player.getBounds();
+    const playerRect = new Phaser.Geom.Rectangle(bounds.x - 6, bounds.y - 6, bounds.width + 12, bounds.height + 12);
+    for (const entry of this.loreInteractables) {
+      if (Phaser.Geom.Rectangle.Overlaps(playerRect, entry.bounds)) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  private consumeLoreInteractable(entry: LoreInteractable): void {
+    this.triggerLoreEntry(entry.id);
+    entry.pulse.stop();
+    entry.marker.destroy();
+    this.loreInteractables = this.loreInteractables.filter((candidate) => candidate !== entry);
+  }
+
+  private triggerLoreEntry(id: LoreEntryId): void {
+    if (this.loreTriggered.has(id)) return;
+    const entry = getLoreEntry(id);
+    if (!entry) return;
+    this.loreTriggered.add(id);
+    this.pendingLoreEntries.push(entry);
+    if (!this.loreOverlayOpen) {
+      this.openNextLoreEntry();
+    }
+  }
+
+  private openNextLoreEntry(): void {
+    if (this.loreOverlayOpen) return;
+    const next = this.pendingLoreEntries.shift();
+    if (!next || !this.journalOverlay) return;
+    this.applyLorePause();
+    this.loreOverlayOpen = true;
+    this.journalOverlay.show(next);
+  }
+
+  private handleLoreCloseRequest(): void {
+    if (!this.loreOverlayOpen) return;
+    this.journalOverlay?.hide();
+    this.loreOverlayOpen = false;
+    if (this.pendingLoreEntries.length > 0) {
+      this.openNextLoreEntry();
+    } else {
+      this.resumeFromLorePause();
+    }
+  }
+
+  private applyLorePause(): void {
+    if (this.lorePauseActive) return;
+    this.lorePauseActive = true;
+    this.pausedTimeScale = this.time.timeScale;
+    this.time.timeScale = 0;
+    if (!this.physics.world.isPaused) {
+      this.physics.world.pause();
+      this.physicsPausedForLore = true;
+    }
+    if (!this.tweensPausedForLore) {
+      this.tweens.pauseAll();
+      this.tweensPausedForLore = true;
+    }
+    if (!this.animsPausedForLore) {
+      this.anims.pauseAll();
+      this.animsPausedForLore = true;
+    }
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = false;
+    }
+    if (this.player) {
+      this.player.setVelocity(0, 0);
+    }
+  }
+
+  private resumeFromLorePause(force = false): void {
+    if (!this.lorePauseActive && !force && !this.physicsPausedForLore && !this.tweensPausedForLore && !this.animsPausedForLore) {
+      return;
+    }
+    this.lorePauseActive = false;
+    if (this.physicsPausedForLore) {
+      this.physics.world.resume();
+      this.physicsPausedForLore = false;
+    }
+    if (this.tweensPausedForLore) {
+      this.tweens.resumeAll();
+      this.tweensPausedForLore = false;
+    }
+    if (this.animsPausedForLore) {
+      this.anims.resumeAll();
+      this.animsPausedForLore = false;
+    }
+    this.time.timeScale = this.pausedTimeScale || 1;
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = true;
+    }
+  }
+
+  private handleLoreAfterBoss(): void {
+    if (this.currentLevel === 3 && !GameState.get().isLoreDiscovered('cobb_locket')) {
+      this.triggerLoreEntry('cobb_locket');
+    } else if (this.currentLevel === 4 && !GameState.get().isLoreDiscovered('mael_name')) {
+      this.triggerLoreEntry('mael_name');
     }
   }
 
@@ -2198,7 +2980,8 @@ export class LevelScene extends Phaser.Scene {
     );
     if (dist <= TILE_SIZE * 1.5) {
       AudioManager.get().playSFX('stairs_descend', 0.9);
-      SaveSystem.save(GameState.get().getData().character, GameState.get().getData());
+      const gsSnapshot = GameState.get().getData();
+      SaveSystem.save(gsSnapshot.character, gsSnapshot, GameState.getDiscoveredLoreIds());
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         GameState.get().nextLevel();
@@ -2412,6 +3195,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private getKillThreshold(): number {
+    if (this.isGateLevel()) return 0;
     if (this.currentLevel === 1) return 5;
     if (this.currentLevel === 2) return 5;
     if (this.currentLevel === 3) return 7;

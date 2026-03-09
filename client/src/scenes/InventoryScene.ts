@@ -4,6 +4,10 @@ import { ITEM_CONFIGS } from "../config/items";
 import { ItemType, WeaponConfig } from "../config/types";
 import { WEAPON_CONFIGS } from "../config/weapons";
 import { FRAME_URLS } from "../utils/assetManifest";
+import { listLoreEntries, type LoreEntryId, getLoreEntry } from "../content/loreEntries";
+import { JournalOverlay } from "../ui/JournalOverlay";
+
+const REVIEWED_LORE = new Set<LoreEntryId>();
 
 // --- Types ---
 export interface Weapon {
@@ -95,12 +99,15 @@ const getIconSrc = (key: string): string | null => {
 // --- UI (DOM overlay) ---
 interface InventoryUIOptions {
   onEquip?: (type: ItemType) => void;
+  onShowLore?: (id: LoreEntryId) => void;
+  onClose?: () => void;
 }
 
 export class InventoryUI {
   private container: HTMLDivElement;
   private selectedId: ItemType = WEAPONS[0].type;
   private options?: InventoryUIOptions;
+  private activeTab: 'inventory' | 'lore' = 'inventory';
 
   constructor(parent: HTMLElement | string, options?: InventoryUIOptions) {
     const host =
@@ -160,6 +167,153 @@ export class InventoryUI {
     const config = WEAPON_CONFIGS[weapon.type] ?? WEAPON_CONFIGS[weapon.type]!;
     const statsHtml = this.renderStats(config!);
     const specialKey = this.describeSpecial(config!, weapon.special);
+    const tabsHtml = `
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        ${this.renderTabButton('inventory', 'Gear')}
+        ${this.renderTabButton('lore', 'Lore')}
+      </div>
+    `;
+
+    const gearHtml = `
+      <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <div style="flex:1 1 260px;min-width:240px;">
+          <div style="margin-bottom:16px;margin-top:6px;">
+            <div style="font-size:18px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
+              Inventory
+            </div>
+            <div style="font-size:11px;color:rgba(148,163,184,0.95);text-transform:uppercase;letter-spacing:3px;margin-top:6px;">
+              Select Your Arsenal
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+            ${WEAPONS.map((w) => {
+              const frameUrl = getIconSrc(w.frameKey);
+              const active = w.type === this.selectedId;
+              return `
+              <button data-weapon="${w.type}" style="
+                aspect-ratio:1/1;
+                position:relative;
+                display:flex;
+                flex-direction:column;
+                align-items:center;
+                justify-content:center;
+                gap:4px;
+                border:2px solid ${active ? "#66e7ff" : "#1a2338"};
+                background:${active ? "#111a30" : "#060b16"};
+                border-radius:4px;
+                padding:4px;
+                cursor:pointer;
+                box-shadow:${active ? "0 0 0 2px #0b1528 inset" : "none"};
+              ">
+                ${
+                  frameUrl
+                    ? `<img src="${frameUrl}" alt="${w.name}" style="width:38px;height:38px;image-rendering:pixelated;" />`
+                    : `<div style="font-family:'Press Start 2P', monospace;font-size:10px;color:${active ? "#ffffff" : "#94a3b8"};margin-bottom:4px;">${w.name}</div>`
+                }
+                <span style="
+                  font-family:'Press Start 2P', monospace;
+                  font-size:10px;
+                  color:${active ? "#f5faff" : "#7487b3"};
+                  text-transform:uppercase;
+                  letter-spacing:0;
+                  display:block;
+                  margin-top:4px;
+                ">${w.name}</span>
+              </button>
+              `;
+            }).join("")}
+          </div>
+        </div>
+
+        <div style="
+          flex:1 1 260px;
+          min-width:240px;
+          background:#060a15;
+          border:2px solid #1b2843;
+          padding:12px;
+        ">
+          ${(() => {
+            const previewSrc = getIconSrc(weapon.frameKey);
+            return `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div>
+                <div style="
+                  font-family:'Press Start 2P', monospace;
+                  font-size:14px;
+                  text-transform:uppercase;
+                  margin-bottom:6px;
+                  letter-spacing:0;
+                ">
+                  ${weapon.name}
+                </div>
+                <div style="font-size:8px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
+                  ${weapon.category}
+                </div>
+              </div>
+              <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;background:#030712;border:2px solid #111a2f;">
+                ${previewSrc ? `<img src="${previewSrc}" alt="${weapon.name}" style="width:36px;height:36px;image-rendering:pixelated;" />` : ""}
+              </div>
+            </div>
+            `;
+          })()}
+
+          ${(() => {
+            const largeSrc = getIconSrc(weapon.frameKey);
+            return `
+            <div style="
+              height:80px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              background:#02060f;
+              border:2px solid #111a2f;
+              margin-bottom:12px;
+            ">
+              ${largeSrc ? `<img src="${largeSrc}" alt="${weapon.name}" style="width:58px;height:58px;image-rendering:pixelated;" />` : ""}
+            </div>
+            `;
+          })()}
+
+          <div style="font-size:9px;line-height:1.6;margin-bottom:8px;">
+            ${weapon.description}
+          </div>
+
+          <div style="font-size:8px;color:rgba(251,191,36,0.95);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">
+            ${specialKey}
+          </div>
+
+          ${statsHtml}
+
+          <button data-equip="true" style="
+            width:100%;
+            margin-top:14px;
+            padding:10px;
+            background:#facc15;
+            border:none;
+            text-transform:uppercase;
+            letter-spacing:1px;
+            cursor:pointer;
+            box-shadow:0 3px 0 0 #b45309;
+            font-size:10px;
+          ">Equip Weapon</button>
+
+          <button data-close="true" style="
+            width:100%;
+            margin-top:8px;
+            padding:8px;
+            background:#050a16;
+            border:2px solid #111a2f;
+            color:#d5e0ff;
+            text-transform:uppercase;
+            letter-spacing:1px;
+            cursor:pointer;
+            font-size:9px;
+          ">Close</button>
+        </div>
+      </div>
+    `;
+
+    const loreHtml = this.renderLoreContent();
 
     this.container.innerHTML = `
       <div style="
@@ -167,165 +321,59 @@ export class InventoryUI {
         background:#0b0f1d;
         border:3px solid #060911;
         box-shadow:0 0 0 4px #020409, 0 18px 40px rgba(0,0,0,0.6);
-        padding:10px;
+        padding:14px;
         font-family:'Press Start 2P', monospace;
         color:#d5e0ff;
       ">
-        <div style="display:flex;flex-wrap:wrap;gap:12px;">
-          <!-- Left -->
-          <div style="flex:1 1 260px;min-width:240px;">
-            <div style="margin-bottom:16px;margin-top:6px;">
-              <div style="font-size:18px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
-                Inventory
-              </div>
-              <div style="font-size:11px;color:rgba(148,163,184,0.95);text-transform:uppercase;letter-spacing:3px;margin-top:6px;">
-                Select Your Arsenal
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-              ${WEAPONS.map((w) => {
-                const frameUrl = getIconSrc(w.frameKey);
-                const active = w.type === this.selectedId;
-                return `
-                <button data-weapon="${w.type}" style="
-                  aspect-ratio:1/1;
-                  position:relative;
-                  display:flex;
-                  flex-direction:column;
-                  align-items:center;
-                  justify-content:center;
-                  gap:4px;
-                  border:2px solid ${active ? "#66e7ff" : "#1a2338"};
-                  background:${active ? "#111a30" : "#060b16"};
-                  border-radius:4px;
-                  padding:4px;
-                  cursor:pointer;
-                  box-shadow:${active ? "0 0 0 2px #0b1528 inset" : "none"};
-                ">
-                  ${
-                    frameUrl
-                      ? `<img src="${frameUrl}" alt="${w.name}" style="width:38px;height:38px;image-rendering:pixelated;" />`
-                      : `<div style="font-family:'Press Start 2P', monospace;font-size:10px;color:${active ? "#ffffff" : "#94a3b8"};margin-bottom:4px;">${w.name}</div>`
-                  }
-                  <span style="
-                    font-family:'Press Start 2P', monospace;
-                    font-size:10px;
-                    color:${active ? "#f5faff" : "#7487b3"};
-                    text-transform:uppercase;
-                    letter-spacing:0;
-                    display:block;
-                    margin-top:4px;
-                  ">${w.name}</span>
-                </button>
-                `;
-              }).join("")}
-            </div>
-          </div>
-
-          <!-- Right -->
-          <div style="
-            flex:1 1 260px;
-            min-width:240px;
-            background:#060a15;
-            border:2px solid #1b2843;
-            padding:12px;
-          ">
-            ${(() => {
-              const previewSrc = getIconSrc(weapon.frameKey);
-              return `
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-                <div>
-                  <div style="
-                    font-family:'Press Start 2P', monospace;
-                    font-size:14px;
-                    text-transform:uppercase;
-                    margin-bottom:6px;
-                    letter-spacing:0;
-                  ">
-                    ${weapon.name}
-                  </div>
-                  <div style="font-size:8px;color:#facc15;text-transform:uppercase;letter-spacing:2px;">
-                    ${weapon.category}
-                  </div>
-                </div>
-                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;background:#030712;border:2px solid #111a2f;">
-                  ${previewSrc ? `<img src="${previewSrc}" alt="${weapon.name}" style="width:36px;height:36px;image-rendering:pixelated;" />` : ""}
-                </div>
-              </div>
-              `;
-            })()}
-
-            ${(() => {
-              const largeSrc = getIconSrc(weapon.frameKey);
-              return `
-              <div style="
-                height:80px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                background:#02060f;
-                border:2px solid #111a2f;
-                margin-bottom:12px;
-              ">
-                ${largeSrc ? `<img src="${largeSrc}" alt="${weapon.name}" style="width:58px;height:58px;image-rendering:pixelated;" />` : ""}
-              </div>
-              `;
-            })()}
-
-            <div style="font-size:9px;line-height:1.6;margin-bottom:8px;">
-              ${weapon.description}
-            </div>
-
-            <div style="font-size:8px;color:rgba(251,191,36,0.95);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;">
-              ${specialKey}
-            </div>
-
-            ${statsHtml}
-
-            <button data-equip="true" style="
-              width:100%;
-              margin-top:14px;
-              padding:10px;
-              background:#facc15;
-              border:none;
-              text-transform:uppercase;
-              letter-spacing:1px;
-              cursor:pointer;
-              box-shadow:0 3px 0 0 #b45309;
-              font-size:10px;
-            ">Equip Weapon</button>
-
-            <button data-close="true" style="
-              width:100%;
-              margin-top:8px;
-              padding:8px;
-              background:#050a16;
-              border:2px solid #111a2f;
-              color:#d5e0ff;
-              text-transform:uppercase;
-              letter-spacing:1px;
-              cursor:pointer;
-              font-size:9px;
-            ">Close</button>
-          </div>
-        </div>
+        ${tabsHtml}
+        ${this.activeTab === 'inventory' ? gearHtml : loreHtml}
       </div>
     `;
 
-    // Scoped event wiring (only inside this UI)
-    this.container.querySelectorAll<HTMLButtonElement>("button[data-weapon]").forEach((btn) => {
-      btn.onclick = () => this.selectWeapon(btn.dataset.weapon as ItemType);
+    this.container.querySelectorAll<HTMLButtonElement>('button[data-tab]').forEach((btn) => {
+      btn.onclick = () => {
+        const tab = btn.dataset.tab as 'inventory' | 'lore';
+        if (tab === this.activeTab) return;
+        this.activeTab = tab;
+        this.render();
+      };
     });
 
-    const closeBtn = this.container.querySelector<HTMLButtonElement>('button[data-close="true"]');
-    if (closeBtn) closeBtn.onclick = () => this.destroy();
+    if (this.activeTab === 'inventory') {
+      this.container.querySelectorAll<HTMLButtonElement>("button[data-weapon]").forEach((btn) => {
+        btn.onclick = () => this.selectWeapon(btn.dataset.weapon as ItemType);
+      });
 
-    const equipBtn = this.container.querySelector<HTMLButtonElement>('button[data-equip="true"]');
-    if (equipBtn) equipBtn.onclick = () => {
-      GameState.get().equipWeapon(this.selectedId);
-      this.options?.onEquip?.(this.selectedId);
-      this.destroy();
-    };
+      const equipBtn = this.container.querySelector<HTMLButtonElement>('button[data-equip="true"]');
+      if (equipBtn) equipBtn.onclick = () => {
+        GameState.get().equipWeapon(this.selectedId);
+        this.options?.onEquip?.(this.selectedId);
+        this.options?.onClose?.();
+        this.destroy();
+      };
+    } else {
+      this.container.querySelectorAll<HTMLButtonElement>('button[data-lore-id]').forEach((btn) => {
+        btn.onclick = () => {
+          const id = btn.dataset.loreId as LoreEntryId;
+          let refresh = false;
+          if (id && !REVIEWED_LORE.has(id)) {
+            REVIEWED_LORE.add(id);
+            refresh = true;
+          }
+          this.options?.onShowLore?.(id);
+          if (refresh) {
+            this.render();
+          }
+        };
+      });
+    }
+
+    this.container.querySelectorAll<HTMLButtonElement>('button[data-close="true"]').forEach((btn) => {
+      btn.onclick = () => {
+        this.options?.onClose?.();
+        this.destroy();
+      };
+    });
   }
 
   private renderStats(config: WeaponConfig): string {
@@ -360,11 +408,119 @@ export class InventoryUI {
     if (!specials.length) return fallback;
     return specials.join(" • ");
   }
+
+  private renderTabButton(tab: 'inventory' | 'lore', label: string): string {
+    const active = this.activeTab === tab;
+    return `
+      <button data-tab="${tab}" style="
+        flex:1;
+        padding:8px 12px;
+        background:${active ? '#111a30' : '#050912'};
+        border:2px solid ${active ? '#66e7ff' : '#111a2f'};
+        color:${active ? '#fefefe' : '#9fb2d6'};
+        text-transform:uppercase;
+        letter-spacing:1px;
+        font-size:10px;
+        cursor:pointer;
+      ">${label}</button>
+    `;
+  }
+
+  private renderLoreContent(): string {
+    const entries = listLoreEntries()
+      .filter((entry) => GameState.get().isLoreDiscovered(entry.id))
+      .sort((a, b) => {
+        const levelDiff = (a.level ?? 0) - (b.level ?? 0);
+        if (levelDiff !== 0) return levelDiff;
+        return a.title.localeCompare(b.title);
+      });
+
+    if (!entries.length) {
+      return `
+        <div style="min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;background:#060a15;border:2px solid #1b2843;">
+          <div style="font-size:14px;color:#facc15;margin-bottom:6px;">Lore Archive</div>
+          <div style="font-size:9px;color:#9fb3d9;line-height:1.6;max-width:300px;">
+            You have not discovered any lore fragments yet. Keep exploring the raid to uncover their stories.
+          </div>
+          <button data-close="true" style="
+            margin-top:18px;
+            padding:8px 12px;
+            background:#050a16;
+            border:2px solid #111a2f;
+            color:#d5e0ff;
+            text-transform:uppercase;
+            letter-spacing:1px;
+            font-size:9px;
+            cursor:pointer;
+          ">Close</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="background:#060a15;border:2px solid #1b2843;padding:12px;max-height:360px;overflow:auto;">
+        <div style="font-size:14px;color:#facc15;margin-bottom:10px;">Lore Archive</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${entries
+            .map((entry) => {
+              const isNew = !REVIEWED_LORE.has(entry.id);
+              const badge = isNew
+                ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:7px;color:#fca5a5;letter-spacing:1px;">
+                      <span style="width:6px;height:6px;border-radius:50%;background:#f87171;box-shadow:0 0 6px rgba(248,113,113,0.8);display:inline-block;"></span>
+                      NEW
+                    </span>`
+                : '';
+              const sourceLine = entry.source
+                ? `<span style="font-size:8px;color:#9fb3d9;letter-spacing:1px;">${entry.source}${entry.level ? ` • Level ${entry.level}` : ''}</span>`
+                : entry.level
+                  ? `<span style="font-size:8px;color:#9fb3d9;letter-spacing:1px;">Level ${entry.level}</span>`
+                  : '';
+              return `
+                <button data-lore-id="${entry.id}" style="
+                  text-align:left;
+                  padding:10px;
+                  background:#050912;
+                  border:2px solid #111a2f;
+                  color:#e2e8f0;
+                  text-transform:uppercase;
+                  letter-spacing:0.5px;
+                  font-size:9px;
+                  cursor:pointer;
+                  display:flex;
+                  flex-direction:column;
+                  gap:6px;
+                ">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+                    <span>${entry.title}</span>
+                    ${badge}
+                  </div>
+                  ${sourceLine}
+                </button>
+              `;
+            })
+            .join('')}
+        </div>
+        <button data-close="true" style="
+          width:100%;
+          margin-top:12px;
+          padding:8px;
+          background:#050a16;
+          border:2px solid #111a2f;
+          color:#d5e0ff;
+          text-transform:uppercase;
+          letter-spacing:1px;
+          cursor:pointer;
+          font-size:9px;
+        ">Close</button>
+      </div>
+    `;
+  }
 }
 
 // --- Phaser Scene wrapper (so main.ts can import it) ---
 export class InventoryScene extends Phaser.Scene {
   private ui?: InventoryUI;
+  private journal?: JournalOverlay;
 
   constructor() {
     super("InventoryScene");
@@ -373,16 +529,35 @@ export class InventoryScene extends Phaser.Scene {
   create() {
     // ✅ This is the real DOM element Phaser mounted into (#app)
     const parent = this.game.canvas?.parentElement;
-    if (!parent) throw new Error("InventoryScene: canvas parentElement missing");
+    const canvas = this.game.canvas;
+    if (!parent || !canvas) throw new Error("InventoryScene: canvas parentElement missing");
 
     this.ui = new InventoryUI(parent, {
       onEquip: () => {
         this.scene.stop();
       },
+      onShowLore: (id) => this.showLoreEntry(id),
+      onClose: () => this.scene.stop(),
     });
 
+    this.journal = new JournalOverlay(parent, canvas);
+    this.journal.onRequestClose(() => this.journal?.hide());
+
     // Cleanup when the scene stops
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.ui?.destroy());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.ui?.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.ui?.destroy();
+      this.journal?.destroy();
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.ui?.destroy();
+      this.journal?.destroy();
+    });
+  }
+
+  private showLoreEntry(id: LoreEntryId): void {
+    if (!this.journal) return;
+    const entry = getLoreEntry(id);
+    if (!entry) return;
+    this.journal.show(entry);
   }
 }

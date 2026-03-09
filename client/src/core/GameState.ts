@@ -9,10 +9,13 @@ import {
   ItemConfig,
   ItemEffect,
   ItemType,
+  SaveData,
   WeaponConfig,
 } from '../config/types';
+import { SAVE_KEY } from '../systems/SaveSystem';
 
 export class GameState {
+  private static readonly LEGACY_LORE_STORAGE_KEY = 'mistralraid_lore_discovered';
   private static instance = new GameState();
   private data: GameStateData;
   private speedBoostTimer: number | null = null;
@@ -20,9 +23,11 @@ export class GameState {
   private shieldTimer: number | null = null;
   private multishotTimer: number | null = null;
   private livesCount = 3;
+  private discoveredLore = new Set<string>();
 
   private constructor() {
     this.data = this.defaultState();
+    this.loadDiscoveredLore();
   }
 
   static get(): GameState {
@@ -39,6 +44,18 @@ export class GameState {
 
   static isDead(): boolean {
     return GameState.instance.isDead();
+  }
+
+  static markLoreDiscovered(id: string): void {
+    GameState.instance.markLoreDiscovered(id);
+  }
+
+  static isLoreDiscovered(id: string): boolean {
+    return GameState.instance.isLoreDiscovered(id);
+  }
+
+  static getDiscoveredLoreIds(): string[] {
+    return GameState.instance.getDiscoveredLoreIds();
   }
 
   get snapshot(): GameStateData {
@@ -79,7 +96,7 @@ export class GameState {
     this.data.dashCharges = DASH_MAX_CHARGES;
   }
 
-  loadSave(save: { character: CharacterType; state: GameStateData }): void {
+  loadSave(save: SaveData): void {
     this.clearTimers();
     this.data = {
       ...save.state,
@@ -90,6 +107,9 @@ export class GameState {
       this.data.dashCharges = DASH_MAX_CHARGES;
     }
     this.data.dashCharges = Math.max(0, Math.min(DASH_MAX_CHARGES, this.data.dashCharges));
+    if (Array.isArray(save.discoveredLore)) {
+      this.discoveredLore = new Set(save.discoveredLore.filter((id): id is string => typeof id === 'string'));
+    }
   }
 
   setHP(hp: number): void {
@@ -119,6 +139,20 @@ export class GameState {
 
   addScore(n: number): void {
     this.data.score += n;
+  }
+
+  markLoreDiscovered(id: string): void {
+    if (!id || this.discoveredLore.has(id)) return;
+    this.discoveredLore.add(id);
+    this.saveDiscoveredLore();
+  }
+
+  isLoreDiscovered(id: string): boolean {
+    return this.discoveredLore.has(id);
+  }
+
+  getDiscoveredLoreIds(): string[] {
+    return Array.from(this.discoveredLore);
   }
 
   addItem(config: ItemConfig, qty = 1): void {
@@ -273,6 +307,69 @@ export class GameState {
 
   resetBuffs(): void {
     this.data.activeBuffs = [];
+  }
+
+  loadDiscoveredLore(): void {
+    const merged = [...this.readLoreFromSave(), ...this.readLoreFromLegacyStore()];
+    this.discoveredLore = new Set(merged);
+  }
+
+  saveDiscoveredLore(): void {
+    const loreIds = Array.from(this.discoveredLore);
+    if (this.persistLoreToSave(loreIds)) {
+      try {
+        localStorage.removeItem(GameState.LEGACY_LORE_STORAGE_KEY);
+      } catch {
+        // Ignore cleanup failure
+      }
+      return;
+    }
+    this.persistLoreToLegacy(loreIds);
+  }
+
+  private readLoreFromSave(): string[] {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Partial<SaveData>;
+      if (!Array.isArray(parsed.discoveredLore)) return [];
+      return parsed.discoveredLore.filter((id): id is string => typeof id === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  private readLoreFromLegacyStore(): string[] {
+    try {
+      const raw = localStorage.getItem(GameState.LEGACY_LORE_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((id): id is string => typeof id === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  private persistLoreToSave(loreIds: string[]): boolean {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as SaveData;
+      parsed.discoveredLore = loreIds;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private persistLoreToLegacy(loreIds: string[]): void {
+    try {
+      localStorage.setItem(GameState.LEGACY_LORE_STORAGE_KEY, JSON.stringify(loreIds));
+    } catch {
+      // Ignore storage errors (quota, privacy mode, etc.)
+    }
   }
 }
 
