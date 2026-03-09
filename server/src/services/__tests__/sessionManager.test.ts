@@ -19,10 +19,16 @@ function createSession(overrides: Partial<Session> = {}): Session {
       OPEN: 1,
       readyState: 1,
       send: vi.fn(),
-    } as Session['ws'],
+    } as any,
     sttStream: null,
     directorInterval: null,
     lastDirectorDecision: null,
+    // Story state (RM-4, RM-5)
+    levelTag: 'unknown',
+    loreDiscovered: [],
+    bossHistory: [],
+    playerClass: 'knight',
+    sanctumReached: false,
     ...overrides,
   };
 }

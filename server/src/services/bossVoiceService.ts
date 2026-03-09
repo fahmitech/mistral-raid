@@ -11,7 +11,7 @@ const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS ?? 2500);
 const WARM_SOCKET_TTL_MS = 8000;
 
 const BOSS_VOICE = {
-  model_id: 'eleven_flash_v2_5',
+  model_id: 'eleven_turbo_v2_5',
   voice_id: process.env.ELEVENLABS_VOICE_ID ?? 'pNInz6obpgDQGcFmaJgB',
   voice_settings: {
     stability: 0.3,

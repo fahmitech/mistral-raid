@@ -27,6 +27,12 @@ export function createSession(ws: WebSocket): Session {
     sttStream: null,
     directorInterval: null,
     lastDirectorDecision: null,
+    // Story state (RM-4, RM-5)
+    levelTag: 'unknown',
+    loreDiscovered: [],
+    bossHistory: [],
+    playerClass: 'knight',
+    sanctumReached: false,
   };
 
   sessions.set(id, session);

@@ -1,6 +1,9 @@
 import { Mistral } from '@mistralai/mistralai';
 import type { Session, TelemetrySummary } from '../types.js';
 import { sendToClient } from '../ws/WebSocketServer.js';
+import { buildNarrativeLabel } from './directorNarrative.js';
+import { buildPlayerProfile } from './playerProfile.js';
+import { logger } from './loggingService.js';
 
 const ENABLE_DIRECTOR = process.env.ENABLE_DIRECTOR !== 'false';
 const DIRECTOR_INTERVAL_MS = Number(process.env.DIRECTOR_INTERVAL_MS ?? 20000);
@@ -38,12 +41,25 @@ export function startDirector(session: Session): void {
         model: 'mistral-small-latest',
         messages: [
           { role: 'system', content: DIRECTOR_SYSTEM_PROMPT },
-          { role: 'user', content: buildDirectorPrompt(t) },
+          { role: 'user', content: buildDirectorPrompt(t, session) },
         ],
         responseFormat: { type: 'json_object' },
       });
+
+      const userPrompt = buildDirectorPrompt(t, session);
       const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
       const parsed = JSON.parse(content) as { difficultyDelta: number; enemyBias: string; reason: string };
+
+      // Log successful director call with full context
+      logger.writeLog('llm', {
+        type: 'global_director',
+        sessionId: session.id,
+        messages: [
+          { role: 'system', content: DIRECTOR_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+        response: parsed,
+      });
       const difficultyDelta = clampInt(parsed.difficultyDelta, -1, 1);
       const enemyBias = typeof parsed.enemyBias === 'string' && parsed.enemyBias.length
         ? parsed.enemyBias
@@ -53,9 +69,10 @@ export function startDirector(session: Session): void {
         : 'Maintaining current pressure.';
 
       session.lastDirectorDecision = { difficultyDelta, enemyBias, reason };
+      const narrative = buildNarrativeLabel(difficultyDelta, enemyBias, t);
       sendToClient(session, {
         type: 'director_update',
-        payload: { difficultyDelta, enemyBias, reason, timestamp: Date.now() },
+        payload: { difficultyDelta, enemyBias, reason, ...narrative, timestamp: Date.now() },
       });
       console.log(`[director] difficultyDelta=${difficultyDelta} enemyBias=${enemyBias} reason="${reason}"`);
     } catch (err) {
@@ -75,7 +92,15 @@ export function stopDirector(session: Session): void {
   }
 }
 
-function buildDirectorPrompt(t: TelemetrySummary): string {
+function buildDirectorPrompt(t: TelemetrySummary, session: Session): string {
+  const profile = buildPlayerProfile(t);
+  const story = {
+    level: session.levelTag || 'unknown',
+    lore: (session.loreDiscovered || []).length,
+    bosses: (session.bossHistory || []).join(','),
+    class: session.playerClass || 'unknown'
+  };
+
   const long = t.longTerm ?? {
     avgAccuracy: t.avgAccuracy,
     cornerPercentage: t.cornerPercentageLast10s,
@@ -84,11 +109,15 @@ function buildDirectorPrompt(t: TelemetrySummary): string {
     sampleCount: t.sampleCount,
     windowSeconds: 0,
   };
-  return `Accuracy: ${(t.avgAccuracy * 100).toFixed(1)}% | Boss HP: ${t.bossHpPercent.toFixed(0)}% | ` +
-    `Player HP: ${t.playerHpPercent.toFixed(0)}% | Corner time: ${t.cornerPercentageLast10s.toFixed(0)}% | ` +
-    `Hits taken: ${t.recentHitsTaken} | Dashes: ${t.totalDashCount} | ` +
-    `Long Acc: ${(long.avgAccuracy * 100).toFixed(0)}% | Long Corner: ${long.cornerPercentage.toFixed(0)}% | ` +
-    `Long Dash/min: ${long.dashPerMin.toFixed(1)} | Long Zone: ${long.dominantZone}`;
+  return `Context: Class=${story.class} | Level=${story.level} | LoreFound=${story.lore} | BossesDefeated=[${story.bosses}]
+Profile: Aggression=${profile.aggression} | Style=${profile.movementStyle} | LoreUsage=${profile.loreBehavior}
+Stats: Acc=${(t.avgAccuracy * 100).toFixed(1)}% | BossHP=${t.bossHpPercent.toFixed(0)}% | ` +
+    `PlayerHP=${t.playerHpPercent.toFixed(0)}% | Corner=${t.cornerPercentageLast10s.toFixed(0)}% | ` +
+    `Hits=${t.recentHitsTaken} | Dashes=${t.totalDashCount} | ` +
+    `Lore=${t.loreInteractionCount} read, ${t.skippedMandatoryLore} skipped | ` +
+    `WallBias=${t.wallBias.toFixed(0)}% | Retreat=${Math.round(t.retreatDistance)}px | ` +
+    `LongAcc=${(long.avgAccuracy * 100).toFixed(0)}% | LongCorner=${long.cornerPercentage.toFixed(0)}% | ` +
+    `LongDash=${long.dashPerMin.toFixed(1)} | LongZone=${long.dominantZone}`;
 }
 
 function clampInt(value: number, min: number, max: number): number {

@@ -17,7 +17,7 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/*.{mjs,wasm}'),
+          src: '../node_modules/onnxruntime-web/dist/*.{mjs,wasm}',
           dest: 'assets',
         },
       ],

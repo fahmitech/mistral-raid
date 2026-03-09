@@ -1,4 +1,5 @@
 import { Mistral } from '@mistralai/mistralai';
+import { logger } from '../services/loggingService.js';
 
 let client: Mistral | null = null;
 
@@ -19,6 +20,10 @@ export interface CompanionContext {
   playerMaxHP: number;
   level: number;
   coins: number;
+  // Story context (RM-6)
+  loreDiscovered?: string[];
+  bossHistory?: string[];
+  playerProfile?: any; // Import would be better but keeping it simple for verification
 }
 
 export interface CompanionReply {
@@ -72,29 +77,46 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
 }
 
 function buildContextPrompt(message: string, ctx: CompanionContext): string {
-  const hpPct = Math.round((ctx.playerHP / ctx.playerMaxHP) * 100);
-  const closestEnemy = ctx.enemies.length > 0
-    ? ctx.enemies.reduce((best, e) => dist(ctx.playerPos, e) < dist(ctx.playerPos, best) ? e : best)
+  const pHP = ctx.playerHP ?? 10;
+  const pMaxHP = ctx.playerMaxHP ?? 10;
+  const hpPct = Math.round((pHP / pMaxHP) * 100);
+  const pPos = ctx.playerPos ?? { x: 0, y: 0 };
+  const enemies = ctx.enemies || [];
+  const treasures = ctx.treasures || [];
+
+  const closestEnemy = enemies.length > 0
+    ? enemies.reduce((best, e) => dist(pPos, e) < dist(pPos, best) ? e : best)
     : null;
-  const closestEnemyDist = closestEnemy ? Math.round(dist(ctx.playerPos, closestEnemy)) : null;
-  const closestEnemyDir = closestEnemy ? getDirection(ctx.playerPos, closestEnemy) : null;
-  const closestTreasure = ctx.treasures.length > 0
-    ? ctx.treasures.reduce((best, t) => dist(ctx.playerPos, t) < dist(ctx.playerPos, best) ? t : best)
+  const closestEnemyDist = closestEnemy ? Math.round(dist(pPos, closestEnemy)) : null;
+  const closestEnemyDir = closestEnemy ? getDirection(pPos, closestEnemy) : null;
+  const closestTreasure = treasures.length > 0
+    ? treasures.reduce((best, t) => dist(pPos, t) < dist(pPos, best) ? t : best)
     : null;
-  const closestTreasureDir = closestTreasure ? getDirection(ctx.playerPos, closestTreasure) : null;
-  const bossDir = ctx.boss ? getDirection(ctx.playerPos, ctx.boss) : null;
-  const bossDist = ctx.boss ? Math.round(dist(ctx.playerPos, ctx.boss)) : null;
+  const closestTreasureDir = closestTreasure ? getDirection(pPos, closestTreasure) : null;
+  const bossDir = ctx.boss ? getDirection(pPos, ctx.boss) : null;
+  const bossDist = ctx.boss ? Math.round(dist(pPos, ctx.boss)) : null;
+
+  let storyContext = '';
+  if (ctx.playerProfile) {
+    storyContext += `\nPsychological Profile: ${ctx.playerProfile.aggression || 'unknown'}, ${ctx.playerProfile.movementStyle || 'unknown'}, lore behavior: ${ctx.playerProfile.loreBehavior || 'unknown'}`;
+  }
+  if (ctx.loreDiscovered && ctx.loreDiscovered.length > 0) {
+    storyContext += `\nKnown Lore: ${ctx.loreDiscovered.join(', ')}`;
+  }
+  if (ctx.bossHistory && ctx.bossHistory.length > 0) {
+    storyContext += `\nPast Victories: ${ctx.bossHistory.join(', ')}`;
+  }
 
   return `Subject asks: "${message}"
 
 Current assessment:
-- Subject integrity: ${ctx.playerHP}/${ctx.playerMaxHP} (${hpPct}%)
-- Depth: ${ctx.level}
-- Salvage collected: ${ctx.coins}
-- Hostile count: ${ctx.enemies.length}
+- Subject integrity: ${pHP}/${pMaxHP} (${hpPct}%)
+- Depth: ${ctx.level ?? 1}
+- Salvage collected: ${ctx.coins ?? 0}
+- Hostile count: ${enemies.length}
 - Nearest threat: ${closestEnemy ? `${closestEnemyDist} units to the ${closestEnemyDir}` : 'none'}
 - Boss presence: ${ctx.boss ? `${bossDist} units to the ${bossDir}` : 'not detected'}
-- Nearest salvage: ${closestTreasure ? `to the ${closestTreasureDir}` : 'none nearby'}
+- Nearest salvage: ${closestTreasure ? `to the ${closestTreasureDir}` : 'none nearby'}${storyContext}
 
 Respond to the subject using the assessment above.`;
 }
@@ -122,6 +144,16 @@ export async function queryCompanion(
     clearTimeout(timeout);
     const raw = resp.choices?.[0]?.message?.content ?? '{}';
     const parsed = JSON.parse(typeof raw === 'string' ? raw : JSON.stringify(raw)) as Partial<CompanionReply>;
+
+    // Log successful companion query with full context
+    logger.writeLog('llm', {
+      type: 'companion_query',
+      messages: [
+        { role: 'system', content: COMPANION_SYSTEM_PROMPT },
+        { role: 'user', content: buildContextPrompt(message, context) },
+      ],
+      response: parsed,
+    });
 
     return {
       reply_text: typeof parsed.reply_text === 'string' ? parsed.reply_text : 'Assessing. Hold position.',

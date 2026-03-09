@@ -21,3 +21,5 @@ docs/specs.md
 
 # OS
 .DS_Store
+.agent
+progress/

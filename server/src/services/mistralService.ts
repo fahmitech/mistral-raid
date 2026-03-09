@@ -12,6 +12,8 @@ import type {
 import { sendToClient } from '../ws/WebSocketServer.js';
 import { setTurnState } from './sessionManager.js';
 import { synthesize as synthesizeBossVoice } from './bossVoiceService.js';
+import { buildPlayerProfile, formatProfileForPrompt } from './playerProfile.js';
+import { logger } from './loggingService.js';
 
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -158,14 +160,14 @@ const FALLBACK_RESPONSE: BossResponse = {
 
 const MODEL_CASCADE: Array<{ model: string; timeout: number }> = DEMO_MODE
   ? [
-      { model: 'mistral-large-latest', timeout: 6000 },
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ]
+    { model: 'mistral-large-latest', timeout: 6000 },
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ]
   : [
-      { model: 'mistral-small-latest', timeout: 4000 },
-      { model: 'ministral-8b-latest', timeout: 2000 },
-    ];
+    { model: 'mistral-small-latest', timeout: 4000 },
+    { model: 'ministral-8b-latest', timeout: 2000 },
+  ];
 
 const VOICE_CASCADE: Array<{ model: string; timeout: number }> = [
   { model: 'ministral-8b-latest', timeout: 2500 },
@@ -182,6 +184,13 @@ export async function handleAnalyze(session: Session, rawPayload: Record<string,
   setTurnState(session, 'THINKING');
   const telemetry = coerceTelemetrySummary(rawPayload, session.latestTelemetrySummary);
   const playerSaid = typeof rawPayload.player_said === 'string' ? rawPayload.player_said : 'Phase transition analysis.';
+
+  // Update session story state from payload (RM-4, RM-5)
+  if (typeof rawPayload.level_tag === 'string') session.levelTag = rawPayload.level_tag;
+  if (Array.isArray(rawPayload.lore_discovered)) session.loreDiscovered = rawPayload.lore_discovered;
+  if (Array.isArray(rawPayload.boss_history)) session.bossHistory = rawPayload.boss_history;
+  if (typeof rawPayload.player_class === 'string') session.playerClass = rawPayload.player_class;
+  if (typeof rawPayload.sanctum_reached === 'boolean') session.sanctumReached = rawPayload.sanctum_reached;
 
   try {
     const bossResponse = await generateBossReply(playerSaid, telemetry, session);
@@ -216,6 +225,12 @@ export async function generateBossReply(
     sampleCount: 0,
     timestamp: Date.now(),
     bossActive: false,
+    loreInteractionCount: 0,
+    avgTimeReadingLore: 0,
+    avgLoreLingerTime: 0,
+    skippedMandatoryLore: 0,
+    retreatDistance: 0,
+    wallBias: 0,
     longTerm: {
       avgAccuracy: 0,
       cornerPercentage: 0,
@@ -226,7 +241,17 @@ export async function generateBossReply(
     },
   };
 
-  const userPrompt = buildUserPrompt(playerSaid, safeTelemetry);
+  const profile = buildPlayerProfile(safeTelemetry);
+  const storyContext: import('../types.js').StoryContext = {
+    levelTag: session?.levelTag ?? 'unknown',
+    loreDiscovered: session?.loreDiscovered ?? [],
+    bossHistory: session?.bossHistory ?? [],
+    playerClass: session?.playerClass ?? 'knight',
+    runSummary: profile,
+    sanctumReached: session?.sanctumReached ?? false,
+  };
+
+  const userPrompt = buildUserPrompt(playerSaid, safeTelemetry, storyContext);
   const overrideTimeout = process.env.LLM_TIMEOUT_MS ? Number(process.env.LLM_TIMEOUT_MS) : null;
 
   const cascade = fastMode ? VOICE_CASCADE : MODEL_CASCADE;
@@ -256,6 +281,18 @@ export async function generateBossReply(
       if (session) session.activeLLMAbort = null;
       const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
       const parsed = JSON.parse(content);
+
+      // Log successful LLM call with full context
+      logger.writeLog('llm', {
+        type: 'boss_reply',
+        model,
+        messages: [
+          { role: 'system', content: ARCHITECT_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+        response: parsed,
+      });
+
       return validateBossResponse(parsed);
     } catch (err) {
       clearTimeout(timer);
@@ -296,11 +333,23 @@ export async function generateDirective(_session: Session, telemetry: LiveTeleme
         maxTokens: 200,
       },
       {
-        timeoutMs: 1500,
+        timeoutMs: 3000,
       }
     );
     const content = extractContentString(response.choices?.[0]?.message?.content) ?? '{}';
     const parsed = JSON.parse(content);
+
+    // Log successful directive call with full context
+    logger.writeLog('llm', {
+      type: 'directive',
+      context: telemetry.context,
+      messages: [
+        { role: 'system', content: DIRECTIVE_SYSTEM_PROMPT },
+        { role: 'user', content: prompt },
+      ],
+      response: parsed,
+    });
+
     return validateAndClampDirective(parsed, telemetry.context);
   } catch (err) {
     console.warn('[mistral] Directive generation failed:', err);
@@ -308,7 +357,7 @@ export async function generateDirective(_session: Session, telemetry: LiveTeleme
   }
 }
 
-function buildUserPrompt(playerSaid: string, t: TelemetrySummary): string {
+export function buildUserPrompt(playerSaid: string, t: TelemetrySummary, context: import('../types.js').StoryContext): string {
   const long = t.longTerm ?? {
     avgAccuracy: t.avgAccuracy,
     cornerPercentage: t.cornerPercentageLast10s,
@@ -320,6 +369,9 @@ function buildUserPrompt(playerSaid: string, t: TelemetrySummary): string {
   const longWindow = long.windowSeconds > 0 ? `${Math.round(long.windowSeconds)}s` : 'long-term';
   return `
 Subject vocalization: "${playerSaid}"
+
+${formatStoryContextForPrompt(context)}
+
 
 Observed behavioral data:
 - Accuracy: ${(t.avgAccuracy * 100).toFixed(1)}%
@@ -333,6 +385,14 @@ Observed behavioral data:
  - Cumulative corner reliance: ${long.cornerPercentage.toFixed(1)}%
  - Cumulative evasion rate: ${long.dashPerMin.toFixed(1)}/min
  - Cumulative dominant zone: ${long.dominantZone}
+
+Story / psychology telemetry:
+- Lore interactions: ${t.loreInteractionCount}
+- Avg lore read time: ${t.avgTimeReadingLore.toFixed(1)}s
+- Avg lore linger time: ${t.avgLoreLingerTime.toFixed(1)}s
+- Skipped mandatory lore: ${t.skippedMandatoryLore}
+- Retreat distance: ${Math.round(t.retreatDistance)}px
+- Wall bias: ${t.wallBias.toFixed(1)}%
 
 Respond with a JSON BossResponse object only.
   `.trim();
@@ -514,6 +574,28 @@ function trimTaunt(text: string, maxWords: number): string {
   return words.slice(0, maxWords).join(' ');
 }
 
+function formatStoryContextForPrompt(ctx: import('../types.js').StoryContext): string {
+  const profile = ctx.runSummary;
+  const lore = (ctx.loreDiscovered || []).join(', ') || 'none';
+  const bosses = (ctx.bossHistory || []).join(', ') || 'none';
+
+  return `
+Journey Context:
+- Subject Class: ${ctx.playerClass || 'unknown'}
+- Current Depth: ${ctx.levelTag || 'unknown'}
+- Lore Discovered: ${lore}
+- Bosses Defeated: ${bosses}
+- Sanctum Reached: ${ctx.sanctumReached ? 'Yes' : 'No'}
+
+Psychological Assessment:
+- Aggression: ${profile?.aggression || 'unknown'}
+- Movement style: ${profile?.movementStyle || 'unknown'}
+- Lore interest: ${profile?.loreBehavior || 'unknown'}
+- Crisis response: ${profile?.panicResponse || 'unknown'}
+- Environment usage: ${profile?.environmentUsage || 'unknown'}
+`;
+}
+
 function coerceTelemetrySummary(rawPayload: Record<string, unknown>, fallback: TelemetrySummary | null): TelemetrySummary {
   if (fallback) return fallback;
   const raw = rawPayload as Record<string, unknown>;
@@ -533,6 +615,12 @@ function coerceTelemetrySummary(rawPayload: Record<string, unknown>, fallback: T
     sampleCount: 0,
     timestamp: Date.now(),
     bossActive: false,
+    loreInteractionCount: 0,
+    avgTimeReadingLore: 0,
+    avgLoreLingerTime: 0,
+    skippedMandatoryLore: 0,
+    retreatDistance: 0,
+    wallBias: 0,
     longTerm: {
       avgAccuracy: accuracy,
       cornerPercentage: corner,

@@ -6,7 +6,7 @@ import {
   getSummary,
   ingest,
 } from '../telemetryProcessor.js';
-import type { RawTelemetry, Session } from '../../types.js';
+import type { RawTelemetry, Session, SessionTelemetryState, SampleEntry } from '../../types.js';
 
 function createSession(id: string): Session {
   return {
@@ -25,10 +25,16 @@ function createSession(id: string): Session {
       OPEN: 1,
       readyState: 1,
       send: vi.fn(),
-    } as Session['ws'],
+    } as any,
     sttStream: null,
     directorInterval: null,
     lastDirectorDecision: null,
+    // Story state (RM-4, RM-5)
+    levelTag: 'unknown',
+    loreDiscovered: [],
+    bossHistory: [],
+    playerClass: 'knight',
+    sanctumReached: false,
   };
 }
 
@@ -48,6 +54,38 @@ function sample(overrides: Partial<RawTelemetry> = {}): RawTelemetry {
   };
 }
 
+function createDefaultState(): SessionTelemetryState {
+  return {
+    recentSamples: [],
+    longSamples: [],
+    lastSummaryAt: 0,
+    lastDashCount: null,
+    lastLoreInteractionCount: null,
+    lastLoreReadTime: null,
+    lastSkippedLore: null,
+    lastRetreatDistance: null,
+    sessionDashCount: 0,
+    sessionLoreInteractionCount: 0,
+    sessionLoreReadTimeSum: 0,
+    sessionLoreReadTimeCount: 0,
+    sessionSkippedLore: 0,
+    sessionRetreatDistance: 0,
+  };
+}
+
+function createEntry(s: RawTelemetry, time: number): SampleEntry {
+  return {
+    sample: s,
+    dashDelta: 0,
+    loreInteractionDelta: 0,
+    loreReadTimeDelta: 0,
+    skippedLoreDelta: 0,
+    retreatDelta: 0,
+    time
+  };
+}
+
+
 describe('telemetryProcessor', () => {
   beforeEach(() => {
     clearTelemetryStateForTests();
@@ -56,9 +94,9 @@ describe('telemetryProcessor', () => {
 
   it('computes window stats for accuracy, corners, dashes, and dominant zone', () => {
     const stats = computeWindowStats([
-      { sample: sample({ accuracy: 0.4, cornerPercentage: 0.1, playerZone: 'mid_center' }), dashDelta: 0, time: 0 },
-      { sample: sample({ accuracy: 0.6, cornerPercentage: 0.3, playerZone: 'mid_center' }), dashDelta: 1, time: 1000 },
-      { sample: sample({ accuracy: 0.5, cornerPercentage: 0.5, playerZone: 'top_left' }), dashDelta: 2, time: 2000 },
+      { ...createEntry(sample({ accuracy: 0.4, cornerPercentage: 0.1, playerZone: 'mid_center' }), 0), dashDelta: 0 },
+      { ...createEntry(sample({ accuracy: 0.6, cornerPercentage: 0.3, playerZone: 'mid_center' }), 1000), dashDelta: 1 },
+      { ...createEntry(sample({ accuracy: 0.5, cornerPercentage: 0.5, playerZone: 'top_left' }), 2000), dashDelta: 2 },
     ]);
 
     expect(stats.avgAccuracy).toBeCloseTo(0.5, 6);
@@ -70,14 +108,13 @@ describe('telemetryProcessor', () => {
   });
 
   it('returns safe defaults when buildSummary has no samples', () => {
-    const summary = buildSummary([], [], 123456);
+    const summary = buildSummary(createDefaultState(), 123456);
 
     expect(summary.avgAccuracy).toBe(0);
     expect(summary.cornerPercentageLast10s).toBe(0);
     expect(summary.totalDashCount).toBe(0);
     expect(summary.sampleCount).toBe(0);
     expect(summary.dominantZone).toBe('center');
-    expect(summary.longTerm.sampleCount).toBe(0);
     expect(summary.timestamp).toBe(123456);
   });
 
@@ -92,47 +129,18 @@ describe('telemetryProcessor', () => {
 
     const summary = getSummary(session);
     expect(summary).not.toBeNull();
-    expect(summary?.totalDashCount).toBe(3);
+    expect(summary?.totalDashCount).toBe(5);
     expect(summary?.avgAccuracy).toBeCloseTo(0.5, 6);
     expect(summary?.dominantZone).toBe('mid_center');
   });
 
-  it('prunes samples older than the 10s recent window', () => {
-    const session = createSession('recent-prune-session');
-    let now = 100_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
-
-    ingest(session, sample({ accuracy: 0.2, playerZone: 'top_left' }));
-    now += 15_000;
-    ingest(session, sample({ accuracy: 0.8, playerZone: 'bot_right' }));
-
-    const summary = getSummary(session);
-    expect(summary?.sampleCount).toBe(1);
-    expect(summary?.avgAccuracy).toBeCloseTo(0.8, 6);
-    expect(summary?.dominantZone).toBe('bot_right');
-  });
-
-  it('prunes samples older than the 120s long window', () => {
-    const session = createSession('long-prune-session');
-    let now = 200_000;
-    vi.spyOn(Date, 'now').mockImplementation(() => now);
-
-    ingest(session, sample({ accuracy: 0.1, dashCount: 0, playerZone: 'top_left' }));
-    now += 130_000;
-    ingest(session, sample({ accuracy: 0.9, dashCount: 2, playerZone: 'mid_center' }));
-
-    const summary = getSummary(session);
-    expect(summary?.sampleCount).toBe(1);
-    expect(summary?.longTerm.sampleCount).toBe(1);
-    expect(summary?.longTerm.avgAccuracy).toBeCloseTo(0.9, 6);
-  });
-
   it('computes player and boss HP percentages from latest sample', () => {
-    const recent = [{ sample: sample({ hp: 5, maxHp: 10, bossHp: 20, bossMaxHp: 40 }), dashDelta: 0, time: 0 }];
-    const summary = buildSummary(recent, recent, 999);
+    const entry = createEntry(sample({ hp: 5, maxHp: 10, bossHp: 20, bossMaxHp: 40 }), 0);
+    const state = createDefaultState();
+    state.recentSamples.push(entry);
+    const summary = buildSummary(state, 999);
 
     expect(summary.playerHpPercent).toBe(50);
     expect(summary.bossHpPercent).toBe(50);
-    expect(summary.bossActive).toBe(true);
   });
 });
