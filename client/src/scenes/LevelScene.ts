@@ -60,6 +60,7 @@ import { BuffManager } from '../systems/BuffManager';
 import { LevelHUDOverlay } from '../ui/LevelHUDOverlay';
 import { JournalOverlay } from '../ui/JournalOverlay';
 import { getLoreEntry, type LoreEntry, type LoreEntryId } from '../content/loreEntries';
+import { getStoryCard, type StoryCardId } from '../content/storyCards';
 import { LevelKey } from '../entities/LevelKey';
 import { LevelDoor, type LevelDoorOptions } from '../entities/LevelDoor';
 
@@ -228,6 +229,7 @@ export class LevelScene extends Phaser.Scene {
     hintId: null as LoreEntryId | null,
   };
   private doorPromptResetTimer?: Phaser.Time.TimerEvent;
+  private storyOverlayActive = false;
 
   // ─── Telemetry (adaptive backend) ───────────────────────────────────────────
   private telemetry = new TelemetryTracker();
@@ -943,6 +945,14 @@ export class LevelScene extends Phaser.Scene {
     this.journalOverlay?.destroy();
     this.journalOverlay = new JournalOverlay(parent, canvas);
     this.journalOverlay.onRequestClose(() => this.handleLoreCloseRequest());
+    this.hudOverlay.onStoryVisibilityChange((visible) => {
+      this.storyOverlayActive = visible;
+      if (visible) {
+        this.applyLorePause();
+      } else if (!this.loreOverlayOpen) {
+        this.resumeFromLorePause();
+      }
+    });
     const initKills = this.checkpointEnemiesKilled;
     const initThreshold = this.getKillThreshold();
     this.hudOverlay.updateStats({
@@ -1253,7 +1263,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private handleInput(time: number): void {
-    if (this.loreOverlayOpen) {
+    if (this.loreOverlayOpen || this.storyOverlayActive) {
       this.player.setVelocity(0, 0);
       return;
     }
@@ -2204,6 +2214,7 @@ export class LevelScene extends Phaser.Scene {
     const gsSnapshot = GameState.get().getData();
     SaveSystem.save(gsSnapshot.character, gsSnapshot, GameState.getDiscoveredLoreIds());
     this.handleLoreAfterBoss();
+    this.showBossAftermathCard();
 
     if (this.levelData.level === 5) {
       this.time.delayedCall(2500, () => {
@@ -2776,8 +2787,10 @@ export class LevelScene extends Phaser.Scene {
   private handleLoreAfterBoss(): void {
     if (this.currentLevel === 3 && !GameState.get().isLoreDiscovered('cobb_locket')) {
       this.triggerLoreEntry('cobb_locket');
+      this.showStoryCardById('discovery_locket');
     } else if (this.currentLevel === 4 && !GameState.get().isLoreDiscovered('mael_name')) {
       this.triggerLoreEntry('mael_name');
+      this.showStoryCardById('discovery_her_name');
     }
   }
 
@@ -2921,6 +2934,7 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(20);
     this.time.delayedCall(3000, () => this.bossNameText?.destroy());
     this.shakeCamera(300, 0.01);
+    this.showBossIntroCard();
     this.showBossBar();
     this.activeAudioLayer = 'boss';
     AudioManager.playMusic(this, 'boss_music');
@@ -3259,69 +3273,79 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private showLevelIntro(): void {
-    const introBg = this.add
-      .rectangle(160, 78, 220, 50, 0x040a14, 0.85)
-      .setStrokeStyle(2, 0x0f1c2f, 0.9)
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setDepth(19);
+    const cardId = this.getLevelIntroCardId(this.currentLevel);
+    if (!cardId) return;
+    this.showStoryCardById(cardId);
+  }
 
-    const titleStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-      fontSize: '18px',
-      color: '#fef3c7',
-      fontStyle: 'bold',
-      stroke: '#0f172a',
-      strokeThickness: 4,
-      shadow: {
-        color: '#000000',
-        blur: 8,
-        fill: false,
-        offsetX: 0,
-        offsetY: 0,
-      },
-    };
-    const title = this.add
-      .text(160, 66, this.levelData.name, titleStyle)
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setDepth(20);
+  private showBossIntroCard(): void {
+    const cardId = this.getBossIntroCardId();
+    if (!cardId) return;
+    this.showStoryCardById(cardId);
+  }
 
-    const subtitle = this.add
-      .text(160, 90, this.levelData.subtitle.toUpperCase(), {
-        fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
-        fontSize: '12px',
-        color: '#d5e0ff',
-        fontStyle: '600',
-        letterSpacing: 2,
-        stroke: '#0b1020',
-        strokeThickness: 2,
-        shadow: {
-          offsetX: 0,
-          offsetY: 0,
-          color: '#000000',
-          blur: 6,
-          fill: false,
-        },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setAlpha(0)
-      .setDepth(20);
+  private showBossAftermathCard(): void {
+    const cardId = this.getBossAftermathCardId();
+    if (!cardId) return;
+    this.showStoryCardById(cardId);
+  }
 
-    this.tweens.add({
-      targets: [introBg, title, subtitle],
-      alpha: 1,
-      duration: 500,
-      yoyo: true,
-      hold: 1500,
-      onComplete: () => {
-        title.destroy();
-        subtitle.destroy();
-      },
-    });
+  private showStoryCardById(id: StoryCardId): void {
+    if (!this.hudOverlay) return;
+    const payload = getStoryCard(id);
+    if (!payload) return;
+    this.hudOverlay.showStoryCard(payload);
+  }
+
+  private getLevelIntroCardId(level: number): StoryCardId | null {
+    switch (level) {
+      case 1:
+        return 'level1_threshold';
+      case 2:
+        return 'level2_hospice';
+      case 3:
+        return 'level3_forge';
+      case 4:
+        return 'level4_rift';
+      case 5:
+        return 'sanctum_home';
+      default:
+        return null;
+    }
+  }
+
+  private getBossIntroCardId(): StoryCardId | null {
+    switch (this.currentLevel) {
+      case 1:
+        return 'boss_aldric';
+      case 2:
+        return 'boss_vael';
+      case 3:
+        return 'boss_cobb';
+      case 4:
+        return 'boss_witness';
+      case 5:
+        return 'boss_elias';
+      default:
+        return null;
+    }
+  }
+
+  private getBossAftermathCardId(): StoryCardId | null {
+    switch (this.currentLevel) {
+      case 1:
+        return 'aftermath_aldric';
+      case 2:
+        return 'aftermath_vael';
+      case 3:
+        return 'aftermath_cobb';
+      case 4:
+        return 'aftermath_mael';
+      case 5:
+        return 'aftermath_watcher';
+      default:
+        return null;
+    }
   }
 
   // ════════════════════════════════════════════════════════════════════════════

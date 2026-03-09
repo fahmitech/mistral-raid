@@ -1,4 +1,6 @@
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+import type { StoryCardPayload } from '../content/storyCards';
+import { StoryOverlay } from './StoryOverlay';
 
 export interface LevelHUDStats {
   level: number;
@@ -30,6 +32,7 @@ export class LevelHUDOverlay {
   private resizeObserver: ResizeObserver;
   private canvas: HTMLCanvasElement;
   private parent: HTMLElement;
+  private storyOverlay: StoryOverlay;
 
   constructor(parent: HTMLElement, canvas: HTMLCanvasElement) {
     this.parent = parent;
@@ -142,6 +145,8 @@ export class LevelHUDOverlay {
     this.container.appendChild(this.stage);
     parent.appendChild(this.container);
 
+    this.storyOverlay = new StoryOverlay(parent, canvas);
+
     this.resizeObserver = new ResizeObserver(() => this.updateStage());
     this.resizeObserver.observe(this.canvas);
     this.updateStage();
@@ -233,6 +238,14 @@ export class LevelHUDOverlay {
     this.companionEl.style.display = 'inline-flex';
   }
 
+  showStoryCard(payload: StoryCardPayload): Promise<void> {
+    return this.storyOverlay.show(payload);
+  }
+
+  onStoryVisibilityChange(handler: (visible: boolean) => void): void {
+    this.storyOverlay.onVisibilityChange(handler);
+  }
+
   destroy(): void {
     if (this.dashResetTimer) {
       window.clearTimeout(this.dashResetTimer);
@@ -240,6 +253,7 @@ export class LevelHUDOverlay {
     }
     this.resizeObserver.disconnect();
     this.container.remove();
+    this.storyOverlay.destroy();
   }
 
   private updateStage(): void {
