@@ -603,7 +603,10 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.bossHp <= 0 && this.arenaPhase !== 'VICTORY') {
       this.arenaPhase = 'VICTORY';
-      this.scene.start('VictoryScene');
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('SanctumScene');
+      });
     }
   }
 

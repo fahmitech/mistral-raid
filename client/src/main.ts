@@ -12,6 +12,7 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { VictoryScene } from './scenes/VictoryScene';
 import { AudioDebugOverlay } from './systems/AudioDebugOverlay';
 import { ArenaScene } from './scenes/ArenaScene';
+import { SanctumScene } from './scenes/SanctumScene';
 import { CoopSelectScene } from './scenes/CoopSelectScene';
 import { DifficultySelectScene } from './scenes/DifficultySelectScene';
 import { AICompanionDebugOverlay } from './systems/AICompanionDebugOverlay';
@@ -52,8 +53,9 @@ const config: Phaser.Types.Core.GameConfig = {
     OptionsScene,
     CreditsScene,
     GameOverScene,
-    VictoryScene,
     ArenaScene,
+    SanctumScene,
+    VictoryScene,
     AudioDebugOverlay,
     AICompanionDebugOverlay,
   ],
