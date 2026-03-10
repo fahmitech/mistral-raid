@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { AudioManager } from '../systems/AudioManager';
+import { CreditsOverlay } from '../ui/CreditsOverlay';
 
 export class CreditsScene extends Phaser.Scene {
-  private container!: Phaser.GameObjects.Container;
   private stars: Phaser.GameObjects.Rectangle[] = [];
-  private scrollHeight = 0;
+  private overlay?: CreditsOverlay;
 
   constructor() {
     super('CreditsScene');
@@ -14,17 +14,16 @@ export class CreditsScene extends Phaser.Scene {
     AudioManager.playMusic(this, 'credits_theme');
 
     this.createBackground();
-    this.createScroll();
-
-    const back = this.add
-      .text(160, 168, '[ BACK TO MENU ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#cccccc',
-      })
-      .setOrigin(0.5, 1)
-      .setInteractive({ useHandCursor: true });
-    back.on('pointerdown', () => this.exit());
+    const parent = this.game.canvas?.parentElement;
+    if (!parent) throw new Error('CreditsScene: canvas parent missing');
+    parent.querySelectorAll<HTMLDivElement>('[data-credits-overlay="true"]').forEach((node) => node.remove());
+    this.overlay = new CreditsOverlay(parent, {
+      lines: this.buildLines(),
+      onComplete: () => this.exit(),
+      onBack: () => this.exit(),
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardownOverlay());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.teardownOverlay());
 
     this.input.keyboard?.on('keydown-ESC', () => this.exit());
 
@@ -39,12 +38,6 @@ export class CreditsScene extends Phaser.Scene {
       }
     });
 
-    if (this.container) {
-      this.container.y -= 0.2;
-      if (this.container.y + this.scrollHeight < -20) {
-        this.exit();
-      }
-    }
   }
 
   private createBackground(): void {
@@ -76,8 +69,8 @@ export class CreditsScene extends Phaser.Scene {
     vignette.fillRect(0, 156, 320, 24);
   }
 
-  private createScroll(): void {
-    const lines = [
+  private buildLines(): string[] {
+    return [
       'MISTRAL RAID',
       '',
       'Design & Code',
@@ -102,24 +95,16 @@ export class CreditsScene extends Phaser.Scene {
       '',
       '2026',
     ];
-
-    const texts = lines.map((line, idx) =>
-      this.add
-        .text(160, idx * 12, line, {
-          fontFamily: '"Press Start 2P"',
-          fontSize: idx === 0 ? '8px' : '5px',
-          color: '#ffffff',
-        })
-        .setOrigin(0.5)
-    );
-
-    this.scrollHeight = lines.length * 12;
-    this.container = this.add.container(0, 200, texts);
   }
 
   private exit(): void {
     AudioManager.stopAll(this);
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('MenuScene'));
+  }
+
+  private teardownOverlay(): void {
+    this.overlay?.destroy();
+    this.overlay = undefined;
   }
 }

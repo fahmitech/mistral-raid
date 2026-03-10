@@ -3,7 +3,11 @@ import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 
 export class VictoryScene extends Phaser.Scene {
-  private confetti: { sprite: Phaser.GameObjects.Rectangle; speed: number; drift: number }[] = [];
+  private letGoText!: Phaser.GameObjects.Text;
+  private holdOnText!: Phaser.GameObjects.Text;
+  private selectedChoice: 0 | 1 = 0;
+  private inputEnabled = false;
+  private confirmed = false;
 
   constructor() {
     super('VictoryScene');
@@ -12,114 +16,112 @@ export class VictoryScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.fadeIn(400, 0, 0, 0);
 
-    AudioManager.playMusic(this, 'victory_music');
-
     const gfx = this.add.graphics();
     gfx.fillStyle(0x060b16, 1);
     gfx.fillRect(0, 0, 320, 180);
 
-    const title = this.add
-      .text(160, 26, 'VICTORY', {
+    this.letGoText = this.add
+      .text(100, 90, 'LET GO', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '12px',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-
-    this.tweens.add({
-      targets: title,
-      alpha: 0.9,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-    });
-
-    this.add
-      .text(160, 44, 'The Watcher has been destroyed.', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '4px',
-        color: '#cccccc',
-      })
-      .setOrigin(0.5);
-
-    const state = GameState.get().getData();
-    const inventoryCount = state.inventory.reduce((sum, slot) => sum + slot.qty, 0);
-
-    this.add
-      .text(160, 70, `FINAL SCORE: ${state.score}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffdd44',
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(160, 82, `COINS: ${state.coins}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffdd44',
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(160, 94, `DAMAGE: ${state.playerDamage.toFixed(1)}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffdd44',
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(160, 106, `INVENTORY: ${inventoryCount}`, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffdd44',
-      })
-      .setOrigin(0.5);
-
-    const button = this.add
-      .text(160, 138, '[ PLAY AGAIN ]', {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '6px',
-        color: '#00ffcc',
+        fontSize: '8px',
+        color: '#fef3c7',
       })
       .setOrigin(0.5)
+      .setAlpha(0)
       .setInteractive({ useHandCursor: true });
-    button.on('pointerdown', () => this.playAgain());
 
-    this.spawnConfetti();
-  }
+    this.holdOnText = this.add
+      .text(220, 90, 'HOLD ON', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '8px',
+        color: '#556677',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setInteractive({ useHandCursor: true });
 
-  update(): void {
-    this.confetti.forEach((c) => {
-      c.sprite.y += c.speed;
-      c.sprite.x += c.drift;
-      if (c.sprite.y > 190) {
-        c.sprite.y = -10;
-        c.sprite.x = Phaser.Math.Between(0, 320);
-      }
-      if (c.sprite.x < -10) c.sprite.x = 330;
-      if (c.sprite.x > 330) c.sprite.x = -10;
+    this.refreshChoices();
+
+    this.time.delayedCall(800, () => {
+      this.tweens.add({
+        targets: [this.letGoText, this.holdOnText],
+        alpha: 1,
+        duration: 300,
+        ease: 'Linear',
+      });
+    });
+
+    this.time.delayedCall(4000, () => {
+      this.inputEnabled = true;
+      this.setupInput();
+      this.refreshChoices();
     });
   }
 
-  private spawnConfetti(): void {
-    const colors = [0xffcc00, 0x33ccff, 0xff66cc, 0x66ff66, 0xffffff];
-    for (let i = 0; i < 80; i += 1) {
-      const rect = this.add.rectangle(
-        Phaser.Math.Between(0, 320),
-        Phaser.Math.Between(0, 180),
-        2,
-        2,
-        Phaser.Utils.Array.GetRandom(colors),
-        Phaser.Math.FloatBetween(0.4, 0.9)
-      );
-      this.confetti.push({
-        sprite: rect,
-        speed: Phaser.Math.FloatBetween(0.3, 1.2),
-        drift: Phaser.Math.FloatBetween(-0.2, 0.2),
-      });
-    }
+  private setupInput(): void {
+    this.letGoText.on('pointerdown', () => this.confirmChoice(0));
+    this.holdOnText.on('pointerdown', () => this.confirmChoice(1));
+
+    this.letGoText.on('pointerover', () => {
+      if (!this.inputEnabled || this.confirmed) return;
+      this.selectedChoice = 0;
+      this.refreshChoices();
+    });
+
+    this.holdOnText.on('pointerover', () => {
+      if (!this.inputEnabled || this.confirmed) return;
+      this.selectedChoice = 1;
+      this.refreshChoices();
+    });
+
+    this.input.keyboard?.on('keydown-LEFT', () => {
+      if (!this.inputEnabled || this.confirmed) return;
+      this.selectedChoice = 0;
+      this.refreshChoices();
+    });
+
+    this.input.keyboard?.on('keydown-RIGHT', () => {
+      if (!this.inputEnabled || this.confirmed) return;
+      this.selectedChoice = 1;
+      this.refreshChoices();
+    });
+
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      this.confirmChoice(this.selectedChoice);
+    });
   }
 
-  private playAgain(): void {
+  private refreshChoices(): void {
+    if (this.selectedChoice === 0) {
+      this.letGoText.setColor('#fef3c7');
+      this.letGoText.setAlpha(1);
+      this.holdOnText.setColor('#556677');
+      this.holdOnText.setAlpha(0.4);
+      return;
+    }
+
+    this.letGoText.setColor('#556677');
+    this.letGoText.setAlpha(0.4);
+    this.holdOnText.setColor('#fef3c7');
+    this.holdOnText.setAlpha(1);
+  }
+
+  private confirmChoice(choice: 0 | 1): void {
+    if (!this.inputEnabled || this.confirmed) return;
+
+    this.selectedChoice = choice;
+    this.confirmed = true;
+    this.inputEnabled = false;
+    this.refreshChoices();
+
+    this.cameras.main.flash(50, 255, 255, 255);
+    this.time.delayedCall(60, () => {
+      this.cameras.main.fadeOut(800, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => this.finishChoice());
+    });
+  }
+
+  private finishChoice(): void {
     AudioManager.stopAll(this);
     GameState.get().reset();
     this.scene.start('MenuScene');

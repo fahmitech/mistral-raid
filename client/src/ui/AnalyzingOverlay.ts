@@ -1,53 +1,57 @@
 import Phaser from 'phaser';
-import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+import { INTERNAL_WIDTH } from '../config/constants';
 
 export class AnalyzingOverlay {
   private scene: Phaser.Scene;
-  private bg: Phaser.GameObjects.Rectangle;
-  private text: Phaser.GameObjects.Text;
-  private spinner: Phaser.GameObjects.Arc;
+  private dot: Phaser.GameObjects.Arc;
+  private label: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.bg = scene.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.55)
+
+    this.label = scene.add
+      .text(INTERNAL_WIDTH - 12, 23, 'AI UPDATING', {
+        fontFamily: 'system-ui, -apple-system, "Segoe UI", "Roboto", Arial',
+        fontSize: '7px',
+        color: '#ffee88',
+        stroke: '#000000',
+        strokeThickness: 1,
+        shadow: { color: '#000000', blur: 4, fill: true, offsetX: 1, offsetY: 1 },
+        resolution: 2,
+      })
+      .setOrigin(1, 0)
       .setScrollFactor(0)
-      .setDepth(30)
+      .setDepth(31)
       .setVisible(false);
 
-    this.text = scene.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 - 10, 'BOSS IS ANALYZING...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffee88',
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(31).setVisible(false);
-
-    this.spinner = scene.add.circle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2 + 10, 6, 0xffee88, 0.8)
+    this.dot = scene.add
+      .circle(INTERNAL_WIDTH - 6, 26, 2.5, 0xffee88, 1)
       .setScrollFactor(0)
       .setDepth(31)
       .setVisible(false);
   }
 
   show(): void {
-    this.bg.setVisible(true);
-    this.text.setVisible(true);
-    this.spinner.setVisible(true);
+    this.label.setVisible(true);
+    this.dot.setVisible(true);
     this.scene.tweens.add({
-      targets: this.spinner,
-      angle: 360,
-      duration: 800,
+      targets: this.dot,
+      alpha: 0.15,
+      duration: 500,
+      yoyo: true,
       repeat: -1,
     });
   }
 
   hide(): void {
-    this.scene.tweens.killTweensOf(this.spinner);
-    this.bg.setVisible(false);
-    this.text.setVisible(false);
-    this.spinner.setVisible(false);
+    this.scene.tweens.killTweensOf(this.dot);
+    this.dot.setAlpha(1);
+    this.label.setVisible(false);
+    this.dot.setVisible(false);
   }
 
   destroy(): void {
-    this.bg.destroy();
-    this.text.destroy();
-    this.spinner.destroy();
+    this.label.destroy();
+    this.dot.destroy();
   }
 }

@@ -2,7 +2,7 @@ import type { CompanionContext, CompanionReply } from '../types/arena';
 import { GameState } from '../core/GameState';
 
 const COIN_COST = 2;
-const SERVER_URL = 'http://localhost:8787/api/companion/query';
+const SERVER_URL = `${(import.meta as any).env?.VITE_SERVER_URL ?? 'http://localhost:8787'}/api/companion/query`;
 
 export class VoiceController {
   private mediaRecorder: MediaRecorder | null = null;

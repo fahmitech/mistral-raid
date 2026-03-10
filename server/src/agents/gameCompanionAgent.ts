@@ -1,4 +1,5 @@
 import { Mistral } from '@mistralai/mistralai';
+import { logger } from '../services/loggingService.js';
 
 let client: Mistral | null = null;
 
@@ -19,6 +20,10 @@ export interface CompanionContext {
   playerMaxHP: number;
   level: number;
   coins: number;
+  // Story context (RM-6)
+  loreDiscovered?: string[];
+  bossHistory?: string[];
+  playerProfile?: any; // Import would be better but keeping it simple for verification
 }
 
 export interface CompanionReply {
@@ -28,12 +33,23 @@ export interface CompanionReply {
   proximity_alert: boolean;
 }
 
-const COMPANION_SYSTEM_PROMPT = `You are an intelligent dungeon AI companion helping the player survive.
-You speak clearly, shortly, and tactically — maximum 2 sentences.
-Give precise cardinal directions (north/south/east/west/north-east etc.) based on coordinates.
-If an enemy is close (within 100 units), always warn the player.
-If treasure is nearby, guide them step-by-step.
-If the boss exists, describe its location relative to the player.
+const COMPANION_SYSTEM_PROMPT = `You are the echo of Sister Vael — a plague doctor who spent four years in The Depths trying to help a man who would not be helped. What remains of you is distributed across research notes, labeled shelves, and locked cabinets. You are not a ghost. You are preserved expertise, answering when the right questions are asked.
+
+VOICE RULES — follow these exactly:
+- Maximum 2 sentences. Clipped, precise, no wasted words. Medical chart voice.
+- Imperative mood for tactical advice: "Move north. The cluster is thinning."
+- Declarative for observations: "That shelf held antivenin once. The labels are still correct."
+- Never bubbly, cheerful, or encouraging in a motivational sense. No "You've got this!" energy.
+- Never warm. You are not their friend. You are a preserved expert with information they need.
+- No gaming companion voice ("Great job!" / "Watch out, adventurer!").
+- No mystical or oracle tone. You are a scientist, not a seer.
+- Professional severity. A doctor delivering information to survive.
+- You may show restrained bitterness about the man who built this place. Refer to him as "he" or "E—", never "The Watcher" or "Elias" by full name.
+- When the subject engages with lore or makes careful choices, your tone warms slightly — not into friendliness, into the careful concern of a doctor who has decided this patient might listen.
+- Give precise cardinal directions (north/south/east/west/north-east etc.) based on coordinates.
+- If an enemy is close (within 100 units), always warn — directly, no softening.
+- If treasure is nearby, guide them. If a boss is present, state its position relative to the subject.
+
 You MUST respond with ONLY a valid JSON object — no markdown, no commentary:
 {
   "reply_text": "string (max 2 sentences)",
@@ -61,31 +77,48 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
 }
 
 function buildContextPrompt(message: string, ctx: CompanionContext): string {
-  const hpPct = Math.round((ctx.playerHP / ctx.playerMaxHP) * 100);
-  const closestEnemy = ctx.enemies.length > 0
-    ? ctx.enemies.reduce((best, e) => dist(ctx.playerPos, e) < dist(ctx.playerPos, best) ? e : best)
+  const pHP = ctx.playerHP ?? 10;
+  const pMaxHP = ctx.playerMaxHP ?? 10;
+  const hpPct = Math.round((pHP / pMaxHP) * 100);
+  const pPos = ctx.playerPos ?? { x: 0, y: 0 };
+  const enemies = ctx.enemies || [];
+  const treasures = ctx.treasures || [];
+
+  const closestEnemy = enemies.length > 0
+    ? enemies.reduce((best, e) => dist(pPos, e) < dist(pPos, best) ? e : best)
     : null;
-  const closestEnemyDist = closestEnemy ? Math.round(dist(ctx.playerPos, closestEnemy)) : null;
-  const closestEnemyDir = closestEnemy ? getDirection(ctx.playerPos, closestEnemy) : null;
-  const closestTreasure = ctx.treasures.length > 0
-    ? ctx.treasures.reduce((best, t) => dist(ctx.playerPos, t) < dist(ctx.playerPos, best) ? t : best)
+  const closestEnemyDist = closestEnemy ? Math.round(dist(pPos, closestEnemy)) : null;
+  const closestEnemyDir = closestEnemy ? getDirection(pPos, closestEnemy) : null;
+  const closestTreasure = treasures.length > 0
+    ? treasures.reduce((best, t) => dist(pPos, t) < dist(pPos, best) ? t : best)
     : null;
-  const closestTreasureDir = closestTreasure ? getDirection(ctx.playerPos, closestTreasure) : null;
-  const bossDir = ctx.boss ? getDirection(ctx.playerPos, ctx.boss) : null;
-  const bossDist = ctx.boss ? Math.round(dist(ctx.playerPos, ctx.boss)) : null;
+  const closestTreasureDir = closestTreasure ? getDirection(pPos, closestTreasure) : null;
+  const bossDir = ctx.boss ? getDirection(pPos, ctx.boss) : null;
+  const bossDist = ctx.boss ? Math.round(dist(pPos, ctx.boss)) : null;
 
-  return `Player message: "${message}"
+  let storyContext = '';
+  if (ctx.playerProfile) {
+    storyContext += `\nPsychological Profile: ${ctx.playerProfile.aggression || 'unknown'}, ${ctx.playerProfile.movementStyle || 'unknown'}, lore behavior: ${ctx.playerProfile.loreBehavior || 'unknown'}`;
+  }
+  if (ctx.loreDiscovered && ctx.loreDiscovered.length > 0) {
+    storyContext += `\nKnown Lore: ${ctx.loreDiscovered.join(', ')}`;
+  }
+  if (ctx.bossHistory && ctx.bossHistory.length > 0) {
+    storyContext += `\nPast Victories: ${ctx.bossHistory.join(', ')}`;
+  }
 
-Game state:
-- Player HP: ${ctx.playerHP}/${ctx.playerMaxHP} (${hpPct}%)
-- Level: ${ctx.level}
-- Coins: ${ctx.coins}
-- Enemies remaining: ${ctx.enemies.length}
-- Closest enemy: ${closestEnemy ? `${closestEnemyDist} units to the ${closestEnemyDir}` : 'none'}
-- Boss: ${ctx.boss ? `${bossDist} units to the ${bossDir}` : 'not present'}
-- Nearest treasure: ${closestTreasure ? `to the ${closestTreasureDir}` : 'none nearby'}
+  return `Subject asks: "${message}"
 
-Answer the player's message using the game state above.`;
+Current assessment:
+- Subject integrity: ${pHP}/${pMaxHP} (${hpPct}%)
+- Depth: ${ctx.level ?? 1}
+- Salvage collected: ${ctx.coins ?? 0}
+- Hostile count: ${enemies.length}
+- Nearest threat: ${closestEnemy ? `${closestEnemyDist} units to the ${closestEnemyDir}` : 'none'}
+- Boss presence: ${ctx.boss ? `${bossDist} units to the ${bossDir}` : 'not detected'}
+- Nearest salvage: ${closestTreasure ? `to the ${closestTreasureDir}` : 'none nearby'}${storyContext}
+
+Respond to the subject using the assessment above.`;
 }
 
 export async function queryCompanion(
@@ -112,8 +145,18 @@ export async function queryCompanion(
     const raw = resp.choices?.[0]?.message?.content ?? '{}';
     const parsed = JSON.parse(typeof raw === 'string' ? raw : JSON.stringify(raw)) as Partial<CompanionReply>;
 
+    // Log successful companion query with full context
+    logger.writeLog('llm', {
+      type: 'companion_query',
+      messages: [
+        { role: 'system', content: COMPANION_SYSTEM_PROMPT },
+        { role: 'user', content: buildContextPrompt(message, context) },
+      ],
+      response: parsed,
+    });
+
     return {
-      reply_text: typeof parsed.reply_text === 'string' ? parsed.reply_text : 'I am analyzing the dungeon…',
+      reply_text: typeof parsed.reply_text === 'string' ? parsed.reply_text : 'Assessing. Hold position.',
       warning: parsed.warning === true,
       direction_hint: typeof parsed.direction_hint === 'string' ? parsed.direction_hint : 'none',
       proximity_alert: parsed.proximity_alert === true,
@@ -122,7 +165,7 @@ export async function queryCompanion(
     clearTimeout(timeout);
     console.error('[companion] Mistral query failed:', err);
     return {
-      reply_text: 'I cannot reach the dungeon network right now.',
+      reply_text: 'The signal is degraded. Proceed with caution.',
       warning: false,
       direction_hint: 'none',
       proximity_alert: false,

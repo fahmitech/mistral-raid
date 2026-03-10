@@ -6,7 +6,7 @@ import type { WebSocket } from 'ws';
 
 const sessions = new Map<string, Session>();
 
-const BOSS_REPLY_COOLDOWN_MS = Number(process.env.BOSS_REPLY_COOLDOWN_MS ?? 4000);
+const BOSS_REPLY_COOLDOWN_MS = Number(process.env.BOSS_REPLY_COOLDOWN_MS ?? 2000);
 const ENABLE_AI_SPEECH = process.env.ENABLE_AI_SPEECH !== 'false';
 
 export function createSession(ws: WebSocket): Session {
@@ -27,6 +27,12 @@ export function createSession(ws: WebSocket): Session {
     sttStream: null,
     directorInterval: null,
     lastDirectorDecision: null,
+    // Story state (RM-4, RM-5)
+    levelTag: 'unknown',
+    loreDiscovered: [],
+    bossHistory: [],
+    playerClass: 'knight',
+    sanctumReached: false,
   };
 
   sessions.set(id, session);

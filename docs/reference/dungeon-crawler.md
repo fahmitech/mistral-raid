@@ -86,7 +86,7 @@ LevelScene is the main game scene — a top-down dungeon crawler where the playe
 - Wall tile selection based on neighbors: if tile above is not a wall → `wall_top`, otherwise `wall_mid`
 
 ### Decorations (No Collision)
-- **Torches**: Fountain sprites (3-frame animation, 125ms per frame) on wall tiles
+- **Torches**: Dedicated torch sprites (`torch_1` through `torch_8`, 8 FPS) mounted on wall tiles
 - **Room decor**: 60% chance per room — skull, crate, box, boxes_stacked, or column in a corner
 - **Wall banners**: One per room — randomly red or blue, on top wall
 - **Blood stains**: 50% chance in Normal rooms — floor_stain_1/2/3 at 70% alpha

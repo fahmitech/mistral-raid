@@ -8,6 +8,7 @@ import {
   ENEMY_TELEPORT_COOLDOWN_MS,
 } from '../config/constants';
 import { EnemyBehavior, EnemyConfig, EnemyType } from '../config/types';
+import type { EnemyDirective } from '../types/arena';
 import { Player } from './Player';
 
 export interface EnemyActions {
@@ -29,6 +30,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   lastTeleportAt = 0;
   lastSummonAt = 0;
   shielded = false;
+  private directive: EnemyDirective | null = null;
+  private directiveExpiresAt = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, config: EnemyConfig) {
     super(scene, x, y, config.spriteKey);
@@ -44,10 +47,24 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  applyDirective(directive: EnemyDirective, currentTime: number): void {
+    this.directive = directive;
+    this.directiveExpiresAt = currentTime + directive.duration_ms;
+  }
+
   updateAI(player: Player, time: number, actions: EnemyActions): void {
+    if (this.directive && time >= this.directiveExpiresAt) {
+      this.directive = null;
+      this.directiveExpiresAt = 0;
+    }
+
+    const behavior = this.directive?.behavior_override ?? this.config.behavior;
+    const aggroRange = ENEMY_AGGRO_RANGE * (this.directive?.aggro_range_multiplier ?? 1);
+    const speed = this.config.speed * (this.directive?.speed_multiplier ?? 1);
+    const patrolChangeMs = this.directive?.patrol_to_aggro_ms;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
 
-    if (this.config.behavior === EnemyBehavior.Teleporter && time - this.lastTeleportAt > ENEMY_TELEPORT_COOLDOWN_MS) {
+    if (behavior === EnemyBehavior.Teleporter && time - this.lastTeleportAt > ENEMY_TELEPORT_COOLDOWN_MS) {
       this.lastTeleportAt = time;
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const radius = Phaser.Math.Between(50, 90);
@@ -55,7 +72,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       actions.shake(60, 0.003);
     }
 
-    if (this.config.behavior === EnemyBehavior.RangedShoot) {
+    if (behavior === EnemyBehavior.RangedShoot) {
       if (dist <= ENEMY_RANGED_RANGE) {
         this.setVelocity(0, 0);
         if (time - this.lastShotAt > ENEMY_RANGED_COOLDOWN_MS) {
@@ -66,31 +83,31 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
             actions.playSound?.(this.x, this.y, this.config.attackSfx);
           }
         }
-      } else if (dist <= ENEMY_AGGRO_RANGE * 1.5) {
-        this.scene.physics.moveToObject(this, player, this.config.speed);
+      } else if (dist <= aggroRange * 1.5) {
+        this.scene.physics.moveToObject(this, player, speed);
       } else {
-        this.patrol(time);
+        this.patrol(time, patrolChangeMs);
       }
       return;
     }
 
-    if (this.config.behavior === EnemyBehavior.Summoner) {
+    if (behavior === EnemyBehavior.Summoner) {
       if (time - this.lastSummonAt > ENEMY_SUMMON_COOLDOWN_MS) {
         this.lastSummonAt = time;
         actions.spawnEnemy(EnemyType.Goblin, this.x + Phaser.Math.Between(-16, 16), this.y + Phaser.Math.Between(-16, 16));
       }
     }
 
-    if (dist <= ENEMY_AGGRO_RANGE) {
-      this.scene.physics.moveToObject(this, player, this.config.speed);
+    if (dist <= aggroRange) {
+      this.scene.physics.moveToObject(this, player, speed);
     } else {
-      this.patrol(time);
+      this.patrol(time, patrolChangeMs);
     }
   }
 
-  patrol(time: number): void {
+  patrol(time: number, patrolChangeMs?: number): void {
     if (time > this.nextPatrolChange) {
-      this.nextPatrolChange = time + Phaser.Math.Between(1800, 3000);
+      this.nextPatrolChange = time + (patrolChangeMs ?? Phaser.Math.Between(1800, 3000));
       this.patrolDir.set(Phaser.Math.FloatBetween(-1, 1), Phaser.Math.FloatBetween(-1, 1)).normalize();
     }
     this.setVelocity(this.patrolDir.x * ENEMY_PATROL_SPEED, this.patrolDir.y * ENEMY_PATROL_SPEED);

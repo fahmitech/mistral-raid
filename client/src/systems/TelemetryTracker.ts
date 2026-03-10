@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { INTERNAL_HEIGHT, INTERNAL_WIDTH } from '../config/constants';
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH, TILE_SIZE } from '../config/constants';
 import type { AnalyzePayload, RawTelemetry } from '../types/arena';
 import type { Player } from '../entities/Player';
 
@@ -17,6 +17,7 @@ export class TelemetryTracker {
   private dashEvents: DashEvent[] = [];
   private shotsFired = 0;
   private shotsHit = 0;
+  private recentShotResults: boolean[] = [];
   private orbsDestroyed = 0;
   private damageTakenFrom = { melee: 0, projectile: 0, hazard: 0 };
   private recentHits: number[] = [];
@@ -34,11 +35,25 @@ export class TelemetryTracker {
   private playerHpAtTransition = 0;
   private phaseForcedByTimeout = false;
 
+  // ── Story-aware telemetry ──────────────────────────────────────
+  private loreInteractionCount = 0;
+  private loreReadTimes: number[] = [];       // durations in seconds
+  private loreLingerTimes: number[] = [];     // durations in seconds
+  private skippedMandatoryLore = 0;
+  private retreatDistance = 0;
+  private wallProximitySamples = 0;
+  private wallProximityHits = 0;
+  private lastEnemyDistance: number | null = null;
+  private lastLoreOpenTime: number | null = null;
+  private worldWidth: number | null = null;
+  private worldHeight: number | null = null;
+
   startPhase(bossMaxHp: number): void {
     this.heatmap = this.defaultHeatmap();
     this.dashEvents = [];
     this.shotsFired = 0;
     this.shotsHit = 0;
+    this.recentShotResults = [];
     this.orbsDestroyed = 0;
     this.damageTakenFrom = { melee: 0, projectile: 0, hazard: 0 };
     this.recentHits = [];
@@ -55,6 +70,17 @@ export class TelemetryTracker {
     this.reactionTimes = [];
     this.playerHpAtTransition = 0;
     this.phaseForcedByTimeout = false;
+
+    // Story-aware resets
+    this.loreInteractionCount = 0;
+    this.loreReadTimes = [];
+    this.loreLingerTimes = [];
+    this.skippedMandatoryLore = 0;
+    this.retreatDistance = 0;
+    this.wallProximitySamples = 0;
+    this.wallProximityHits = 0;
+    this.lastEnemyDistance = null;
+    this.lastLoreOpenTime = null;
   }
 
   update(player: Player, boss: Phaser.GameObjects.Sprite | null, delta: number): void {
@@ -81,6 +107,29 @@ export class TelemetryTracker {
       }
     }
 
+    // ── Wall proximity sampling ──────────────────────────────────
+    this.wallProximitySamples += 1;
+    const wallThreshold = TILE_SIZE * 1.5; // within ~1.5 tiles of world edge
+    const worldW = this.worldWidth ?? INTERNAL_WIDTH;
+    const worldH = this.worldHeight ?? INTERNAL_HEIGHT;
+    if (
+      player.x < wallThreshold ||
+      player.x > worldW - wallThreshold ||
+      player.y < wallThreshold ||
+      player.y > worldH - wallThreshold
+    ) {
+      this.wallProximityHits += 1;
+    }
+
+    // ── Retreat tracking (distance increasing from nearest threat) ──
+    if (boss) {
+      const distToBoss = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
+      if (this.lastEnemyDistance !== null && distToBoss > this.lastEnemyDistance) {
+        this.retreatDistance += distToBoss - this.lastEnemyDistance;
+      }
+      this.lastEnemyDistance = distToBoss;
+    }
+
     this.pruneRecentHits(now);
   }
 
@@ -94,11 +143,15 @@ export class TelemetryTracker {
   recordShotFired(): void {
     this.shotsFired += 1;
     this.recentMissStreak += 1;
+    this.recentShotResults.push(false);
+    if (this.recentShotResults.length > 20) this.recentShotResults.shift();
   }
 
   recordShotHit(): void {
     this.shotsHit += 1;
     this.recentMissStreak = 0;
+    const lastMissIndex = this.recentShotResults.lastIndexOf(false);
+    if (lastMissIndex !== -1) this.recentShotResults[lastMissIndex] = true;
   }
 
   recordOrbDestroyed(): void {
@@ -126,11 +179,69 @@ export class TelemetryTracker {
     this.bossMaxHp = bossMaxHp;
   }
 
+  setWorldBounds(width: number, height: number): void {
+    this.worldWidth = width;
+    this.worldHeight = height;
+  }
+
+  // ── Story-aware recording methods ─────────────────────────────
+  recordLoreInteraction(): void {
+    this.loreInteractionCount += 1;
+    this.lastLoreOpenTime = performance.now();
+  }
+
+  recordLoreClose(): void {
+    if (this.lastLoreOpenTime !== null) {
+      this.loreReadTimes.push((performance.now() - this.lastLoreOpenTime) / 1000);
+      this.lastLoreOpenTime = null;
+    }
+  }
+
+  recordLoreRead(durationMs: number): void {
+    this.loreReadTimes.push(durationMs / 1000);
+  }
+
+  recordLoreLinger(durationMs: number): void {
+    this.loreLingerTimes.push(durationMs / 1000);
+  }
+
+  recordMandatoryLoreSkipped(): void {
+    this.skippedMandatoryLore += 1;
+  }
+
+  getCurrentZone(x: number, y: number): string {
+    return this.computeZone(x, y);
+  }
+
+  getRecentAccuracy(lastN: number): number {
+    const recent = this.recentShotResults.slice(-lastN);
+    if (!recent.length) return 0;
+    return recent.filter(Boolean).length / recent.length;
+  }
+
+  getRecentDodgeBias(): { left: number; right: number; up: number; down: number } {
+    const cutoff = performance.now() - 15000;
+    const bias = { left: 0, right: 0, up: 0, down: 0 };
+    this.dashEvents
+      .filter((event) => event.time >= cutoff)
+      .forEach((event) => {
+        bias[event.dir] += 1;
+      });
+    return bias;
+  }
+
   getRawTelemetry(playerHp: number, playerMaxHp: number, bossHp: number): RawTelemetry {
     const accuracy = this.shotsFired > 0 ? this.shotsHit / this.shotsFired : 0;
     const totalSamples = Object.values(this.heatmap).reduce((sum, v) => sum + v, 0) || 1;
     const cornerPct = (this.cornerSamples / totalSamples) * 100;
     const playerZone = this.getDominantZone();
+
+    const wallBias = this.wallProximitySamples > 0
+      ? (this.wallProximityHits / this.wallProximitySamples) * 100
+      : 0;
+    const avgLoreLingerTime = this.loreLingerTimes.length > 0
+      ? this.loreLingerTimes.reduce((s, v) => s + v, 0) / this.loreLingerTimes.length
+      : 0;
 
     return {
       hp: playerHp,
@@ -143,6 +254,13 @@ export class TelemetryTracker {
       cornerPercentage: cornerPct,
       dashCount: this.dashEvents.length,
       playerZone,
+      // Story-aware fields
+      loreInteractionCount: this.loreInteractionCount,
+      timeSpentReadingLore: this.loreReadTimes.reduce((s, v) => s + v, 0),
+      loreLingerTime: avgLoreLingerTime,
+      skippedMandatoryLore: this.skippedMandatoryLore,
+      retreatDistance: this.retreatDistance,
+      wallBias,
     };
   }
 
@@ -176,6 +294,15 @@ export class TelemetryTracker {
       dash_frequency: dashFrequency,
       corner_time_pct: cornerTimePct,
       reaction_time_avg_ms: this.average(this.reactionTimes),
+      // Story-aware telemetry
+      lore_interaction_count: this.loreInteractionCount,
+      time_spent_reading_lore: this.loreReadTimes.reduce((s, v) => s + v, 0),
+      lore_linger_time_avg: this.average(this.loreLingerTimes),
+      skipped_mandatory_lore: this.skippedMandatoryLore,
+      retreat_distance: this.retreatDistance,
+      wall_bias_pct: this.wallProximitySamples > 0
+        ? (this.wallProximityHits / this.wallProximitySamples) * 100
+        : 0,
     };
   }
 

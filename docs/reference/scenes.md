@@ -59,7 +59,7 @@ GameOverScene, VictoryScene, AudioDebugOverlay
 
 **Wall tiles:** Full corner set (top_left, top, top_right, mid, left, right, corner_tl/tr/bl/br, side_left/right, column_wall, hole_1/2, goo, goo_base), 4 banner colors (red/blue/green/yellow), outer walls (13 edge variants), pit tiles (13 variants)
 
-**Fountain:** 3-frame animation (wall_fountain_mid_blue_anim), top piece, basin
+**Torches:** 8-frame animation (`torch_1` through `torch_8`)
 
 **Decorations:** skull, column, column_wall, crate, box, boxes_stacked, hole
 

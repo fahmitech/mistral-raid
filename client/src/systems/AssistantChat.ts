@@ -22,8 +22,15 @@ export class AssistantChat {
   private messagesEl!: HTMLDivElement;
   private inputEl!: HTMLInputElement;
   private voiceBtn!: HTMLButtonElement;
+  private sendBtn!: HTMLButtonElement;
+  private suggestionsEl!: HTMLDivElement;
+  private voiceRow!: HTMLDivElement;
+  private inputRow!: HTMLDivElement;
+  private activationOverlay?: HTMLDivElement;
   private visible = false;
+  private activated = false;
   private messages: ChatMessage[] = [];
+  private pendingMessages: ChatMessage[] = [];
   private contextFn: () => CompanionContext;
   private removeHandler: (() => void) | null = null;
   private voiceController: import('./VoiceController').VoiceController | null = null;
@@ -34,9 +41,6 @@ export class AssistantChat {
     this.panel = this.buildPanel();
     document.body.appendChild(this.tab);
     document.body.appendChild(this.panel);
-
-    // Welcome message
-    this.addMessage('ai', 'Dungeon AI online. Ask me anything or use the quick buttons below.');
 
     this.removeHandler = wsClient.onMessage((msg) => {
       if (msg.type === 'AI_ASSISTANT_REPLY') {
@@ -52,18 +56,20 @@ export class AssistantChat {
         () => this.contextFn()
       );
     }).catch(() => { /* voice unavailable */ });
+
+    // Start with the panel open but gated until activation.
+    this.setPanelVisibility(true, false);
+    this.setInteractionEnabled(false);
+    this.showActivationOverlay();
   }
 
   toggle(): void {
-    this.visible = !this.visible;
-    this.panel.style.transform = this.visible ? 'translateX(0)' : 'translateX(110%)';
-    this.tab.style.opacity = this.visible ? '0.4' : '1';
-    if (this.visible) {
-      setTimeout(() => this.inputEl.focus(), 80);
-    } else {
-      const canvas = document.querySelector('canvas');
-      canvas?.focus();
-    }
+    this.setPanelVisibility(!this.visible);
+  }
+
+  close(): void {
+    if (!this.visible) return;
+    this.setPanelVisibility(false);
   }
 
   isVisible(): boolean {
@@ -71,6 +77,10 @@ export class AssistantChat {
   }
 
   addMessage(role: 'user' | 'ai', text: string): void {
+    if (!this.activated) {
+      this.pendingMessages.push({ role, text });
+      return;
+    }
     this.messages.push({ role, text });
     if (this.messages.length > MAX_MESSAGES) {
       this.messages.shift();
@@ -79,6 +89,10 @@ export class AssistantChat {
   }
 
   addAutoAlert(text: string): void {
+    if (!this.activated) {
+      this.pendingMessages.push({ role: 'ai', text });
+      return;
+    }
     // Only add if not duplicate of last AI message
     const last = this.messages[this.messages.length - 1];
     if (last?.role === 'ai' && last.text === text) return;
@@ -93,7 +107,7 @@ export class AssistantChat {
   }
 
   private sendQuery(text: string): void {
-    if (!text.trim()) return;
+    if (!text.trim() || !this.activated) return;
     this.addMessage('user', text);
     const context = this.contextFn();
     wsClient.send({ type: 'AI_ASSISTANT_QUERY', payload: { message: text, context } });
@@ -102,6 +116,10 @@ export class AssistantChat {
 
   private handleReply(reply: CompanionReply): void {
     // Replace last '...' placeholder if present, otherwise append
+    if (!this.activated) {
+      this.pendingMessages.push({ role: 'ai', text: reply.reply_text });
+      return;
+    }
     const last = this.messages[this.messages.length - 1];
     if (last?.role === 'ai' && last.text === '...') {
       this.messages[this.messages.length - 1] = { role: 'ai', text: reply.reply_text };
@@ -205,11 +223,15 @@ export class AssistantChat {
       align-items: center;
       flex-shrink: 0;
     `;
-    header.textContent = 'AI DUNGEON COMPANION';
+    const title = document.createElement('span');
+    title.textContent = 'AI DUNGEON COMPANION';
+    header.appendChild(title);
 
-    const hintLabel = document.createElement('span');
-    hintLabel.textContent = '[H] close';
-    hintLabel.style.cssText = 'font-size:8px;color:#555;';
+    const hintLabel = document.createElement('button');
+    hintLabel.textContent = '[H] CLOSE';
+    hintLabel.style.cssText =
+      'font-size:7px;color:#c4d7ff;background:rgba(8,8,24,0.85);border:1px solid #556;letter-spacing:0.1em;padding:3px 6px;cursor:pointer;font-family:inherit;';
+    hintLabel.addEventListener('click', () => this.toggle());
     header.appendChild(hintLabel);
     panel.appendChild(header);
 
@@ -257,6 +279,7 @@ export class AssistantChat {
       btn.addEventListener('mouseleave', () => { btn.style.background = '#1a1a44'; });
       chips.appendChild(btn);
     }
+    this.suggestionsEl = chips;
     panel.appendChild(chips);
 
     // Voice button
@@ -286,6 +309,7 @@ export class AssistantChat {
     vBtn.addEventListener('mouseleave', () => { this.voiceController?.stopRecording(); });
     this.voiceBtn = vBtn;
     voiceRow.appendChild(vBtn);
+    this.voiceRow = voiceRow;
     panel.appendChild(voiceRow);
 
     // Input row
@@ -340,8 +364,80 @@ export class AssistantChat {
 
     inputRow.appendChild(input);
     inputRow.appendChild(sendBtn);
+    this.sendBtn = sendBtn;
+    this.inputRow = inputRow;
     panel.appendChild(inputRow);
 
     return panel;
+  }
+
+  private setPanelVisibility(next: boolean, focusInput = true): void {
+    this.visible = next;
+    this.panel.style.transform = next ? 'translateX(0)' : 'translateX(110%)';
+    this.tab.style.opacity = next ? '0.4' : '1';
+    if (next && focusInput && this.activated) {
+      setTimeout(() => this.inputEl.focus(), 80);
+    } else if (!next) {
+      const canvas = document.querySelector('canvas');
+      canvas?.focus();
+    }
+  }
+
+  private setInteractionEnabled(enabled: boolean): void {
+    this.suggestionsEl.style.pointerEvents = enabled ? 'auto' : 'none';
+    this.suggestionsEl.style.opacity = enabled ? '1' : '0.4';
+    this.voiceBtn.disabled = !enabled;
+    this.voiceBtn.style.opacity = enabled ? '1' : '0.5';
+    this.inputEl.disabled = !enabled;
+    this.sendBtn.disabled = !enabled;
+    this.inputEl.placeholder = enabled ? 'Ask your companion...' : 'Activate companion to chat';
+    this.voiceRow.style.opacity = enabled ? '1' : '0.5';
+    this.inputRow.style.opacity = enabled ? '1' : '0.5';
+  }
+
+  private showActivationOverlay(): void {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: absolute;
+      inset: 48px 12px 120px 12px;
+      background: rgba(4,4,18,0.92);
+      border: 1px dashed rgba(120,140,220,0.6);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      text-align: center;
+      padding: 16px;
+      z-index: 20;
+    `;
+    const text = document.createElement('div');
+    text.textContent = 'Activate your AI companion when you are ready. Movement stays unlocked until then.';
+    text.style.cssText = 'font-size: 9px; color:#cfd8ff; letter-spacing:0.12em;';
+    const btn = document.createElement('button');
+    btn.textContent = 'ACTIVATE COMPANION';
+    btn.style.cssText =
+      'padding:8px 12px;background:#1a1a88;color:#f5d0fe;border:2px solid #7788ff;border-radius:6px;font-size:9px;cursor:pointer;font-family:inherit;letter-spacing:0.2em;';
+    btn.addEventListener('click', () => this.activateCompanion());
+    overlay.append(text, btn);
+    this.panel.appendChild(overlay);
+    this.activationOverlay = overlay;
+  }
+
+  private activateCompanion(): void {
+    if (this.activated) return;
+    this.activated = true;
+    this.activationOverlay?.remove();
+    this.activationOverlay = undefined;
+    this.setInteractionEnabled(true);
+    this.addMessage('ai', 'Dungeon AI online. Ask me anything or use the quick buttons below.');
+    if (this.pendingMessages.length > 0) {
+      for (const msg of this.pendingMessages) {
+        this.addMessage(msg.role, msg.text);
+      }
+      this.pendingMessages = [];
+    }
+    setTimeout(() => this.inputEl.focus(), 80);
   }
 }

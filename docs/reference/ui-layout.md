@@ -235,7 +235,7 @@ Uses a code-drawn `particle-dot` texture (8×8 white circle) and provides:
 
 ### Decorations (No Collision)
 - **Banners:** Red and blue, animated sway (2-frame)
-- **Fountains:** 3-frame water animation, positioned on top wall
+- **Torches:** Flame animation (`torch_1` through `torch_8`), mounted on the top wall
 - **Skulls:** Floor decoration
 - **Crates:** Corner decoration
 
@@ -291,7 +291,7 @@ Frame naming uses `_anim_f0..f3` suffixes for animated sets.
 | Category | Prefixes / Examples |
 |----------|---------------------|
 | Floors | `floor_*`, `Floor_*`, `floor_gargoyle_*`, `floor_mud_*` |
-| Walls | `wall_*`, `Wall_*`, `wall_fountain_*`, `wall_outer_*`, `wall_inner_*` |
+| Walls | `wall_*`, `Wall_*`, `wall_outer_*`, `wall_inner_*` |
 | Edges | `Edge_*` |
 | Pits | `Pit_*` |
 | Doors | `doors_*` |

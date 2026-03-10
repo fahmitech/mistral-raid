@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { PlayerSelectScene } from './scenes/PlayerSelectScene';
 import { LevelScene } from './scenes/LevelScene';
+import { LevelUpScene } from './scenes/LevelUpScene';
 import { PauseScene } from './scenes/PauseScene';
 import { InventoryScene } from './scenes/InventoryScene';
 import { OptionsScene } from './scenes/OptionsScene';
@@ -11,7 +12,9 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { VictoryScene } from './scenes/VictoryScene';
 import { AudioDebugOverlay } from './systems/AudioDebugOverlay';
 import { ArenaScene } from './scenes/ArenaScene';
+import { SanctumScene } from './scenes/SanctumScene';
 import { CoopSelectScene } from './scenes/CoopSelectScene';
+import { DifficultySelectScene } from './scenes/DifficultySelectScene';
 import { AICompanionDebugOverlay } from './systems/AICompanionDebugOverlay';
 import { INTERNAL_HEIGHT, INTERNAL_WIDTH, ZOOM } from './config/constants';
 
@@ -31,25 +34,28 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-scale: {
-  mode: Phaser.Scale.FIT,
-  autoCenter: Phaser.Scale.CENTER_BOTH,
-  width: INTERNAL_WIDTH,
-  height: INTERNAL_HEIGHT,
-},
+  scale: {
+    mode: Phaser.Scale.ENVELOP,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: INTERNAL_WIDTH,
+    height: INTERNAL_HEIGHT,
+  },
   scene:[
     BootScene,
     MenuScene,
     PlayerSelectScene,
     CoopSelectScene,
+    DifficultySelectScene,
     LevelScene,
+    LevelUpScene,
     PauseScene,
     InventoryScene,
     OptionsScene,
     CreditsScene,
     GameOverScene,
-    VictoryScene,
     ArenaScene,
+    SanctumScene,
+    VictoryScene,
     AudioDebugOverlay,
     AICompanionDebugOverlay,
   ],
@@ -57,27 +63,48 @@ scale: {
   audio: { disableWebAudio: false },
 };
 
-const game = new Phaser.Game(config);
+// Wait for fonts to load before starting the game
+let game: Phaser.Game;
 
+const startGame = () => {
+  game = new Phaser.Game(config);
 
-const updateIntegerZoom = () => {
-  const maxZoom = game.scale.getMaxZoom();
-  
-  const nextZoom = Math.floor(Math.max(1, Math.min(ZOOM, maxZoom)));
-  
-  if (game.scale.zoom !== nextZoom) {
-    game.scale.setZoom(nextZoom);
-  }
+  const updateIntegerZoom = () => {
+    const parentWidth = game.scale.parentSize.width;
+    const parentHeight = game.scale.parentSize.height;
+    const zoomX = parentWidth / INTERNAL_WIDTH;
+    const zoomY = parentHeight / INTERNAL_HEIGHT;
+    const nextZoom = Math.max(1, Math.ceil(Math.max(zoomX, zoomY)));
+    if (game.scale.zoom !== nextZoom) {
+      game.scale.setZoom(nextZoom);
+    }
+  };
+
+  window.addEventListener('resize', updateIntegerZoom);
+  updateIntegerZoom();
+
+  setTimeout(() => {
+    if (game.canvas) {
+      game.canvas.style.imageRendering = 'pixelated';
+    }
+  }, 0);
 };
 
-window.addEventListener('resize', updateIntegerZoom);
-updateIntegerZoom();
-
-setTimeout(() => {
-  if (game.canvas) {
-    game.canvas.style.imageRendering = 'pixelated';
+// Preload critical font before starting game
+const preloadFonts = async () => {
+  try {
+    // Force the font to load by using FontFace API
+    const font = new FontFace('Press Start 2P', 'url(/fonts/PressStart2P-Regular.ttf)');
+    await font.load();
+    document.fonts.add(font);
+  } catch (e) {
+    console.warn('Font preload failed, using document.fonts.ready fallback');
   }
-}, 0);
+  // Wait for all fonts to be ready
+  await document.fonts.ready;
+};
+
+preloadFonts().then(startGame);
 
 const ensureErrorOverlay = (): HTMLPreElement => {
   const existing = document.getElementById('error-overlay');

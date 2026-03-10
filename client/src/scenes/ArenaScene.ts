@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { INTERNAL_HEIGHT, INTERNAL_WIDTH, DASH_COOLDOWN_MS, DASH_DISTANCE, DASH_INVINCIBLE_MS, INVINCIBLE_MS } from '../config/constants';
+import { INTERNAL_HEIGHT, INTERNAL_WIDTH, DASH_COOLDOWN_MS, DASH_DISTANCE, DASH_INVINCIBLE_MS, INVINCIBLE_MS, TILE_SIZE } from '../config/constants';
+import { LightingSystem } from '../systems/LightingSystem';
+import { DifficultyManager } from '../systems/DifficultyManager';
 import { Player } from '../entities/Player';
 import { GameState } from '../core/GameState';
 import { CHARACTER_CONFIGS } from '../config/characters';
@@ -57,6 +59,7 @@ export class ArenaScene extends Phaser.Scene {
   private devConsole!: DevConsole;
   private directorPanel!: DirectorPanel;
   private telemetryTimer: Phaser.Time.TimerEvent | null = null;
+  private liveTelemetryTimer: Phaser.Time.TimerEvent | null = null;
   private introTauntTimer: Phaser.Time.TimerEvent | null = null;
   private introTauntSent = false;
   private introAudioPlayed = false;
@@ -76,6 +79,7 @@ export class ArenaScene extends Phaser.Scene {
   private wsDebugBg!: Phaser.GameObjects.Rectangle;
   private audioUnlockHandler: (() => void) | null = null;
   private toggleHandler: ((event: KeyboardEvent) => void) | null = null;
+  private lastDamageSource: 'melee' | 'projectile' | 'hazard' | undefined;
 
   private wsUnsub: (() => void) | null = null;
   private wsStatusUnsub: (() => void) | null = null;
@@ -84,15 +88,42 @@ export class ArenaScene extends Phaser.Scene {
   private livesText?: Phaser.GameObjects.Text;
   private arenaDefeated = false;
 
+  private lighting!: LightingSystem;
+  private arenaEmbers: { sprite: Phaser.GameObjects.Ellipse; speed: number; drift: number }[] = [];
+
+  private bossGlow!: Phaser.GameObjects.Arc;
+  private bossThinkingText!: Phaser.GameObjects.Text;
+  private bossThinkingPulseTween: Phaser.Tweens.Tween | null = null;
+  private shieldGlow!: Phaser.GameObjects.Arc;
+  private lastBossAiAt = 0;
+  private loreItems!: Phaser.GameObjects.Group;
+  private activeLoreText: Phaser.GameObjects.Text | null = null;
+  private activeLoreBg: Phaser.GameObjects.Rectangle | null = null;
+  private isReadingLore = false;
+  private mandatoryLoreZones: Phaser.Geom.Rectangle[] = [];
+  private triggeredMandatoryLore = new Set<number>();
+
   constructor() {
     super('ArenaScene');
   }
 
   create(): void {
     CoopState.reset(); // Arena Demo is always solo — no AI companion
-    this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT / 2, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x101018, 1);
-    this.physics.world.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+    this.buildArenaEnvironment();
+    // Combat zone: between wall rows (y 32-160) and wall cols (x 16-304)
+    this.physics.world.setBounds(TILE_SIZE, TILE_SIZE * 2, INTERNAL_WIDTH - TILE_SIZE * 2, TILE_SIZE * 8);
+    this.cameras.main.setBounds(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.setupAudio();
+
+    // Lighting — player spotlight with 4 torches (2 top, 2 bottom)
+    this.lighting = new LightingSystem(this, 0.68);
+    const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE);
+    this.lighting.setTorches([
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 4 },          // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4 },         // top-right
+      { x: 2 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 },     // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 },    // bottom-right
+    ]);
 
     const gs = GameState.get();
     const state = gs.getData();
@@ -127,8 +158,25 @@ export class ArenaScene extends Phaser.Scene {
     if (this.anims.exists(`${bossConfig.spriteKey}_idle`)) {
       this.boss.play(`${bossConfig.spriteKey}_idle`);
     }
-    this.bossHp = bossConfig.hp;
-    this.bossMaxHp = bossConfig.hp;
+    // Apply difficulty scaling to boss HP — applied once at spawn time
+    const diffSettings = DifficultyManager.get().getSettings();
+    this.bossHp = Math.round(bossConfig.hp * diffSettings.bossHpMult);
+    this.bossMaxHp = this.bossHp;
+
+    // ── Cinematic boss intro ──────────────────────────────────────────
+    this.cameras.main.fadeIn(500, 0, 0, 0);
+    this.boss.setAlpha(0);
+    this.time.delayedCall(500, () => {
+      this.tweens.add({
+        targets: this.boss,
+        alpha: 1,
+        duration: 700,
+        ease: 'Power2.easeIn',
+        onComplete: () => {
+          this.cameras.main.shake(220, 0.007);
+        },
+      });
+    });
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = {
@@ -149,9 +197,30 @@ export class ArenaScene extends Phaser.Scene {
     this.hud = new ArenaHUD(this);
     this.tauntText = new TauntText(this);
     this.analyzingOverlay = new AnalyzingOverlay(this);
+
+    // Boss red atmosphere glow (pulsing, ADD blend, depth below lighting)
+    this.bossGlow = this.add
+      .arc(this.boss.x, this.boss.y, 26, 0, 360, false, 0xcc1122, 0)
+      .setDepth(5)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: this.bossGlow,
+      alpha: 0.18,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Shield glow around player (only visible when shield active)
+    this.shieldGlow = this.add
+      .arc(this.player.x, this.player.y, 12, 0, 360, false, 0x33aaff, 0)
+      .setDepth(19)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.createBossThinkingIndicator();
     this.livesText = this.add.text(INTERNAL_WIDTH - 4, 4, `LIVES: ${this.lives}`, {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#ffdd44',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(22);
     this.createMicIndicator();
@@ -167,7 +236,7 @@ export class ArenaScene extends Phaser.Scene {
       boss: this.boss,
       onDamage: (amount, source) => this.damagePlayer(amount, source),
       onOrbDestroyed: () => this.telemetry.recordOrbDestroyed(),
-      onMinionKilled: () => {},
+      onMinionKilled: () => { },
     });
 
     this.setupNetworking();
@@ -228,26 +297,26 @@ export class ArenaScene extends Phaser.Scene {
 
   private createMicIndicator(): void {
     const y = INTERNAL_HEIGHT - 22;
-    this.micIndicatorBg = this.add.rectangle(56, y + 2, 104, 16, 0x000000, 0.45)
+    this.micIndicatorBg = this.add.rectangle(70, y + 2, 130, 18, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
     this.micIndicator = this.add.text(8, y - 4, '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#ff6677',
     }).setScrollFactor(0).setDepth(22);
     this.updateMicIndicator();
   }
 
   private createTranscriptOverlay(): void {
-    const y = INTERNAL_HEIGHT - 46;
-    this.transcriptBg = this.add.rectangle(INTERNAL_WIDTH / 2, y, INTERNAL_WIDTH - 12, 16, 0x000000, 0.45)
+    const y = INTERNAL_HEIGHT - 50;
+    this.transcriptBg = this.add.rectangle(INTERNAL_WIDTH / 2, y, INTERNAL_WIDTH - 12, 22, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21)
       .setVisible(false);
-    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 6, '', {
+    this.transcriptText = this.add.text(INTERNAL_WIDTH / 2, y - 8, '', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#cceeff',
       align: 'center',
       wordWrap: { width: INTERNAL_WIDTH - 20 },
@@ -255,12 +324,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private createWsDebugOverlay(): void {
-    this.wsDebugBg = this.add.rectangle(56, 10, 110, 14, 0x000000, 0.45)
+    this.wsDebugBg = this.add.rectangle(70, 16, 130, 18, 0x000000, 0.45)
       .setScrollFactor(0)
       .setDepth(21);
-    this.wsDebugText = this.add.text(8, 4, 'WS: --', {
+    this.wsDebugText = this.add.text(8, 8, 'WS: --', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#99aadd',
     }).setScrollFactor(0).setDepth(22);
   }
@@ -287,6 +356,159 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  private buildArenaEnvironment(): void {
+    const TILE_COLS = Math.ceil(INTERNAL_WIDTH / TILE_SIZE); // 20
+    const TILE_ROWS = Math.ceil(INTERNAL_HEIGHT / TILE_SIZE); // 12
+
+    // ── Resolve tile keys with fallbacks ──────────────────────────────────
+    const floorKeys = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
+    const stainKeys = ['floor_stain_1', 'floor_stain_2'];
+    const wallKey = this.textures.exists('wall_mid') ? 'wall_mid' : 'floor_1';
+    const wallTopKey = this.textures.exists('wall_top_mid') ? 'wall_top_mid' : wallKey;
+    const cornerTLKey = this.textures.exists('wall_corner_top_left') ? 'wall_corner_top_left' : wallTopKey;
+    const cornerTRKey = this.textures.exists('wall_corner_top_right') ? 'wall_corner_top_right' : wallTopKey;
+    const cornerBLKey = this.textures.exists('wall_corner_front_left') ? 'wall_corner_front_left' : wallKey;
+    const cornerBRKey = this.textures.exists('wall_corner_front_right') ? 'wall_corner_front_right' : wallKey;
+
+    // ── Full grid coverage using individual images (no RenderTexture) ─────
+    // Every cell is drawn as a plain add.image — 100% reliable, no RT batching issues.
+    for (let row = 0; row < TILE_ROWS; row++) {
+      for (let col = 0; col < TILE_COLS; col++) {
+        const px = col * TILE_SIZE;
+        const py = row * TILE_SIZE;
+
+        const isTopHeader = row === 0;
+        const isTopWall = row === 1;
+        const isBottomWall = row >= TILE_ROWS - 2;
+        const isLeftWall = col === 0;
+        const isRightWall = col === TILE_COLS - 1;
+
+        let key: string;
+        if (isTopHeader) {
+          if (isLeftWall) key = cornerTLKey;
+          else if (isRightWall) key = cornerTRKey;
+          else key = wallTopKey;
+        } else if (isBottomWall) {
+          if (isLeftWall) key = cornerBLKey;
+          else if (isRightWall) key = cornerBRKey;
+          else key = wallKey;
+        } else if (isLeftWall || isRightWall || isTopWall) {
+          key = wallKey;
+        } else {
+          // Interior floor — varied tiles with occasional stains
+          if (Math.random() < 0.06) {
+            const sk = stainKeys[Math.floor(Math.random() * stainKeys.length)];
+            key = this.textures.exists(sk) ? sk : 'floor_1';
+          } else {
+            const fk = floorKeys[Math.floor(Math.random() * floorKeys.length)];
+            key = this.textures.exists(fk) ? fk : 'floor_1';
+          }
+        }
+
+        this.add.image(px, py, key).setOrigin(0, 0).setDepth(0);
+      }
+    }
+
+    // ── Banners (2 on top wall) ────────────────────────────────────────────
+    const bannerKeys = ['wall_banner_red', 'wall_banner_blue', 'wall_banner_green', 'wall_banner_yellow'];
+    const bannerKey = bannerKeys.find((k) => this.textures.exists(k));
+    const bannerCols = [5, 14];
+    if (bannerKey) {
+      bannerCols.forEach((col) =>
+        this.add.image(col * TILE_SIZE, TILE_SIZE, bannerKey).setOrigin(0, 0).setDepth(1)
+      );
+    } else {
+      const bannerGfx = this.add.graphics().setDepth(1);
+      bannerCols.forEach((col) => {
+        bannerGfx.fillStyle(0x991111, 0.85);
+        bannerGfx.fillRect(col * TILE_SIZE + 3, TILE_SIZE + 2, 10, 13);
+      });
+    }
+
+    // ── Lore Items (Crates) ───────────────────────────────────────────────
+    this.loreItems = this.add.group();
+    const crateKeys = ['chest_empty_open_anim_f0', 'chest_empty', 'chest_full', 'chest_full_open_anim_f0'];
+    const crateKey = crateKeys.find((k) => this.textures.exists(k));
+    const loreSnippets = [
+      { id: "lore_fragment_412", text: "Fragment 412: The subject shows increasing resistance to the stimulus." },
+      { id: "lore_walls_breathing", text: "The walls are breathing. Or maybe it's just the cooling fans." },
+      { id: "lore_entry_08", text: "ENTRY 08: Do not trust the silence. It is just the Watcher thinking." },
+      { id: "lore_arena_lie", text: "They promised a way out. They lied. There is only the arena." }
+    ];
+
+    const cratePositions: [number, number][] = [
+      [2, 2], [TILE_COLS - 3, 2], [2, TILE_ROWS - 3], [TILE_COLS - 3, TILE_ROWS - 3],
+    ];
+    loreSnippets.forEach((data, idx) => {
+      const [col, row] = cratePositions[idx];
+      const cx = col * TILE_SIZE + 8;
+      const cy = row * TILE_SIZE + 8;
+      let sprite: Phaser.GameObjects.GameObject;
+      if (crateKey) {
+        sprite = this.add.sprite(cx, cy, crateKey).setDepth(2);
+      } else {
+        const cg = this.add.graphics().setDepth(2);
+        cg.fillStyle(0x554433, 1);
+        cg.fillRect(cx - 6, cy - 6, 12, 12);
+        sprite = cg;
+      }
+      sprite.setData('lore', data.text);
+      sprite.setData('loreId', data.id);
+      this.loreItems.add(sprite);
+    });
+
+    // Mandatory Lore Trigger (near boss)
+    this.mandatoryLoreZones.push(new Phaser.Geom.Rectangle(INTERNAL_WIDTH / 2 - 40, 60, 80, 40));
+
+    // Lore HUD
+    this.activeLoreBg = this.add.rectangle(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 60, INTERNAL_WIDTH - 40, 40, 0x000000, 0.8)
+      .setScrollFactor(0).setDepth(100).setVisible(false);
+    this.activeLoreText = this.add.text(INTERNAL_WIDTH / 2, INTERNAL_HEIGHT - 60, '', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ffffff',
+      wordWrap: { width: INTERNAL_WIDTH - 60 },
+      align: 'center'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(101).setVisible(false);
+
+    // ── 4 torches — 2 on top wall, 2 on bottom wall ───────────────────────
+    const torchPositions = [
+      { x: 2 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-left
+      { x: 17 * TILE_SIZE + 8, y: TILE_SIZE + 4 }, // top-right
+      { x: 2 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-left
+      { x: 17 * TILE_SIZE + 8, y: (TILE_ROWS - 2) * TILE_SIZE + 4 }, // bottom-right
+    ];
+    torchPositions.forEach(({ x, y }) => {
+      const torch = this.add.sprite(x, y, 'torch_1').setDepth(2);
+      if (this.anims.exists('torch')) torch.play('torch');
+    });
+
+    // ── Ambient embers — 6 per torch ──────────────────────────────────────
+    this.arenaEmbers = [];
+    torchPositions.forEach(({ x, y }) => {
+      for (let i = 0; i < 6; i++) {
+        const size = Phaser.Math.FloatBetween(1, 2);
+        const color = Math.random() > 0.5 ? 0xff6633 : 0xff3300;
+        const sprite = this.add
+          .ellipse(
+            x + Phaser.Math.Between(-8, 8),
+            y + Phaser.Math.Between(-4, 10),
+            size, size, color, Phaser.Math.FloatBetween(0.1, 0.4),
+          )
+          .setDepth(3);
+        this.arenaEmbers.push({ sprite, speed: Phaser.Math.FloatBetween(0.1, 0.35), drift: Phaser.Math.FloatBetween(0.1, 0.4) });
+      }
+    });
+
+    // ── Vignette — dark edges, keeps focus on interior ────────────────────
+    const vfx = this.add.graphics().setDepth(4);
+    vfx.fillStyle(0x000000, 0.45);
+    vfx.fillRect(0, 0, INTERNAL_WIDTH, TILE_SIZE * 2);
+    vfx.fillRect(0, INTERNAL_HEIGHT - TILE_SIZE * 2, INTERNAL_WIDTH, TILE_SIZE * 2);
+    vfx.fillRect(0, 0, TILE_SIZE, INTERNAL_HEIGHT);
+    vfx.fillRect(INTERNAL_WIDTH - TILE_SIZE, 0, TILE_SIZE, INTERNAL_HEIGHT);
+  }
+
   private updateMicIndicator(): void {
     let label = 'MIC: OFF';
     let color = '#ff6677';
@@ -301,7 +523,68 @@ export class ArenaScene extends Phaser.Scene {
     this.micIndicator.setColor(color);
   }
 
+  private createBossThinkingIndicator(): void {
+    this.bossThinkingText = this.add.text(this.boss.x, this.boss.y - 20, '...', {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: '#ffee88',
+      stroke: '#000000',
+      strokeThickness: 2,
+      resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(19).setVisible(false);
+
+    this.bossThinkingPulseTween = this.tweens.add({
+      targets: this.bossThinkingText,
+      alpha: { from: 0.35, to: 1 },
+      duration: 420,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+      paused: true,
+    });
+  }
+
+  private syncBossThinkingIndicator(): void {
+    const shouldShow = this.aiState === 'thinking';
+
+    if (shouldShow !== this.bossThinkingText.visible) {
+      this.bossThinkingText.setVisible(shouldShow);
+      if (shouldShow) {
+        this.bossThinkingPulseTween?.play();
+      } else {
+        this.bossThinkingPulseTween?.pause();
+        this.bossThinkingText.setAlpha(1);
+      }
+    }
+
+    if (shouldShow) {
+      const bossTopY = this.boss.y - this.boss.displayHeight * 0.55;
+      this.bossThinkingText.setPosition(this.boss.x, bossTopY);
+    }
+  }
+
   update(time: number, delta: number): void {
+    this.lighting.update(this.player.x, this.player.y);
+
+    // Boss red glow tracks boss position
+    this.bossGlow.setPosition(this.boss.x, this.boss.y);
+    this.syncBossThinkingIndicator();
+
+    // Shield glow — visible only while shield is active
+    const shieldOn = this.player.isShieldActive(time) || GameState.get().getData().hasShield;
+    this.shieldGlow.setPosition(this.player.x, this.player.y);
+    this.shieldGlow.setAlpha(shieldOn ? 0.45 : 0);
+
+    // Drift embers upward
+    this.arenaEmbers.forEach((p) => {
+      p.sprite.y -= p.speed;
+      p.sprite.x += Math.sin(p.sprite.y * 0.04) * p.drift;
+      if (p.sprite.y < -4) {
+        p.sprite.y = INTERNAL_HEIGHT + 4;
+        p.sprite.x = Phaser.Math.Between(0, INTERNAL_WIDTH);
+      }
+    });
+
     this.handleInput(time);
     this.player.updateBlink(time);
     this.player.updateWeaponPosition();
@@ -314,6 +597,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (this.arenaPhase === 'PHASE_2') {
+      this.updateBossAI(time);
       this.mechanicInterpreter.update(time, delta);
     }
 
@@ -351,8 +635,51 @@ export class ArenaScene extends Phaser.Scene {
 
     if (this.bossHp <= 0 && this.arenaPhase !== 'VICTORY') {
       this.arenaPhase = 'VICTORY';
-      this.scene.start('VictoryScene');
+      GameState.get().recordBossDefeat(this.boss.config.type);
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('SanctumScene');
+      });
     }
+
+    this.handleLoreInteractions();
+  }
+
+  private handleLoreInteractions(): void {
+    let nearAny = false;
+    this.loreItems.getChildren().forEach((obj: any) => {
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x || 0, obj.y || 0);
+      if (dist < 40) {
+        nearAny = true;
+        if (!this.isReadingLore) {
+          this.isReadingLore = true;
+          this.activeLoreBg?.setVisible(true);
+          this.activeLoreText?.setVisible(true);
+          this.activeLoreText?.setText(obj.getData('lore'));
+          this.telemetry.recordLoreInteraction();
+          GameState.get().recordLore(obj.getData('loreId'));
+        }
+      }
+    });
+
+    if (!nearAny && this.isReadingLore) {
+      this.isReadingLore = false;
+      this.activeLoreBg?.setVisible(false);
+      this.activeLoreText?.setVisible(false);
+      this.telemetry.recordLoreClose();
+    }
+
+    // Check mandatory lore skips
+    this.mandatoryLoreZones.forEach((zone, idx) => {
+      if (!this.triggeredMandatoryLore.has(idx)) {
+        if (zone.contains(this.player.x, this.player.y)) {
+          this.triggeredMandatoryLore.add(idx);
+          if (!this.isReadingLore) {
+            this.telemetry.recordMandatoryLoreSkipped();
+          }
+        }
+      }
+    });
   }
 
   private setupNetworking(): void {
@@ -369,6 +696,12 @@ export class ArenaScene extends Phaser.Scene {
       delay: 150,
       loop: true,
       callback: () => this.sendTelemetry(),
+    });
+
+    this.liveTelemetryTimer = this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => this.sendLiveTelemetry(),
     });
   }
 
@@ -436,7 +769,7 @@ export class ArenaScene extends Phaser.Scene {
   private scheduleTtsFallback(): void {
     this.cancelTtsFallback();
     this.waitingForTTS = true;
-    this.ttsFallbackTimer = this.time.delayedCall(2600, () => {
+    this.ttsFallbackTimer = this.time.delayedCall(7000, () => {
       this.ttsFallbackTimer = null;
       if (!this.waitingForTTS) return;
       this.waitingForTTS = false;
@@ -470,9 +803,15 @@ export class ArenaScene extends Phaser.Scene {
     if (!wsClient.isConnected) return;
     this.introTauntSent = true;
 
+    const story = GameState.get().getData();
     const payload = {
       ...this.telemetry.compile('player-1'),
       player_said: 'I have entered your arena. Show me what you are.',
+      level_tag: `level_${story.level}`,
+      lore_discovered: story.loreDiscovered,
+      boss_history: story.bossHistory,
+      player_class: story.character,
+      sanctum_reached: story.sanctumReached
     };
     wsClient.send({ type: 'ANALYZE', payload });
     this.devConsole.setTTSStatus('waiting');
@@ -495,7 +834,15 @@ export class ArenaScene extends Phaser.Scene {
     this.telemetry.setPlayerHpAtTransition(GameState.get().getData().playerHP);
     this.telemetry.setPhaseForcedByTimeout(forcedByTimeout);
 
-    const payload = this.telemetry.compile('player-1');
+    const story = GameState.get().getData();
+    const payload = {
+      ...this.telemetry.compile('player-1'),
+      level_tag: `level_${story.level}`,
+      lore_discovered: story.loreDiscovered,
+      boss_history: story.bossHistory,
+      player_class: story.character,
+      sanctum_reached: story.sanctumReached
+    };
     wsClient.send({ type: 'ANALYZE', payload });
     this.devConsole.setTTSStatus('waiting');
   }
@@ -506,6 +853,7 @@ export class ArenaScene extends Phaser.Scene {
       case 'ai_state':
         this.aiState = msg.payload.state;
         this.devConsole.setAIState(this.aiState);
+        this.syncBossThinkingIndicator();
         if (this.aiState === 'thinking') {
           this.analyzingOverlay.show();
         } else {
@@ -540,6 +888,9 @@ export class ArenaScene extends Phaser.Scene {
       case 'director_update':
         this.directorPanel.update(msg.payload);
         break;
+      case 'BOSS_DIRECTIVE':
+        this.boss.applyDirective(msg.payload, this.time.now);
+        break;
       case 'error':
         this.devConsole.setError(msg.payload.message);
         this.handleBossResponse(msg.payload.fallback);
@@ -566,6 +917,31 @@ export class ArenaScene extends Phaser.Scene {
     const playerData = GameState.get().getData();
     const raw = this.telemetry.getRawTelemetry(playerData.playerHP, playerData.playerMaxHP, this.bossHp);
     wsClient.send({ type: 'telemetry', payload: raw });
+  }
+
+  private sendLiveTelemetry(): void {
+    if (!wsClient.isConnected) return;
+    if (this.arenaPhase !== 'PHASE_1' && this.arenaPhase !== 'PHASE_2') return;
+
+    const playerData = GameState.get().getData();
+    const zone = this.telemetry.getCurrentZone(this.player.x, this.player.y);
+    const corners = new Set(['top_left', 'top_right', 'bot_left', 'bot_right']);
+
+    wsClient.send({
+      type: 'LIVE_TELEMETRY',
+      payload: {
+        context: 'arena',
+        player_hp_pct: playerData.playerMaxHP > 0 ? playerData.playerHP / playerData.playerMaxHP : 0,
+        boss_hp_pct: this.bossMaxHp > 0 ? this.bossHp / this.bossMaxHp : 0,
+        player_zone: zone,
+        recent_dodge_bias: this.telemetry.getRecentDodgeBias(),
+        recent_accuracy: this.telemetry.getRecentAccuracy(10),
+        avg_distance_from_boss: Phaser.Math.Distance.Between(this.player.x, this.player.y, this.boss.x, this.boss.y),
+        in_corner: corners.has(zone),
+        elapsed_ms: Math.max(0, this.time.now - this.phaseStartTime),
+        last_damage_source: this.lastDamageSource,
+      },
+    });
   }
 
   private handleInput(time: number): void {
@@ -629,7 +1005,8 @@ export class ArenaScene extends Phaser.Scene {
   private shootProjectile(angle: number): void {
     const gs = GameState.get();
     const state = gs.getData();
-    const damage = gs.getEffectiveWeaponDamage(state.playerDamage, state.equippedWeapon);
+    const baseDamage = gs.getEffectiveWeaponDamage(state.playerDamage, state.equippedWeapon);
+    const damage = baseDamage * DifficultyManager.get().getSettings().playerDamageMult;
 
     const speed = 220;
     const proj = this.add.circle(this.player.x, this.player.y, 2.5, 0xffffff, 1);
@@ -642,15 +1019,27 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private updateBossAI(time: number): void {
+    // Throttle boss AI updates for Easy difficulty (slows attack frequency)
+    const throttle = DifficultyManager.get().getSettings().bossAiThrottleMs;
+    if (throttle > 0 && time - this.lastBossAiAt < throttle) return;
+    this.lastBossAiAt = time;
+
+    const diff = DifficultyManager.get().getSettings();
     const actions = {
       shootProjectile: (x: number, y: number, vx: number, vy: number, damage: number, color: number) => {
         const angle = Math.atan2(vy, vx);
         const proj = this.add.circle(x, y, 3, color ?? 0xff2266, 1);
         const speed = 140;
-        this.bossProjectiles.push({ obj: proj, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, damage: damage ?? 2, createdAt: this.time.now });
+        this.bossProjectiles.push({
+          obj: proj,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          damage: (damage ?? 2) * diff.bossDamageMult,
+          createdAt: this.time.now,
+        });
       },
-      spawnEnemy: () => {},
-      shake: () => {},
+      spawnEnemy: () => { },
+      shake: () => { },
     };
     this.boss.updateAI(this.player, time, actions);
   }
@@ -723,10 +1112,20 @@ export class ArenaScene extends Phaser.Scene {
     const now = this.time.now;
     if (this.player.isInvincible(now)) return;
 
+    // Shield blocks ALL incoming damage for its full duration
+    if (this.player.isShieldActive(now) || GameState.get().getData().hasShield) {
+      this.spawnShieldBlockEffect();
+      return;
+    }
+
+    this.lastDamageSource = source;
     GameState.get().takeDamage(amount);
     this.player.setInvincible(INVINCIBLE_MS, now);
     this.telemetry.recordDamage(source, amount);
     AudioManager.playSFX(this, 'enemy_hit');
+    if (this.options.screenShake) {
+      this.cameras.main.shake(80, 0.004);
+    }
   }
 
   private usePotion(): void {
@@ -755,7 +1154,7 @@ export class ArenaScene extends Phaser.Scene {
   private spawnHealEffect(): void {
     const label = this.add.text(this.player.x, this.player.y - 10, '+HP', {
       fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
+      fontSize: '8px',
       color: '#33ff66',
     }).setOrigin(0.5).setDepth(20);
     this.tweens.add({
@@ -781,6 +1180,23 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
+  /** Visual burst when shield absorbs a hit. */
+  private spawnShieldBlockEffect(): void {
+    const ring = this.add
+      .arc(this.player.x, this.player.y, 8, 0, 360, false, 0x44aaff, 0.9)
+      .setDepth(20)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: ring,
+      scaleX: 2.5,
+      scaleY: 2.5,
+      alpha: 0,
+      duration: 320,
+      ease: 'Power2.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
   private showArenaRetryOverlay(): void {
     const gs = GameState.get();
     gs.setHP(gs.getData().playerMaxHP);
@@ -790,20 +1206,25 @@ export class ArenaScene extends Phaser.Scene {
     const cx = INTERNAL_WIDTH / 2;
     const cy = INTERNAL_HEIGHT / 2;
     this.add.rectangle(cx, cy, INTERNAL_WIDTH, INTERNAL_HEIGHT, 0x000000, 0.65).setDepth(50).setScrollFactor(0);
-    this.add.text(cx, cy - 18, 'YOU DIED', {
-      fontFamily: '"Press Start 2P"',
+    this.add.text(cx, cy - 20, 'YOU DIED', {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '16px',
+      color: '#ff5555',
+      stroke: '#0b0f1d',
+      strokeThickness: 2,
+      resolution: 2,
+    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
+    this.add.text(cx, cy + 4, `LIVES REMAINING: ${this.lives}`, {
+      fontFamily: '"Press Start 2P", monospace',
       fontSize: '10px',
-      color: '#ff4444',
+      color: '#8ef6ff',
+      resolution: 2,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy, `LIVES REMAINING: ${this.lives}`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '6px',
-      color: '#ffffff',
-    }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
-    this.add.text(cx, cy + 14, 'Retrying...', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#aaaaaa',
+    this.add.text(cx, cy + 20, 'Retrying...', {
+      fontFamily: '"Press Start 2P", monospace',
+      fontSize: '10px',
+      color: '#94a3b8',
+      resolution: 2,
     }).setOrigin(0.5).setDepth(51).setScrollFactor(0);
 
     this.time.delayedCall(2500, () => {
@@ -815,12 +1236,21 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.lighting?.destroy();
+    this.bossGlow?.destroy();
+    this.bossThinkingPulseTween?.stop();
+    this.bossThinkingPulseTween = null;
+    this.bossThinkingText?.destroy();
+    this.shieldGlow?.destroy();
+    this.arenaEmbers.forEach((p) => p.sprite.destroy());
+    this.arenaEmbers = [];
     this.wsUnsub?.();
     this.wsStatusUnsub?.();
     wsClient.disconnect();
     micCapture.stop();
     bossVoicePlayer.stop();
     this.telemetryTimer?.remove(false);
+    this.liveTelemetryTimer?.remove(false);
     this.introTauntTimer?.remove(false);
     this.cancelTtsFallback();
     this.mechanicInterpreter.clear();

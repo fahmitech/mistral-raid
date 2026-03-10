@@ -1,9 +1,40 @@
 import Phaser from 'phaser';
 import { CHARACTER_CONFIGS } from '../config/characters';
+import { COMPANION_GUIDES, type CompanionGuide } from '../config/companionGuides';
 import { CharacterType } from '../config/types';
 import { GameState } from '../core/GameState';
 import { AudioManager } from '../systems/AudioManager';
 import { CoopState, type CompanionPersonality } from '../systems/CoopState';
+import { CoopSelectOverlay, type CoopSection, type CoopSelectOverlayState, type CoopHeroOption, type PersonalityOption } from '../ui/CoopSelectOverlay';
+import { FRAME_URLS } from '../utils/assetManifest';
+
+// Hero extended info for the card display
+const HERO_INFO: Record<CharacterType, { role: string; shortDescription: string; accentHex: string; difficulty: string }> = {
+  [CharacterType.Knight]: {
+    role: 'TANK',
+    shortDescription: 'A balanced warrior with strong defense and steady offense. Perfect for learning the dungeon.',
+    accentHex: '#4a90d9',
+    difficulty: 'Forgiving',
+  },
+  [CharacterType.Rogue]: {
+    role: 'STRIKER',
+    shortDescription: 'Lightning-fast attacker with rapid fire. Low HP demands skilled play.',
+    accentHex: '#7ed957',
+    difficulty: 'Steady',
+  },
+  [CharacterType.Mage]: {
+    role: 'CASTER',
+    shortDescription: 'Devastating spell damage at the cost of fragility. High risk, high reward.',
+    accentHex: '#c084fc',
+    difficulty: 'Advanced',
+  },
+  [CharacterType.Paladin]: {
+    role: 'JUGGERNAUT',
+    shortDescription: 'An iron tank with maximum HP and heavy hits. Slow but unstoppable.',
+    accentHex: '#f59e0b',
+    difficulty: 'Steady',
+  },
+};
 
 const CHARACTER_ORDER: CharacterType[] = [
   CharacterType.Knight,
@@ -25,7 +56,7 @@ const BOX_GAP    = 24;
 const BOX_STEP   = BOX_SIZE + BOX_GAP;                // 48px
 const ROW_START_X = (320 - (4 * BOX_SIZE + 3 * BOX_GAP)) / 2; // 76
 
-type FocusedSection = 'hero' | 'companion' | 'personality';
+type FocusedSection = CoopSection;
 
 export class CoopSelectScene extends Phaser.Scene {
   // Hero row
@@ -40,15 +71,12 @@ export class CoopSelectScene extends Phaser.Scene {
 
   // Personality row
   private personalityIndex = 3; // default balanced
-  private personalityTexts: Phaser.GameObjects.Text[] = [];
 
   // Focus
   private focused: FocusedSection = 'hero';
 
   // Info labels
-  private descText?: Phaser.GameObjects.Text;
-  private personalityDescText?: Phaser.GameObjects.Text;
-  private sectionLabel?: Phaser.GameObjects.Text;
+  private overlay?: CoopSelectOverlay;
 
   constructor() {
     super('CoopSelectScene');
@@ -60,105 +88,73 @@ export class CoopSelectScene extends Phaser.Scene {
     this.heroBgs = [];
     this.companionSprites = [];
     this.companionBgs = [];
-    this.personalityTexts = [];
     this.heroIndex = 0;
     this.companionIndex = 1;
     this.personalityIndex = 3;
     this.focused = 'hero';
-    this.descText = undefined;
-    this.personalityDescText = undefined;
-    this.sectionLabel = undefined;
+    this.overlay?.destroy();
+    const parent = this.game.canvas?.parentElement;
+    if (!parent) throw new Error('CoopSelectScene: canvas parentElement missing');
+    const heroOptions: CoopHeroOption[] = CHARACTER_ORDER.map((type) => {
+      const cfg = CHARACTER_CONFIGS[type];
+      const info = HERO_INFO[type];
+      // Normalize stats to 0-1 range for display
+      const maxHP = 8;
+      const maxSpeed = 145;
+      const maxDamage = 2.0;
+      const maxFireRate = 420;
+      return {
+        label: cfg.label.toUpperCase(),
+        role: info.role,
+        shortDescription: info.shortDescription,
+        accentHex: info.accentHex,
+        image: this.resolvePortraitUrl(cfg.spriteKey) ?? null,
+        stats: {
+          health: cfg.maxHP / maxHP,
+          speed: cfg.speed / maxSpeed,
+          power: cfg.damage / maxDamage,
+          attackSpeed: 1 - (cfg.fireRate / maxFireRate), // Lower fireRate = faster attacks
+        },
+        difficulty: info.difficulty,
+      };
+    });
+    const companionOptions = COMPANION_GUIDES.map((guide) => ({
+      label: guide.label,
+      image: this.createCompanionPreview(guide),
+    }));
+    const personalityOptions: PersonalityOption[] = PERSONALITIES.map((p) => ({
+      key: p.key,
+      label: p.label,
+      color: p.color,
+      icon: this.getPersonalityIcon(p.key),
+      desc: p.desc,
+    }));
+    this.overlay = new CoopSelectOverlay(parent, {
+      heroes: heroOptions,
+      companions: companionOptions,
+      companionDetails: COMPANION_GUIDES,
+      personalities: personalityOptions,
+      onSelect: (section, index) => this.handleOverlaySelect(section, index),
+      onBack: () => this.back(),
+      onConfirm: () => this.confirm(),
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.overlay?.destroy();
+      this.overlay = undefined;
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.overlay?.destroy();
+      this.overlay = undefined;
+    });
 
     AudioManager.get().init(this);
     this.createBackground();
 
-    // ── Title ──────────────────────────────────────────────────────────────
-    this.add.text(160, 8, 'AI CO-OP MODE', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '8px',
-      color: '#cc88ff',
-      stroke: '#220044',
-      strokeThickness: 2,
-      resolution: 2,
-    }).setOrigin(0.5);
-
-    this.add.text(160, 20, 'AI Companion Powered by Mistral', {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#ff7700',
-      resolution: 2,
-    }).setOrigin(0.5);
-
     // ── Hero section ───────────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 34, 'YOUR HERO:', {
-      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ffffff', resolution: 2,
-    });
-    this.createPortraitRow(56, this.heroSprites, this.heroBgs, false);
+    this.createPortraitRow(56, this.heroSprites, this.heroBgs, this.getHeroSpriteKeys(), false);
 
     // ── Companion section ──────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 88, 'AI COMPANION:', {
-      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#88ccff', resolution: 2,
-    });
-    this.createPortraitRow(110, this.companionSprites, this.companionBgs, true);
-
-    // ── Personality section ────────────────────────────────────────────────
-    this.add.text(ROW_START_X, 130, 'PERSONALITY:', {
-      fontFamily: '"Press Start 2P"', fontSize: '5px', color: '#ffcc44', resolution: 2,
-    });
-    this.createPersonalityRow(142);
-
-    // ── Desc text ─────────────────────────────────────────────────────────
-    this.personalityDescText = this.add.text(160, 156, PERSONALITIES[this.personalityIndex].desc, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '5px',
-      color: '#aabbcc',
-      resolution: 2,
-    }).setOrigin(0.5);
-
-    // ── Section indicator ─────────────────────────────────────────────────
-    this.sectionLabel = this.add.text(160, 165, '▲▼ Switch section   ◄► Change   ENTER Confirm', {
-      fontFamily: '"Press Start 2P"', fontSize: '4px', color: '#667788', resolution: 2,
-    }).setOrigin(0.5);
-
-    // ── Back / Confirm buttons ─────────────────────────────────────────────
-    const backText = this.add.text(12, 173, '[ BACK ]', {
-      fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#888888', resolution: 2,
-    }).setOrigin(0, 0.5);
-
-    const confirmText = this.add.text(308, 173, '[ START ]', {
-      fontFamily: '"Press Start 2P"', fontSize: '6px', color: '#00ffcc', resolution: 2,
-    }).setOrigin(1, 0.5);
-
-    // ── Mouse support ──────────────────────────────────────────────────────
-    this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
-      // Hero row click
-      this.heroSprites.forEach((s, i) => {
-        if (s.getBounds().contains(ptr.x, ptr.y)) {
-          this.focused = 'hero';
-          this.heroIndex = i;
-          this.refreshAll();
-        }
-      });
-      // Companion row click
-      this.companionSprites.forEach((s, i) => {
-        if (s.getBounds().contains(ptr.x, ptr.y)) {
-          this.focused = 'companion';
-          this.companionIndex = i;
-          this.refreshAll();
-        }
-      });
-      // Personality click
-      this.personalityTexts.forEach((t, i) => {
-        if (t.getBounds().contains(ptr.x, ptr.y)) {
-          this.focused = 'personality';
-          this.personalityIndex = i;
-          this.refreshAll();
-        }
-      });
-      // Buttons
-      if (backText.getBounds().contains(ptr.x, ptr.y)) this.back();
-      if (confirmText.getBounds().contains(ptr.x, ptr.y)) this.confirm();
-    });
+    this.createPortraitRow(110, this.companionSprites, this.companionBgs, COMPANION_GUIDES.map((guide) => guide.spriteKey), true);
 
     // ── Keyboard ──────────────────────────────────────────────────────────
     this.input.keyboard?.on('keydown-LEFT',  () => this.shiftFocus(-1));
@@ -186,20 +182,22 @@ export class CoopSelectScene extends Phaser.Scene {
 
     // Panel for hero row
     const panel = gfx;
+    const panelWidth = 4 * BOX_STEP - BOX_GAP + 24;
+    const panelHeight = 152;
     panel.fillStyle(0x06101e, 0.82);
-    panel.fillRoundedRect(ROW_START_X - 6, 30, 4 * BOX_STEP - BOX_GAP + 12 + 12, 112, 4);
+    panel.fillRoundedRect(ROW_START_X - 6, 28, panelWidth, panelHeight, 6);
     panel.lineStyle(1, 0x334466, 0.7);
-    panel.strokeRoundedRect(ROW_START_X - 6, 30, 4 * BOX_STEP - BOX_GAP + 12 + 12, 112, 4);
+    panel.strokeRoundedRect(ROW_START_X - 6, 28, panelWidth, panelHeight, 6);
   }
 
   private createPortraitRow(
     rowCenterY: number,
     sprites: Phaser.GameObjects.Sprite[],
     bgs: Phaser.GameObjects.Graphics[],
+    spriteKeys: string[],
     isCompanion: boolean
   ): void {
-    CHARACTER_ORDER.forEach((type, idx) => {
-      const cfg = CHARACTER_CONFIGS[type];
+    spriteKeys.forEach((spriteKey, idx) => {
       const cx = ROW_START_X + idx * BOX_STEP + BOX_SIZE / 2;
       const cy = rowCenterY;
 
@@ -208,35 +206,17 @@ export class CoopSelectScene extends Phaser.Scene {
       bg.fillRoundedRect(cx - BOX_SIZE / 2, cy - BOX_SIZE / 2, BOX_SIZE, BOX_SIZE, 3);
       bgs.push(bg);
 
-      const portraitKey = this.resolvePortraitKey(cfg.spriteKey);
+      const portraitKey = this.resolvePortraitKey(spriteKey);
       const sprite = this.add.sprite(cx, cy, portraitKey);
-      const animKey = `${cfg.spriteKey}_idle`;
+      const animKey = `${spriteKey}_idle`;
       if (this.anims.exists(animKey)) sprite.play(animKey);
       sprite.setScale(0.9);
       sprites.push(sprite);
-
-      // Name label
-      this.add.text(cx, cy + BOX_SIZE / 2 + 3, cfg.label.substring(0, 4).toUpperCase(), {
-        fontFamily: '"Press Start 2P"', fontSize: '4px', color: '#556677', resolution: 2,
-      }).setOrigin(0.5, 0);
 
       // Companion aura indicator
       if (isCompanion) {
         this.add.arc(cx, cy, BOX_SIZE / 2 + 2, 0, 360, false, 0x8844ff, 0.12).setDepth(0);
       }
-    });
-  }
-
-  private createPersonalityRow(rowY: number): void {
-    PERSONALITIES.forEach((p, idx) => {
-      const cx = ROW_START_X + idx * BOX_STEP + BOX_SIZE / 2;
-      const text = this.add.text(cx, rowY, p.label, {
-        fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#667788',
-        resolution: 2,
-      }).setOrigin(0.5);
-      this.personalityTexts.push(text);
     });
   }
 
@@ -246,6 +226,51 @@ export class CoopSelectScene extends Phaser.Scene {
     const animKey = `${spriteKey}_anim_f0`;
     if (this.textures.exists(animKey)) return animKey;
     return '__MISSING';
+  }
+
+  private resolvePortraitUrl(spriteKey: string): string | undefined {
+    const candidates = [
+      `${spriteKey}_idle_anim_f0`,
+      `${spriteKey}_idle_anim_f1`,
+      `${spriteKey}_idle`,
+      spriteKey,
+    ];
+    for (const key of candidates) {
+      const url = FRAME_URLS[key];
+      if (url) return url;
+    }
+    return undefined;
+  }
+
+  private getHeroSpriteKeys(): string[] {
+    return CHARACTER_ORDER.map((type) => CHARACTER_CONFIGS[type].spriteKey);
+  }
+
+  private getPersonalityIcon(key: string): string {
+    const map: Record<string, string> = {
+      aggressive: '⚔️',
+      tactical: '🎯',
+      protector: '🛡️',
+      balanced: '⚖️',
+    };
+    return map[key] ?? '★';
+  }
+
+  private createCompanionPreview(guide: CompanionGuide): string | null {
+    const art = guide.pixelArt;
+    if (!art || art.frames.length === 0) return null;
+    const frame = art.frames[0];
+    const size = frame.length;
+    let rects = '';
+    frame.forEach((row, y) => {
+      row.split('').forEach((symbol, x) => {
+        const color = art.palette[symbol];
+        if (!color || color === 'transparent') return;
+        rects += `<rect x=\"${x}\" y=\"${y}\" width=\"1\" height=\"1\" fill=\"${color}\" />`;
+      });
+    });
+    const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ${size} ${size}\">${rects}</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }
 
   private shiftFocus(dir: number): void {
@@ -275,19 +300,48 @@ export class CoopSelectScene extends Phaser.Scene {
   private refreshAll(): void {
     this.refreshPortraitRow(this.heroSprites, this.heroBgs, this.heroIndex, this.focused === 'hero', false);
     this.refreshPortraitRow(this.companionSprites, this.companionBgs, this.companionIndex, this.focused === 'companion', true);
-    this.refreshPersonalityRow();
 
-    // Update personality description
-    const p = PERSONALITIES[this.personalityIndex];
-    this.personalityDescText?.setText(p.desc);
-
-    // Section label hint
-    const sectionNames: Record<FocusedSection, string> = {
-      hero: 'YOUR HERO',
-      companion: 'AI COMPANION',
-      personality: 'PERSONALITY',
+    const overlayState: CoopSelectOverlayState = {
+      heroIndex: this.heroIndex,
+      companionIndex: this.companionIndex,
+      personalityIndex: this.personalityIndex,
+      focused: this.focused as CoopSection,
+      description: PERSONALITIES[this.personalityIndex].desc,
+      companionDetail: COMPANION_GUIDES[this.companionIndex] ?? COMPANION_GUIDES[0],
     };
-    this.sectionLabel?.setText(`[▲▼] Switch   [◄►] ${sectionNames[this.focused]}   [ENTER] Confirm`);
+    this.overlay?.render(overlayState);
+  }
+
+  private handleOverlaySelect(section: CoopSection, index: number): void {
+    const prevHero = this.heroIndex;
+    const prevCompanion = this.companionIndex;
+    const prevPersonality = this.personalityIndex;
+    const prevFocus = this.focused;
+
+    switch (section) {
+      case 'hero':
+        this.heroIndex = Phaser.Math.Wrap(index, 0, this.heroSprites.length);
+        break;
+      case 'companion':
+        this.companionIndex = Phaser.Math.Wrap(index, 0, this.companionSprites.length);
+        break;
+      case 'personality':
+        this.personalityIndex = Phaser.Math.Wrap(index, 0, PERSONALITIES.length);
+        break;
+    }
+    this.focused = section;
+
+    if (
+      prevHero === this.heroIndex &&
+      prevCompanion === this.companionIndex &&
+      prevPersonality === this.personalityIndex &&
+      prevFocus === section
+    ) {
+      return;
+    }
+
+    AudioManager.playSFX(this, 'menu_hover');
+    this.refreshAll();
   }
 
   private refreshPortraitRow(
@@ -318,32 +372,17 @@ export class CoopSelectScene extends Phaser.Scene {
     });
   }
 
-  private refreshPersonalityRow(): void {
-    PERSONALITIES.forEach((p, idx) => {
-      const text = this.personalityTexts[idx];
-      if (!text) return;
-      const isFocused = this.focused === 'personality';
-      if (idx === this.personalityIndex) {
-        text.setColor(isFocused ? p.color : '#aabbcc');
-        text.setStroke('#000000', isFocused ? 2 : 0);
-      } else {
-        text.setColor('#445566');
-        text.setStroke('#000000', 0);
-      }
-    });
-  }
-
   private confirm(): void {
     AudioManager.playSFX(this, 'ui_click');
 
     const heroCfg = CHARACTER_CONFIGS[CHARACTER_ORDER[this.heroIndex]];
-    const companionCfg = CHARACTER_CONFIGS[CHARACTER_ORDER[this.companionIndex]];
+    const companionGuide = COMPANION_GUIDES[this.companionIndex] ?? COMPANION_GUIDES[0];
 
     // Configure coop state before launching LevelScene
     CoopState.set({
       isCoopMode: true,
       companionPersonality: PERSONALITIES[this.personalityIndex].key,
-      companionSpriteKey: companionCfg.spriteKey,
+      companionSpriteKey: companionGuide.spriteKey,
       voiceEnabled: false,
     });
 
@@ -354,7 +393,7 @@ export class CoopSelectScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start('LevelScene', { level: 1 });
+      this.scene.start('DifficultySelectScene', { fromScene: 'CoopSelectScene' });
     });
   }
 

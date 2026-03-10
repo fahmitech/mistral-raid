@@ -4,25 +4,84 @@ export type TurnState =
 
 export type AIState = 'listening' | 'thinking' | 'speaking';
 
+export type BossMovementMode =
+  | 'chase'
+  | 'circle'
+  | 'strafe'
+  | 'retreat'
+  | 'idle';
+
+export type BossAttackMode =
+  | 'aimed_shot'
+  | 'burst'
+  | 'charge'
+  | 'spiral'
+  | 'ring'
+  | 'fan'
+  | 'suppress';
+
+export type EnemyBehaviorDirective =
+  | 'melee'
+  | 'ranged'
+  | 'summoner'
+  | 'teleporter'
+  | 'shielded'
+  | 'exploder'
+  | 'split';
+
+export interface BossDirective {
+  movement_mode: BossMovementMode;
+  attack_mode: BossAttackMode;
+  speed_multiplier: number;
+  attack_cooldown_ms: number;
+  circle_radius?: number;
+  duration_ms: number;
+}
+
+export interface EnemyDirective {
+  aggro_range_multiplier: number;
+  speed_multiplier: number;
+  patrol_to_aggro_ms?: number;
+  behavior_override?: EnemyBehaviorDirective;
+  duration_ms: number;
+}
+
+export interface LiveTelemetry {
+  context: 'arena' | 'dungeon';
+  player_hp_pct: number;
+  boss_hp_pct?: number;
+  enemy_count?: number;
+  player_zone: string;
+  recent_dodge_bias: { left: number; right: number; up: number; down: number };
+  recent_accuracy: number;
+  avg_distance_from_boss?: number;
+  in_corner: boolean;
+  elapsed_ms: number;
+  last_damage_source?: 'melee' | 'projectile' | 'hazard';
+}
+
 export type ServerMessage =
-  | { type: 'ai_state';           payload: { state: AIState } }
-  | { type: 'captions_partial';   payload: { text: string } }
-  | { type: 'captions_final';     payload: { text: string } }
-  | { type: 'BOSS_RESPONSE';      payload: BossResponse }
-  | { type: 'AUDIO_CHUNK';        payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_DONE';         payload: { format: 'mp3' | 'wav' | 'ogg' } }
-  | { type: 'AUDIO_READY';        payload: { audioBase64: string; format: 'mp3' } }
-  | { type: 'mechanics_update';   payload: MechanicConfig }
-  | { type: 'director_update';    payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'ai_state'; payload: { state: AIState } }
+  | { type: 'captions_partial'; payload: { text: string } }
+  | { type: 'captions_final'; payload: { text: string } }
+  | { type: 'BOSS_RESPONSE'; payload: BossResponse }
+  | { type: 'AUDIO_CHUNK'; payload: { audioBase64: string; format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_DONE'; payload: { format: 'mp3' | 'wav' | 'ogg' } }
+  | { type: 'AUDIO_READY'; payload: { audioBase64: string; format: 'mp3' } }
+  | { type: 'mechanics_update'; payload: MechanicConfig }
+  | { type: 'director_update'; payload: { difficultyDelta: number; enemyBias: string; reason: string; timestamp: number } }
+  | { type: 'BOSS_DIRECTIVE'; payload: BossDirective }
+  | { type: 'ENEMY_DIRECTIVE'; payload: EnemyDirective }
   | { type: 'AI_ASSISTANT_REPLY'; payload: CompanionReply }
-  | { type: 'error';              payload: { message: string; fallback: BossResponse } };
+  | { type: 'error'; payload: { message: string; fallback: BossResponse } };
 
 export type ClientMessage =
-  | { type: 'telemetry';          payload: RawTelemetry }
-  | { type: 'barge_in';           payload: Record<string, never> }
-  | { type: 'vad_state';          payload: { speaking: boolean } }
-  | { type: 'ANALYZE';            payload: AnalyzePayload }
-  | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } };
+  | { type: 'telemetry'; payload: RawTelemetry }
+  | { type: 'barge_in'; payload: Record<string, never> }
+  | { type: 'vad_state'; payload: { speaking: boolean } }
+  | { type: 'ANALYZE'; payload: AnalyzePayload }
+  | { type: 'AI_ASSISTANT_QUERY'; payload: { message: string; context: CompanionContext } }
+  | { type: 'LIVE_TELEMETRY'; payload: LiveTelemetry };
 
 export interface CompanionContext {
   playerPos: { x: number; y: number };
@@ -33,6 +92,9 @@ export interface CompanionContext {
   playerMaxHP: number;
   level: number;
   coins: number;
+  // Story context (RM-6)
+  loreDiscovered?: string[];
+  bossHistory?: string[];
 }
 
 export interface CompanionReply {
@@ -54,6 +116,13 @@ export interface RawTelemetry {
   dashCount: number;
   playerZone: string;
   notableEvent?: string;
+  // Story-aware telemetry
+  loreInteractionCount?: number;
+  timeSpentReadingLore?: number;     // seconds total this phase
+  loreLingerTime?: number;           // avg seconds lingered near lore before interacting
+  skippedMandatoryLore?: number;     // count of mandatory lore triggers walked past
+  retreatDistance?: number;          // px moved backward during combat this phase
+  wallBias?: number;                 // 0-100, % of time within 1 tile of a wall
 }
 
 export interface AnalyzePayload {
@@ -75,6 +144,13 @@ export interface AnalyzePayload {
   dash_frequency: number;
   corner_time_pct: number;
   reaction_time_avg_ms: number;
+  // Story-aware telemetry
+  lore_interaction_count: number;
+  time_spent_reading_lore: number;
+  lore_linger_time_avg: number;
+  skipped_mandatory_lore: number;
+  retreat_distance: number;
+  wall_bias_pct: number;
 }
 
 export interface BossResponse {
@@ -87,7 +163,7 @@ export interface BossResponse {
 
 export interface MechanicConfig {
   type: 'projectile_spawner' | 'hazard_zone' | 'laser_beam'
-      | 'homing_orb' | 'wall_of_death' | 'minion_spawn';
+  | 'homing_orb' | 'wall_of_death' | 'minion_spawn';
   duration_seconds?: number;
   [key: string]: unknown;
 }

@@ -2,6 +2,9 @@
 node_modules/
 dist/
 .vite/
+coverage/
+playwright-report/
+test-results/
 
 # Environment
 .env
@@ -18,3 +21,5 @@ docs/specs.md
 
 # OS
 .DS_Store
+.agent
+progress/
