@@ -11,6 +11,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
     stableTranscript: '',
     latestTelemetrySummary: null,
     rollingDebateNotes: '',
+    conversationHistory: [],
     activeLLMAbort: null,
     activeTTSAbort: null,
     lastSpeechEndTime: 0,

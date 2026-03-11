@@ -122,7 +122,7 @@ async function acquireSocket(apiKey: string): Promise<{ ws: WebSocket; warmed: b
   return { ws, warmed: false };
 }
 
-export async function synthesize(session: Session, tauntText: string): Promise<void> {
+export async function synthesize(session: Session, tauntText: string, bossHpPercent?: number): Promise<void> {
   if (!ENABLE_AI_SPEECH) {
     setTurnState(session, 'LISTENING');
     return;
@@ -133,6 +133,19 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
     console.warn('[tts] ELEVENLABS_API_KEY not set');
     setTurnState(session, 'LISTENING');
     return;
+  }
+
+  const voiceSettings = { ...BOSS_VOICE.voice_settings };
+  if (typeof bossHpPercent === 'number') {
+    if (bossHpPercent <= 30) {
+      voiceSettings.stability = 0.15;
+      voiceSettings.style = 0.8;
+      voiceSettings.speed = 1.0;
+    } else if (bossHpPercent <= 60) {
+      voiceSettings.stability = 0.25;
+      voiceSettings.style = 0.65;
+      voiceSettings.speed = 0.95;
+    }
   }
 
   const controller = new AbortController();
@@ -288,7 +301,7 @@ export async function synthesize(session: Session, tauntText: string): Promise<v
       text: ' ',
       model_id: BOSS_VOICE.model_id,
       output_format: BOSS_VOICE.output_format,
-      voice_settings: BOSS_VOICE.voice_settings,
+      voice_settings: voiceSettings,
     };
     ws.send(JSON.stringify(initPayload));
     ws.send(JSON.stringify({ text: tauntText }));

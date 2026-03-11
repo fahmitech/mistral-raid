@@ -315,7 +315,7 @@ export async function stopStreaming(session: Session): Promise<void> {
 
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
-  void synthesizeBossVoice(session, bossResponse.taunt);
+  void synthesizeBossVoice(session, bossResponse.taunt, session.latestTelemetrySummary?.bossHpPercent);
   session.partialTranscript = '';
   prewarmConnection(session);
 }
@@ -398,7 +398,7 @@ export async function transcribeAndRespond(session: Session, utteranceBuffer: Bu
   const bossResponse = await generateBossReply(finalTranscript, session.latestTelemetrySummary, session, true);
   sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
   setTurnState(session, 'AI_SPEAKING');
-  void synthesizeBossVoice(session, bossResponse.taunt);
+  void synthesizeBossVoice(session, bossResponse.taunt, session.latestTelemetrySummary?.bossHpPercent);
   session.partialTranscript = '';
   prewarmConnection(session);
 }

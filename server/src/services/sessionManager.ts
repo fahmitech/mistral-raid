@@ -19,6 +19,7 @@ export function createSession(ws: WebSocket): Session {
     stableTranscript: '',
     latestTelemetrySummary: null,
     rollingDebateNotes: '',
+    conversationHistory: [],
     activeLLMAbort: null,
     activeTTSAbort: null,
     lastSpeechEndTime: 0,

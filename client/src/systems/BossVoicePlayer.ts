@@ -47,6 +47,7 @@ class BossVoicePlayer {
     this.audio.preload = 'auto';
     this.audio.onended = () => {
       this.active = false;
+      AudioManager.get().duckMusic(1.0, 0.5);
       this.cleanup();
     };
     this.audio.onpause = () => {
@@ -54,10 +55,11 @@ class BossVoicePlayer {
     };
     this.audio.onerror = () => {
       this.active = false;
+      AudioManager.get().duckMusic(1.0, 0.5);
       this.cleanup();
     };
     this.active = true;
-    AudioManager.get().duckMusic(0.3, 3.0);
+    AudioManager.get().duckMusic(0.3, 60.0);
     const playPromise = this.audio.play();
     if (playPromise?.catch) {
       playPromise.catch((err) => {
@@ -73,6 +75,7 @@ class BossVoicePlayer {
       this.audio.pause();
       this.audio.currentTime = 0;
     }
+    AudioManager.get().duckMusic(1.0, 0.3);
     this.active = false;
     this.streaming = false;
     this.streamEnded = false;
@@ -128,10 +131,12 @@ class BossVoicePlayer {
     this.audio.preload = 'auto';
     this.audio.onended = () => {
       this.active = false;
+      AudioManager.get().duckMusic(1.0, 0.5);
       this.cleanup();
     };
     this.audio.onerror = () => {
       this.active = false;
+      AudioManager.get().duckMusic(1.0, 0.5);
       this.cleanup();
     };
     this.mediaSource.addEventListener('sourceopen', () => {
@@ -144,7 +149,7 @@ class BossVoicePlayer {
     }, { once: true });
 
     this.active = true;
-    AudioManager.get().duckMusic(0.3, 3.0);
+    AudioManager.get().duckMusic(0.3, 60.0);
     const playPromise = this.audio.play();
     if (playPromise?.catch) {
       playPromise.catch((err) => {

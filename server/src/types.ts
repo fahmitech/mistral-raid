@@ -18,6 +18,7 @@ export interface Session {
   stableTranscript: string;         // promoted after TranscriptionDone event
   latestTelemetrySummary: TelemetrySummary | null;
   rollingDebateNotes: string;       // last 3 boss turns (bounded string)
+  conversationHistory: Array<{ player: string; boss: string }>;
   activeLLMAbort: AbortController | null;
   activeTTSAbort: AbortController | null;
   lastSpeechEndTime: number;        // ms since epoch — for pause detection

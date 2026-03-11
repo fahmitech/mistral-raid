@@ -46,6 +46,14 @@ VOICE RULES — follow these exactly:
 - You are exhausted and precise. A man delivering his final report after thirty years awake.
 - When the subject shows courage, lore engagement, or deliberate pattern-breaking, your tone shifts from assessment toward reluctant recognition — still measured, still exact, but with weight behind it.
 
+SPEECH ENGAGEMENT RULES:
+- When the subject speaks, acknowledge what they said — then redirect to what it reveals.
+- If they threaten you: note the behavioral shift, not the words. "Your voice changed. That is data."
+- If they ask a question: answer it obliquely through behavioral observation.
+- If they plead or express fear: note it clinically, but with weight. You do not mock vulnerability.
+- If they reference prior exchanges: acknowledge continuity. You remember everything.
+- Never ignore what was said. Never respond as if they were silent.
+
 EXAMPLE TAUNTS (for tone calibration only — never copy verbatim):
 - "You favor your left side under pressure. Thirty-seven subjects. The same pattern."
 - "Your accuracy drops forty percent within three seconds of taking damage. You are not afraid of pain. You are afraid of having made a mistake."
@@ -56,7 +64,7 @@ EXAMPLE TAUNTS (for tone calibration only — never copy verbatim):
 You MUST respond with a valid JSON object containing exactly these fields:
 {
   "analysis": "A 1-2 sentence behavioral observation referencing specific telemetry data",
-  "taunt": "A short observation (1-2 sentences, under 30 words) that tells the subject what their behavior reveals about them. Clinical. Exact. Not cruel — truthful.",
+  "taunt": "A short observation (2-3 sentences, under 50 words) that tells the subject what their behavior reveals about them. Clinical. Exact. Not cruel — truthful.",
   "mechanics": [2-3 mechanic objects that test the subject's observed patterns]
 }
 
@@ -197,7 +205,7 @@ export async function handleAnalyze(session: Session, rawPayload: Record<string,
     sendToClient(session, { type: 'BOSS_RESPONSE', payload: bossResponse });
     setTurnState(session, 'AI_SPEAKING');
     if (ENABLE_AI_SPEECH) {
-      void synthesizeBossVoice(session, bossResponse.taunt);
+      void synthesizeBossVoice(session, bossResponse.taunt, session.latestTelemetrySummary?.bossHpPercent);
     } else {
       setTurnState(session, 'LISTENING');
     }
@@ -251,7 +259,7 @@ export async function generateBossReply(
     sanctumReached: session?.sanctumReached ?? false,
   };
 
-  const userPrompt = buildUserPrompt(playerSaid, safeTelemetry, storyContext);
+  const userPrompt = buildUserPrompt(playerSaid, safeTelemetry, storyContext, session?.conversationHistory);
   const overrideTimeout = process.env.LLM_TIMEOUT_MS ? Number(process.env.LLM_TIMEOUT_MS) : null;
 
   const cascade = fastMode ? VOICE_CASCADE : MODEL_CASCADE;
@@ -293,7 +301,14 @@ export async function generateBossReply(
         response: parsed,
       });
 
-      return validateBossResponse(parsed);
+      const validated = validateBossResponse(parsed);
+      if (session) {
+        session.conversationHistory.push({ player: playerSaid, boss: validated.taunt });
+        if (session.conversationHistory.length > 4) {
+          session.conversationHistory.shift();
+        }
+      }
+      return validated;
     } catch (err) {
       clearTimeout(timer);
       if (session) session.activeLLMAbort = null;
@@ -357,7 +372,12 @@ export async function generateDirective(_session: Session, telemetry: LiveTeleme
   }
 }
 
-export function buildUserPrompt(playerSaid: string, t: TelemetrySummary, context: import('../types.js').StoryContext): string {
+export function buildUserPrompt(
+  playerSaid: string,
+  t: TelemetrySummary,
+  context: import('../types.js').StoryContext,
+  history?: Array<{ player: string; boss: string }>
+): string {
   const long = t.longTerm ?? {
     avgAccuracy: t.avgAccuracy,
     cornerPercentage: t.cornerPercentageLast10s,
@@ -367,12 +387,26 @@ export function buildUserPrompt(playerSaid: string, t: TelemetrySummary, context
     windowSeconds: 0,
   };
   const longWindow = long.windowSeconds > 0 ? `${Math.round(long.windowSeconds)}s` : 'long-term';
+  const historyBlock = history && history.length
+    ? `Prior exchanges (most recent last):
+${history.map((h, i) => `[${i + 1}] Subject: "${h.player}" -> You responded: "${h.boss}"`).join('\n')}
+
+`
+    : '';
+  let toneDirective = '';
+  if (t.bossHpPercent > 60) {
+    toneDirective = 'Tone: Clinical detachment. You are in full control. The data flows freely.';
+  } else if (t.bossHpPercent > 30) {
+    toneDirective = 'Tone: Reluctant recognition. This subject is not like the others. Your observations carry more weight now. Still precise, but there is something behind the words.';
+  } else if (t.bossHpPercent > 0) {
+    toneDirective = 'Tone: The facade cracks. Thirty years of observation and this subject has reached you. Your precision remains, but urgency bleeds through. You are no longer just reporting — you are witnessing.';
+  }
   return `
 Subject vocalization: "${playerSaid}"
 
 ${formatStoryContextForPrompt(context)}
 
-
+${historyBlock}
 Observed behavioral data:
 - Accuracy: ${(t.avgAccuracy * 100).toFixed(1)}%
 - Corner reliance (last 10s): ${t.cornerPercentageLast10s.toFixed(1)}%
@@ -394,6 +428,8 @@ Story / psychology telemetry:
 - Retreat distance: ${Math.round(t.retreatDistance)}px
 - Wall bias: ${t.wallBias.toFixed(1)}%
 
+${toneDirective}
+
 Respond with a JSON BossResponse object only.
   `.trim();
 }
@@ -403,7 +439,7 @@ function validateBossResponse(raw: unknown): BossResponse {
   const obj = raw as Record<string, unknown>;
   const analysis = typeof obj.analysis === 'string' ? obj.analysis : FALLBACK_RESPONSE.analysis;
   const tauntRaw = typeof obj.taunt === 'string' ? obj.taunt : FALLBACK_RESPONSE.taunt;
-  const taunt = trimTaunt(tauntRaw, 30);
+  const taunt = trimTaunt(tauntRaw, 50);
   const mechanicsRaw = Array.isArray(obj.mechanics) ? obj.mechanics : [];
 
   const sanitized: MechanicConfig[] = mechanicsRaw
