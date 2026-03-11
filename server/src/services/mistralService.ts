@@ -634,9 +634,7 @@ function buildConversationContext(
   playerSaid: string,
   history?: Array<{ player: string; boss: string }>
 ): string {
-  const speechAct = inferSpeechAct(playerSaid);
-  const emotionalRegister = inferEmotionalRegister(playerSaid);
-  const latestClaim = summarizeUtterance(playerSaid, 140);
+  const latestLine = playerSaid.trim().replace(/\s+/g, ' ');
   const latestExchange = history?.length ? history[history.length - 1] : null;
   const continuity = latestExchange
     ? `Continuity hook:
@@ -647,40 +645,11 @@ function buildConversationContext(
 - Required continuity: Establish the central disagreement clearly on this first exchange.`;
 
   return `
-Conversation pressure:
-- Speech act: ${speechAct}
-- Emotional register: ${emotionalRegister}
-- Current claim or challenge: "${latestClaim}"
+Conversation focus:
+- Latest subject line for this turn: "${latestLine}"
 - Debate move for this turn: Answer, counter, then escalate. Make it feel like the next beat in one argument.
 ${continuity}
 `;
-}
-
-function inferSpeechAct(text: string): string {
-  const normalized = text.toLowerCase();
-  if (normalized.includes('?')) return 'question';
-  if (/\b(kill|destroy|end you|take you down|beat you|defeat you|tear you apart)\b/.test(normalized)) return 'threat';
-  if (/\b(please|help|spare|save|don't|do not)\b/.test(normalized)) return 'plea';
-  if (/\b(liar|monster|coward|murderer|you let|you made)\b/.test(normalized)) return 'accusation';
-  if (/\b(i will|i'll|i wont|i won't|never|swear|promise)\b/.test(normalized)) return 'vow';
-  if (/\b(strongest|chosen|destined|can't stop me|invincible|unstoppable)\b/.test(normalized)) return 'boast';
-  return 'declaration';
-}
-
-function inferEmotionalRegister(text: string): string {
-  const normalized = text.toLowerCase();
-  if (/\b(afraid|scared|terrified|please|help)\b/.test(normalized)) return 'fear';
-  if (/\b(why|how|what|who|when)\b/.test(normalized) || normalized.includes('?')) return 'curiosity';
-  if (/\b(hate|anger|angry|rage|monster|coward|liar)\b/.test(normalized)) return 'anger';
-  if (/\b(will|promise|swear|must|won't|never)\b/.test(normalized)) return 'resolve';
-  if (/\b(sorry|regret|forgive|grief|mourn)\b/.test(normalized)) return 'grief';
-  return 'control';
-}
-
-function summarizeUtterance(text: string, maxChars: number): string {
-  const normalized = text.trim().replace(/\s+/g, ' ');
-  if (normalized.length <= maxChars) return normalized;
-  return `${normalized.slice(0, maxChars - 1).trimEnd()}...`;
 }
 
 function formatStoryContextForPrompt(ctx: import('../types.js').StoryContext): string {

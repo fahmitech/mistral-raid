@@ -325,7 +325,7 @@ describe('mistralService.buildUserPrompt', () => {
     expect(prompt.indexOf('Subject: "first"')).toBeLessThan(prompt.indexOf('Subject: "third"'));
   });
 
-  it('includes conversation pressure and continuity for ongoing debate turns', async () => {
+  it('includes conversation focus and continuity for ongoing debate turns', async () => {
     const { buildUserPrompt } = await import('../mistralService.js');
 
     const prompt = buildUserPrompt(
@@ -337,9 +337,8 @@ describe('mistralService.buildUserPrompt', () => {
       ]
     );
 
-    expect(prompt).toContain('Conversation pressure:');
-    expect(prompt).toContain('Speech act: question');
-    expect(prompt).toContain('Current claim or challenge: "Can you stop me after all this?"');
+    expect(prompt).toContain('Conversation focus:');
+    expect(prompt).toContain('Latest subject line for this turn: "Can you stop me after all this?"');
     expect(prompt).toContain('Last subject line: "I came here to end this."');
     expect(prompt).toContain('Continue the same argument. Do not restart from zero.');
     expect(prompt).toContain('Answer, counter, then escalate.');
