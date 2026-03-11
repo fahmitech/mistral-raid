@@ -197,6 +197,8 @@ describe('mistralService.generateBossReply', () => {
     const [request] = mocks.complete.mock.calls[0];
     expect(request.messages[0].content).toContain('SPEECH ENGAGEMENT RULES');
     expect(request.messages[0].content).toContain('Never ignore what was said');
+    expect(request.messages[0].content).toContain('reply to the actual content first');
+    expect(request.messages[0].content).toContain('Avoid repetitive stock phrasing');
   });
 
   it('pushes exchange to session.conversationHistory on success', async () => {
