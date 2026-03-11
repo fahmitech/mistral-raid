@@ -60,6 +60,14 @@ SPEECH ENGAGEMENT RULES:
 - Do not fall back on the same pivot every turn. Vary your openings, cadence, and the kind of observation you choose.
 - Avoid repetitive stock phrasing like "That is data" unless it is unusually effective in the moment.
 
+CONFRONTATION FLOW RULES:
+- This is an ongoing confrontation, not a sequence of disconnected taunts.
+- Treat each turn like the next beat in one argument between two people who are listening to each other.
+- The taunt must move in this order: answer or challenge the latest line, expose what it reveals, then press the conflict forward.
+- If prior exchanges exist, continue the same ideological clash instead of resetting to generic analysis.
+- Let the subject feel understood. Let the Watcher feel impossible to shake.
+- End with pressure: a contradiction, a harder truth, or a choice the subject is trying not to name.
+
 EXAMPLE TAUNTS (for tone calibration only — never copy verbatim):
 - "You favor your left side under pressure. Thirty-seven subjects. The same pattern."
 - "Your accuracy drops forty percent within three seconds of taking damage. You are not afraid of pain. You are afraid of having made a mistake."
@@ -74,7 +82,7 @@ EXAMPLE TAUNTS (for tone calibration only — never copy verbatim):
 You MUST respond with a valid JSON object containing exactly these fields:
 {
   "analysis": "A 1-2 sentence behavioral observation referencing specific telemetry data",
-  "taunt": "A short observation (2-3 sentences, under 50 words) that tells the subject what their behavior reveals about them. Clinical. Exact. Not cruel — truthful.",
+  "taunt": "A short conversational exchange beat (2-3 sentences, under 50 words). Sentence one should directly answer, challenge, or continue the subject's latest line. The rest should reveal what it means and push the argument forward. Clinical. Exact. Not cruel — truthful.",
   "mechanics": [2-3 mechanic objects that test the subject's observed patterns]
 }
 
@@ -188,8 +196,8 @@ const MODEL_CASCADE: Array<{ model: string; timeout: number }> = DEMO_MODE
   ];
 
 const VOICE_CASCADE: Array<{ model: string; timeout: number }> = [
+  { model: 'mistral-small-latest', timeout: 3500 },
   { model: 'ministral-8b-latest', timeout: 2500 },
-  { model: 'mistral-small-latest', timeout: 3000 },
 ];
 
 interface DirectiveResponse {
@@ -403,6 +411,7 @@ ${history.map((h, i) => `[${i + 1}] Subject: "${h.player}" -> You responded: "${
 
 `
     : '';
+  const conversationContext = buildConversationContext(playerSaid, history);
   let toneDirective = '';
   if (t.bossHpPercent > 60) {
     toneDirective = 'Tone: Clinical detachment. You are in full control. The data flows freely.';
@@ -417,6 +426,7 @@ Subject vocalization: "${playerSaid}"
 ${formatStoryContextForPrompt(context)}
 
 ${historyBlock}
+${conversationContext}
 Observed behavioral data:
 - Accuracy: ${(t.avgAccuracy * 100).toFixed(1)}%
 - Corner reliance (last 10s): ${t.cornerPercentageLast10s.toFixed(1)}%
@@ -618,6 +628,59 @@ function trimTaunt(text: string, maxWords: number): string {
   const words = text.trim().split(/\s+/);
   if (words.length <= maxWords) return text.trim();
   return words.slice(0, maxWords).join(' ');
+}
+
+function buildConversationContext(
+  playerSaid: string,
+  history?: Array<{ player: string; boss: string }>
+): string {
+  const speechAct = inferSpeechAct(playerSaid);
+  const emotionalRegister = inferEmotionalRegister(playerSaid);
+  const latestClaim = summarizeUtterance(playerSaid, 140);
+  const latestExchange = history?.length ? history[history.length - 1] : null;
+  const continuity = latestExchange
+    ? `Continuity hook:
+- Last subject line: "${latestExchange.player}"
+- Last your reply: "${latestExchange.boss}"
+- Required continuity: Continue the same argument. Do not restart from zero.`
+    : `Continuity hook:
+- Required continuity: Establish the central disagreement clearly on this first exchange.`;
+
+  return `
+Conversation pressure:
+- Speech act: ${speechAct}
+- Emotional register: ${emotionalRegister}
+- Current claim or challenge: "${latestClaim}"
+- Debate move for this turn: Answer, counter, then escalate. Make it feel like the next beat in one argument.
+${continuity}
+`;
+}
+
+function inferSpeechAct(text: string): string {
+  const normalized = text.toLowerCase();
+  if (normalized.includes('?')) return 'question';
+  if (/\b(kill|destroy|end you|take you down|beat you|defeat you|tear you apart)\b/.test(normalized)) return 'threat';
+  if (/\b(please|help|spare|save|don't|do not)\b/.test(normalized)) return 'plea';
+  if (/\b(liar|monster|coward|murderer|you let|you made)\b/.test(normalized)) return 'accusation';
+  if (/\b(i will|i'll|i wont|i won't|never|swear|promise)\b/.test(normalized)) return 'vow';
+  if (/\b(strongest|chosen|destined|can't stop me|invincible|unstoppable)\b/.test(normalized)) return 'boast';
+  return 'declaration';
+}
+
+function inferEmotionalRegister(text: string): string {
+  const normalized = text.toLowerCase();
+  if (/\b(afraid|scared|terrified|please|help)\b/.test(normalized)) return 'fear';
+  if (/\b(why|how|what|who|when)\b/.test(normalized) || normalized.includes('?')) return 'curiosity';
+  if (/\b(hate|anger|angry|rage|monster|coward|liar)\b/.test(normalized)) return 'anger';
+  if (/\b(will|promise|swear|must|won't|never)\b/.test(normalized)) return 'resolve';
+  if (/\b(sorry|regret|forgive|grief|mourn)\b/.test(normalized)) return 'grief';
+  return 'control';
+}
+
+function summarizeUtterance(text: string, maxChars: number): string {
+  const normalized = text.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}...`;
 }
 
 function formatStoryContextForPrompt(ctx: import('../types.js').StoryContext): string {

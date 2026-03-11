@@ -154,7 +154,7 @@ describe('mistralService.generateBossReply', () => {
     await generateBossReply('test', null, undefined, true);
 
     const [request] = mocks.complete.mock.calls[0];
-    expect(request.model).toBe('ministral-8b-latest');
+    expect(request.model).toBe('mistral-small-latest');
   });
 
   it('uses MODEL_CASCADE first model when fastMode=false', async () => {
@@ -199,6 +199,8 @@ describe('mistralService.generateBossReply', () => {
     expect(request.messages[0].content).toContain('Never ignore what was said');
     expect(request.messages[0].content).toContain('reply to the actual content first');
     expect(request.messages[0].content).toContain('Avoid repetitive stock phrasing');
+    expect(request.messages[0].content).toContain('CONFRONTATION FLOW RULES');
+    expect(request.messages[0].content).toContain('ongoing confrontation');
   });
 
   it('pushes exchange to session.conversationHistory on success', async () => {
@@ -321,6 +323,26 @@ describe('mistralService.buildUserPrompt', () => {
     expect(prompt).toContain('[2] Subject: "second" -> You responded: "Two."');
     expect(prompt).toContain('[3] Subject: "third" -> You responded: "Three."');
     expect(prompt.indexOf('Subject: "first"')).toBeLessThan(prompt.indexOf('Subject: "third"'));
+  });
+
+  it('includes conversation pressure and continuity for ongoing debate turns', async () => {
+    const { buildUserPrompt } = await import('../mistralService.js');
+
+    const prompt = buildUserPrompt(
+      'Can you stop me after all this?',
+      makeTelemetry(),
+      makeStoryContext(),
+      [
+        { player: 'I came here to end this.', boss: 'You came here to be seen.' },
+      ]
+    );
+
+    expect(prompt).toContain('Conversation pressure:');
+    expect(prompt).toContain('Speech act: question');
+    expect(prompt).toContain('Current claim or challenge: "Can you stop me after all this?"');
+    expect(prompt).toContain('Last subject line: "I came here to end this."');
+    expect(prompt).toContain('Continue the same argument. Do not restart from zero.');
+    expect(prompt).toContain('Answer, counter, then escalate.');
   });
 
   it('includes clinical detachment tone when bossHpPercent > 60', async () => {
