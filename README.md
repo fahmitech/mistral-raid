@@ -258,3 +258,6 @@ server/src/
   agents/                 aiCompanionCombatAgent, gameCompanionAgent
   routes/                 audio, boss, companion
 ```
+
+## License
+AGPL v3
