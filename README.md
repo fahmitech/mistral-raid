@@ -1,4 +1,4 @@
-# Mistral Raid — The Watcher in the Depths
+# Mistral Raid — The Watcher in the Depths (Top 1 Winner at Mistral AI Worldwide Online Hackathon)
 
 > **Hackathon:** Mistral Worldwide Hackathon | Feb 28 – Mar 1, 2026
 
